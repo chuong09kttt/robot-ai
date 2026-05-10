@@ -9,6 +9,14 @@ dotenv.config();
 const app = express();
 app.use(express.static("public"));
 
+// Thêm CORS để tránh lỗi
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
+  next();
+});
+
 const server = createServer(app);
 const wss = new WebSocketServer({ server });
 
@@ -27,14 +35,20 @@ function safeJSON(str) {
 // API endpoint for TTS (Text-to-Speech)
 app.get('/tts', async (req, res) => {
   const text = req.query.text;
+  
+  console.log(`[TTS Request] Text: "${text}"`);
+  
   if (!text) {
+    console.log('[TTS Error] Missing text');
     return res.status(400).json({ error: 'Missing text parameter' });
   }
   
   try {
-    // Detect language (simple check)
-    const isEnglish = /^[a-zA-Z\s\.,!?'"]+$/.test(text);
-    const voice = isEnglish ? "nova" : "alloy"; // Nova for English, Alloy for Vietnamese
+    // Detect language
+    const hasVietnamese = /[àáảãạăắằẵặâấầẫậđèéẻẽẹêếềễệìíỉĩịòóỏõọôốồỗộơớờỡợùúủũụưứừữựỳýỷỹỵ]/i.test(text);
+    const voice = hasVietnamese ? "alloy" : "nova";
+    
+    console.log(`[TTS] Language: ${hasVietnamese ? 'Vietnamese' : 'English'}, Voice: ${voice}`);
     
     const mp3 = await openai.audio.speech.create({
       model: "tts-1",
@@ -46,18 +60,29 @@ app.get('/tts', async (req, res) => {
     // Convert to buffer
     const buffer = Buffer.from(await mp3.arrayBuffer());
     
+    console.log(`[TTS Success] Generated ${buffer.length} bytes`);
+    
     res.set({
       'Content-Type': 'audio/mpeg',
-      'Content-Length': buffer.length
+      'Content-Length': buffer.length,
+      'Cache-Control': 'no-cache'
     });
     res.send(buffer);
+    
   } catch (error) {
-    console.error('TTS Error:', error);
-    res.status(500).json({ error: 'TTS failed' });
+    console.error('[TTS Error]', error);
+    res.status(500).json({ error: 'TTS failed', details: error.message });
   }
 });
 
+// Test endpoint
+app.get('/test', (req, res) => {
+  res.json({ status: 'Server is running', time: new Date().toISOString() });
+});
+
 wss.on("connection", (ws) => {
+  console.log("[WebSocket] Client connected");
+  
   ws.on("message", async (msg) => {
     const data = safeJSON(msg.toString());
     if (!data) return;
@@ -68,15 +93,17 @@ wss.on("connection", (ws) => {
       ws.on("close", () => {
         if (esp32 === ws) esp32 = null;
       });
-      console.log("ESP32 connected");
+      console.log("[ESP32] Connected");
       return;
     }
 
     // USER MESSAGE
     if (data.type === "user") {
-      // Detect language from user input
-      const isEnglish = /^[a-zA-Z\s\.,!?'"]+$/.test(data.text);
-      const responseLang = isEnglish ? "English" : "Vietnamese";
+      console.log(`[User] ${data.text}`);
+      
+      // Detect language
+      const hasVietnamese = /[àáảãạăắằẵặâấầẫậđèéẻẽẹêếềễệìíỉĩịòóỏõọôốồỗộơớờỡợùúủũụưứừữựỳýỷỹỵ]/i.test(data.text);
+      const responseLang = hasVietnamese ? "Vietnamese" : "English";
       
       const ai = await openai.chat.completions.create({
         model: "gpt-4o-mini",
@@ -92,9 +119,6 @@ QUAN TRỌNG:
 - Nếu người dùng hỏi tiếng Anh → TRẢ LỜI TIẾNG ANH
 - Câu trả lời ngắn gọn, tự nhiên, thân thiện (tối đa 2 câu)
 - Luôn trả về JSON: {"speech":"nội dung trả lời","cmd":"none"}
-
-Ví dụ người dùng hỏi "khối lượng mặt trời bao nhiêu" → Trả lời tiếng Việt
-Ví dụ người dùng hỏi "what is your name" → Trả lời tiếng Anh
             `
           },
           { role: "user", content: data.text }
@@ -106,6 +130,8 @@ Ví dụ người dùng hỏi "what is your name" → Trả lời tiếng Anh
       const reply = ai.choices[0].message.content;
       const obj = safeJSON(reply);
       const speechText = obj?.speech || reply;
+      
+      console.log(`[AI Response] ${speechText}`);
       
       // Send text response to web
       ws.send(JSON.stringify({
@@ -122,8 +148,16 @@ Ví dụ người dùng hỏi "what is your name" → Trả lời tiếng Anh
       }
     }
   });
+  
+  ws.on("close", () => {
+    console.log("[WebSocket] Client disconnected");
+  });
 });
 
-server.listen(process.env.PORT || 3000, () => {
-  console.log("Server running with OpenAI TTS");
+const PORT = process.env.PORT || 3000;
+server.listen(PORT, () => {
+  console.log(`\n🚀 Server running on port ${PORT}`);
+  console.log(`📱 Web UI: http://localhost:${PORT}`);
+  console.log(`🎤 TTS endpoint: http://localhost:${PORT}/tts?text=hello`);
+  console.log(`✅ Ready!\n`);
 });
