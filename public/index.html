@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+<meta charset="UTF-8">
+<title>Robot AI</title>
+</head>
+
+<body>
+
+<h2>Robot AI Voice</h2>
+
+<button id="start">
+🎤 Start Voice
+</button>
+
+<div id="chat"></div>
+
+<script>
+
+const ws =
+new WebSocket(
+(location.protocol==="https:"?"wss://":"ws://")
++ location.host
+);
+
+const chat =
+document.getElementById("chat");
+
+function add(text){
+
+  chat.innerHTML +=
+  "<p>"+text+"</p>";
+
+}
+
+ws.onmessage = (e)=>{
+
+  const data =
+  JSON.parse(e.data);
+
+  if(data.type==="ai"){
+
+    add("Robot: "+data.text);
+
+    // SPEAK
+    const utter =
+    new SpeechSynthesisUtterance(
+      data.text
+    );
+
+    speechSynthesis.speak(utter);
+
+  }
+
+};
+
+document
+.getElementById("start")
+.onclick = ()=>{
+
+  const rec =
+  new webkitSpeechRecognition();
+
+  rec.lang = "vi-VN";
+
+  rec.start();
+
+  rec.onresult = (e)=>{
+
+    const text =
+    e.results[0][0].transcript;
+
+    add("Bạn: "+text);
+
+    ws.send(JSON.stringify({
+      type:"user",
+      text:text
+    }));
+
+  };
+
+};
+
+</script>
+
+</body>
+</html>
