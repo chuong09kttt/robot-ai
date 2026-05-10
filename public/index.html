@@ -2,738 +2,381 @@
 <html lang="vi">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>🐹 CHIRI - Trợ lý AI thức tỉnh bằng giọng nói</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>🐹 CHIRI - Trợ lý AI</title>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
+        * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #0f0c29 0%, #302b63 50%, #24243e 100%);
+            font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+            background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
             min-height: 100vh;
             display: flex;
             justify-content: center;
             align-items: center;
-            padding: 10px;
+            padding: 16px;
         }
-
         .container {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            border-radius: 50px;
-            padding: 25px;
+            background: rgba(255,255,255,0.1);
+            backdrop-filter: blur(20px);
+            border-radius: 60px;
+            padding: 24px;
             max-width: 500px;
             width: 100%;
-            box-shadow: 0 30px 60px rgba(0,0,0,0.5);
-            position: relative;
+            box-shadow: 0 25px 50px rgba(0,0,0,0.3);
+            border: 1px solid rgba(255,255,255,0.2);
         }
-
-        /* Wake word indicator */
-        .wake-badge {
-            position: absolute;
-            top: 15px;
-            left: 15px;
-            background: rgba(0,0,0,0.6);
-            padding: 5px 12px;
-            border-radius: 20px;
-            font-size: 11px;
-            color: white;
-            backdrop-filter: blur(5px);
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .wake-dot {
-            width: 10px;
-            height: 10px;
-            background: #2ecc71;
-            border-radius: 50%;
-            animation: pulse 2s infinite;
-        }
-
-        @keyframes pulse {
-            0%, 100% { opacity: 1; transform: scale(1); }
-            50% { opacity: 0.5; transform: scale(1.2); }
-        }
-
-        .wake-dot.listening {
-            background: #e74c3c;
-            animation: fastPulse 0.5s infinite;
-        }
-
-        @keyframes fastPulse {
-            0%, 100% { transform: scale(1); background: #e74c3c; }
-            50% { transform: scale(1.3); background: #ff6b6b; }
-        }
-
-        /* Timer */
-        .sleep-timer {
-            position: absolute;
-            top: 15px;
-            right: 15px;
-            background: rgba(0,0,0,0.6);
-            padding: 5px 12px;
-            border-radius: 20px;
-            font-size: 11px;
-            color: white;
-            font-family: monospace;
-        }
-
-        /* Robot section */
-        .robot-section {
-            text-align: center;
-            margin: 40px 0 20px;
-        }
-
+        /* Robot Face */
+        .robot-section { text-align: center; margin: 10px 0; }
         .robot-avatar {
-            width: 260px;
-            height: 260px;
-            margin: 0 auto;
-            background: radial-gradient(circle at 30% 30%, #f5f7fa, #c3cfe2);
+            width: 260px; height: 260px; margin: 0 auto;
+            background: radial-gradient(circle at 35% 35%, #f0f4ff, #cbd5e1);
             border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            position: relative;
-            box-shadow: 0 20px 40px rgba(0,0,0,0.3);
-            transition: all 0.3s ease;
-        }
-
-        .robot-face {
-            position: relative;
-            width: 170px;
-            height: 170px;
-        }
-
-        .eyes {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 35px;
-            gap: 45px;
-        }
-
-        .eye {
-            width: 38px;
-            height: 38px;
-            background: #2c3e50;
-            border-radius: 50%;
-            transition: all 0.1s ease;
-            position: relative;
-        }
-
-        .eye::after {
-            content: '';
-            position: absolute;
-            width: 15px;
-            height: 15px;
-            background: white;
-            border-radius: 50%;
-            top: 7px;
-            left: 7px;
-        }
-
-        /* Sleeping eyes */
-        .sleeping .eye {
-            height: 8px;
-            margin-top: 15px;
-            background: #555;
-        }
-
-        .sleeping .eye::after {
-            display: none;
-        }
-
-        .mouth {
-            width: 85px;
-            height: 45px;
-            margin: 0 auto;
-            background: #2c3e50;
-            border-radius: 0 0 45px 45px;
-            transition: all 0.1s ease;
-        }
-
-        /* Sleeping mouth */
-        .sleeping .mouth {
-            width: 60px;
-            height: 8px;
-            border-radius: 10px;
-            background: #555;
-        }
-
-        /* Animation states */
-        .listening .eye {
-            animation: listenPulse 0.5s infinite;
-            background: #e74c3c;
-        }
-
-        @keyframes listenPulse {
-            0%, 100% { transform: scale(1); }
-            50% { transform: scale(1.3); background: #ff6b6b; }
-        }
-
-        .speaking .mouth {
-            animation: speakAnim 0.12s infinite;
-        }
-
-        @keyframes speakAnim {
-            0%, 100% { height: 25px; border-radius: 0 0 25px 25px; }
-            50% { height: 60px; border-radius: 0 0 60px 60px; }
-        }
-
-        .thinking .eye {
-            animation: thinkMove 0.8s ease-in-out infinite;
-        }
-
-        @keyframes thinkMove {
-            0%, 100% { transform: translate(0, 0); }
-            25% { transform: translate(-10px, 0); }
-            75% { transform: translate(10px, 0); }
-        }
-
-        .robot-name {
-            font-size: 38px;
-            font-weight: bold;
-            color: white;
-            margin-top: 15px;
-            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
-        }
-
-        .status-text {
-            font-size: 13px;
-            color: rgba(255,255,255,0.9);
-            margin-top: 8px;
-            padding: 5px 10px;
-            background: rgba(0,0,0,0.3);
-            border-radius: 20px;
-            display: inline-block;
-        }
-
-        /* Wake word examples */
-        .wake-examples {
-            display: flex;
-            justify-content: center;
-            gap: 15px;
-            margin: 15px 0;
-            flex-wrap: wrap;
-        }
-
-        .wake-example {
-            background: rgba(255,255,255,0.2);
-            padding: 5px 12px;
-            border-radius: 20px;
-            font-size: 12px;
-            color: white;
-        }
-
-        /* Chat box */
-        .chat-section {
-            background: rgba(0,0,0,0.3);
-            border-radius: 20px;
-            padding: 12px;
-            margin-top: 15px;
-        }
-
-        .chat-box {
-            height: 110px;
-            overflow-y: auto;
-            font-size: 12px;
-        }
-
-        .message {
-            margin-bottom: 6px;
-            animation: fadeIn 0.2s ease;
-        }
-
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(5px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-
-        .message.user {
-            text-align: right;
-        }
-
-        .message .bubble {
-            display: inline-block;
-            padding: 5px 10px;
-            border-radius: 12px;
-            max-width: 85%;
-            font-size: 11px;
-        }
-
-        .message.user .bubble {
-            background: #3498db;
-            color: white;
-        }
-
-        .message.ai .bubble {
-            background: rgba(255,255,255,0.9);
-            color: #333;
-        }
-
-        .tip {
-            text-align: center;
-            font-size: 11px;
-            color: rgba(255,255,255,0.7);
-            margin-top: 12px;
-            padding: 8px;
-            background: rgba(0,0,0,0.2);
-            border-radius: 20px;
-        }
-
-        /* Manual wake button */
-        .manual-wake {
-            position: absolute;
-            bottom: 20px;
-            right: 20px;
-            width: 45px;
-            height: 45px;
-            background: rgba(255,255,255,0.2);
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            cursor: pointer;
-            backdrop-filter: blur(5px);
+            display: flex; align-items: center; justify-content: center;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.4);
             transition: all 0.2s;
         }
-
-        .manual-wake:active {
-            transform: scale(0.9);
+        .robot-face { position: relative; width: 170px; height: 170px; }
+        .eyes { display: flex; justify-content: space-between; gap: 50px; margin-bottom: 35px; }
+        .eye {
+            width: 44px; height: 44px; background: #1e293b; border-radius: 50%;
+            transition: 0.1s; position: relative;
         }
-
-        .manual-wake svg {
-            width: 25px;
-            height: 25px;
-            fill: white;
+        .eye::after { content: ''; position: absolute; width: 17px; height: 17px; background: white; border-radius: 50%; top: 8px; left: 8px; }
+        .mouth {
+            width: 95px; height: 48px; background: #1e293b; margin: 0 auto;
+            border-radius: 0 0 48px 48px; transition: 0.1s;
         }
+        /* Animations */
+        .listening .eye { animation: pulseRed 0.6s infinite; background: #dc2626; }
+        .speaking .mouth { animation: talkAnim 0.12s infinite; background: #10b981; }
+        .thinking .eye { animation: thinkMove 0.8s infinite; }
+        @keyframes talkAnim { 0%,100% { height: 25px; } 50% { height: 60px; } }
+        @keyframes pulseRed { 0%,100% { transform: scale(1); } 50% { transform: scale(1.25); background: #ef4444; } }
+        @keyframes thinkMove { 0%,100% { transform: translateX(0); } 50% { transform: translateX(15px); } }
+        
+        .robot-name { font-size: 34px; font-weight: 800; color: white; margin-top: 16px; text-shadow: 0 2px 5px black; }
+        .status-text { font-size: 14px; background: rgba(0,0,0,0.6); display: inline-block; padding: 8px 20px; border-radius: 40px; margin-top: 12px; color: #e2e8f0; }
+        
+        /* Chat box */
+        .chat-box {
+            background: rgba(0,0,0,0.4); border-radius: 28px; padding: 14px;
+            height: 140px; overflow-y: auto; margin: 20px 0; font-size: 13px;
+        }
+        .msg-user { text-align: right; margin-bottom: 8px; }
+        .msg-user span { background: #3b82f6; padding: 8px 16px; border-radius: 24px; display: inline-block; color: white; max-width: 80%; }
+        .msg-ai { text-align: left; margin-bottom: 8px; }
+        .msg-ai span { background: rgba(255,255,255,0.9); padding: 8px 16px; border-radius: 24px; color: #1f2937; display: inline-block; max-width: 80%; }
+        
+        .tip { text-align: center; font-size: 12px; color: #94a3b8; margin-top: 8px; }
+        
+        /* Nút bắt đầu */
+        .start-btn {
+            background: linear-gradient(135deg, #10b981, #059669);
+            padding: 16px 32px;
+            border-radius: 60px;
+            color: white;
+            font-size: 18px;
+            font-weight: bold;
+            text-align: center;
+            cursor: pointer;
+            margin: 10px auto;
+            width: 80%;
+            transition: 0.2s;
+            border: none;
+        }
+        .start-btn:active { transform: scale(0.96); }
+        .hidden { display: none; }
+        
+        /* Manual wake button nhỏ cho iOS */
+        .ios-wake {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: rgba(0,0,0,0.6);
+            padding: 10px 15px;
+            border-radius: 30px;
+            color: white;
+            font-size: 12px;
+            cursor: pointer;
+            backdrop-filter: blur(10px);
+            z-index: 100;
+            display: none;
+        }
+        .ios-wake.show { display: block; }
+        .ios-wake:active { transform: scale(0.95); }
     </style>
 </head>
 <body>
-    <div class="container">
-        <div class="wake-badge">
-            <div class="wake-dot" id="wakeDot"></div>
-            <span id="wakeText">Đang lắng nghe</span>
-        </div>
-        <div class="sleep-timer" id="sleepTimer">😴 Sẽ ngủ sau 2:00</div>
-
-        <div class="robot-section">
-            <div class="robot-avatar" id="robotAvatar">
-                <div class="robot-face" id="robotFace">
-                    <div class="eyes">
-                        <div class="eye" id="leftEye"></div>
-                        <div class="eye" id="rightEye"></div>
-                    </div>
-                    <div class="mouth" id="robotMouth"></div>
-                </div>
-            </div>
-            <div class="robot-name">🐹 CHIRI</div>
-            <div class="status-text" id="statusText">🎤 Nói "Chào CHIRI" hoặc "Hello" để đánh thức</div>
-        </div>
-
-        <div class="wake-examples">
-            <span class="wake-example">🗣️ "Chào CHIRI"</span>
-            <span class="wake-example">🗣️ "Hello"</span>
-            <span class="wake-example">🗣️ "Hi CHIRI"</span>
-            <span class="wake-example">🗣️ "Xin chào"</span>
-        </div>
-
-        <div class="chat-section">
-            <div class="chat-box" id="chatBox">
-                <div class="message ai">
-                    <div class="bubble">🐹 Chào bạn! Mình là CHIRI. Hãy gọi "CHIRI ơi" hoặc "Hello" để trò chuyện nhé! Mình sẽ tự động ngủ sau 2 phút không nói chuyện.</div>
-                </div>
+<div class="container">
+    <div class="robot-section">
+        <div class="robot-avatar" id="robotAvatar">
+            <div class="robot-face" id="robotFace">
+                <div class="eyes"><div class="eye"></div><div class="eye"></div></div>
+                <div class="mouth"></div>
             </div>
         </div>
-        <div class="tip">💡 Mẹo: Nói "CHIRI ơi", "Xin chào", "Hello" để đánh thức. Sau 2 phút không nói, CHIRI sẽ tự ngủ!</div>
-
-        <div class="manual-wake" id="manualWake">
-            <svg viewBox="0 0 24 24">
-                <path d="M12 16c-2.21 0-4-1.79-4-4V6c0-2.21 1.79-4 4-4s4 1.79 4 4v6c0 2.21-1.79 4-4 4zm-6-4c0 .66.54 1.2 1.2 1.2h.6c.66 0 1.2-.54 1.2-1.2V6c0-.66-.54-1.2-1.2-1.2h-.6c-.66 0-1.2.54-1.2 1.2v6zm12 0c0 .66.54 1.2 1.2 1.2h.6c.66 0 1.2-.54 1.2-1.2V6c0-.66-.54-1.2-1.2-1.2h-.6c-.66 0-1.2.54-1.2 1.2v6z"/>
-            </svg>
-        </div>
+        <div class="robot-name">🐹 CHIRI</div>
+        <div class="status-text" id="statusText">🎤 Cần cấp quyền Micro</div>
     </div>
 
-    <script>
-        let ws = null;
-        let recognition = null;
-        let isAwake = true;
-        let inactivityTimer = null;
-        let isProcessing = false;
-        let currentAudio = null;
-        
-        // Cấu hình
-        const INACTIVITY_LIMIT = 120000; // 2 phút
-        const WAKE_WORDS = ['chiri', 'chào chiri', 'xin chào', 'hello chiri', 'hi chiri', 'chiri ơi', 'hey chiri', 'chào bạn', 'alô', 'chào'];
-        
-        let lastActivityTime = Date.now();
-        let countdownInterval = null;
-        
-        // Khởi tạo Speech Recognition
-        function initSpeechRecognition() {
-            if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
-                const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-                recognition = new SpeechRecognition();
-                recognition.lang = 'vi-VN';
-                recognition.continuous = true;
-                recognition.interimResults = true;
-                recognition.maxAlternatives = 1;
-                
-                recognition.onstart = () => {
-                    console.log('🎤 Continuous listening started');
-                    updateWakeIndicator('listening');
-                };
-                
-                recognition.onresult = (event) => {
-                    for (let i = event.resultIndex; i < event.results.length; i++) {
-                        const transcript = event.results[i][0].transcript.toLowerCase().trim();
-                        const isFinal = event.results[i].isFinal;
-                        
-                        if (transcript) {
-                            console.log('🎙️ Heard:', transcript);
-                            
-                            // Kiểm tra wake word
-                            if (!isAwake && !isProcessing) {
-                                for (const word of WAKE_WORDS) {
-                                    if (transcript.includes(word)) {
-                                        console.log('🔊 Wake word detected!');
-                                        wakeUp();
-                                        break;
-                                    }
-                                }
-                            }
-                            
-                            // Nếu đang thức và có câu lệnh
-                            if (isAwake && !isProcessing && isFinal && transcript.length > 2) {
-                                // Bỏ qua nếu chỉ là wake word
-                                let isOnlyWakeWord = false;
-                                for (const word of WAKE_WORDS) {
-                                    if (transcript === word || transcript === word + ' ơi') {
-                                        isOnlyWakeWord = true;
-                                        break;
-                                    }
-                                }
-                                
-                                if (!isOnlyWakeWord && !transcript.includes('chiri ơi')) {
-                                    processCommand(transcript);
-                                }
-                            }
-                        }
-                    }
-                };
-                
-                recognition.onerror = (event) => {
-                    console.error('Recognition error:', event.error);
-                    if (event.error === 'no-speech') {
-                        // Không làm gì
-                    } else if (event.error === 'not-allowed') {
-                        updateWakeIndicator('error');
-                        document.getElementById('statusText').innerHTML = '❌ Cần cấp quyền micro!';
-                    }
-                };
-                
-                recognition.onend = () => {
-                    console.log('Recognition ended, restarting...');
-                    if (!isProcessing) {
-                        setTimeout(() => {
-                            try {
-                                recognition.start();
-                            } catch (e) {
-                                console.log('Restart error:', e);
-                            }
-                        }, 500);
-                    }
-                };
-                
-                recognition.start();
-            } else {
-                document.getElementById('statusText').innerHTML = '⚠️ Trình duyệt không hỗ trợ! Dùng Chrome/Edge nhé!';
-            }
-        }
-        
-        function updateWakeIndicator(state) {
-            const dot = document.getElementById('wakeDot');
-            const text = document.getElementById('wakeText');
-            
-            if (state === 'listening') {
-                dot.classList.add('listening');
-                text.innerHTML = '🎤 Đang nghe...';
-            } else if (state === 'awake') {
-                dot.classList.remove('listening');
-                dot.style.background = '#f39c12';
-                text.innerHTML = '💬 Đang thức';
-            } else if (state === 'sleeping') {
-                dot.classList.remove('listening');
-                dot.style.background = '#2ecc71';
-                text.innerHTML = '😴 Đang ngủ';
-            }
-        }
-        
-        function wakeUp() {
-            if (isAwake) return;
-            
-            isAwake = true;
-            lastActivityTime = Date.now();
-            
-            resetInactivityTimer();
-            
-            const robotFace = document.getElementById('robotFace');
-            robotFace.classList.remove('sleeping');
-            updateWakeIndicator('awake');
-            
-            const greetings = [
-                "Dạ, CHIRI đây ạ! Có gì cần giúp không ạ?",
-                "Vâng ạ! CHIRI nghe rõ!",
-                "Chào bạn! CHIRI đây, cần gì ạ?"
-            ];
-            const greeting = greetings[Math.floor(Math.random() * greetings.length)];
-            addMessage('ai', greeting);
-            playAudio(greeting);
-            
-            document.getElementById('statusText').innerHTML = '🎤 CHIRI đang lắng nghe... Hãy nói!';
-        }
-        
-        function goToSleep() {
-            if (!isAwake) return;
-            
-            isAwake = false;
-            
-            const robotFace = document.getElementById('robotFace');
-            robotFace.classList.add('sleeping');
-            updateWakeIndicator('sleeping');
-            
-            const sleepMsg = "CHIRI đi ngủ đây ạ. Khi nào cần hãy gọi CHIRI nhé!";
-            addMessage('ai', sleepMsg);
-            playAudio(sleepMsg);
-            
-            document.getElementById('statusText').innerHTML = '😴 CHIRI đang ngủ - Hãy nói "Chào CHIRI" để đánh thức';
-            
-            if (inactivityTimer) {
-                clearTimeout(inactivityTimer);
-                inactivityTimer = null;
-            }
-            if (countdownInterval) {
-                clearInterval(countdownInterval);
-                countdownInterval = null;
-            }
-            document.getElementById('sleepTimer').innerHTML = '😴 Đang ngủ';
-        }
-        
-        function resetInactivityTimer() {
-            lastActivityTime = Date.now();
-            
-            if (inactivityTimer) {
-                clearTimeout(inactivityTimer);
-            }
-            
-            inactivityTimer = setTimeout(() => {
-                if (isAwake && (Date.now() - lastActivityTime) >= INACTIVITY_LIMIT) {
-                    goToSleep();
-                }
-            }, INACTIVITY_LIMIT);
-            
-            if (countdownInterval) clearInterval(countdownInterval);
-            countdownInterval = setInterval(() => {
-                if (isAwake) {
-                    const elapsed = Date.now() - lastActivityTime;
-                    const remaining = Math.max(0, INACTIVITY_LIMIT - elapsed);
-                    const seconds = Math.floor(remaining / 1000);
-                    const minutes = Math.floor(seconds / 60);
-                    const secs = seconds % 60;
-                    document.getElementById('sleepTimer').innerHTML = `😴 Ngủ sau ${minutes}:${secs.toString().padStart(2, '0')}`;
-                }
-            }, 1000);
-        }
-        
-        async function processCommand(text) {
-            if (isProcessing) return;
-            
-            isProcessing = true;
-            resetInactivityTimer();
-            
-            addMessage('user', text);
-            setThinking(true);
-            document.getElementById('statusText').innerHTML = '🤔 CHIRI đang suy nghĩ...';
-            
-            if (ws && ws.readyState === WebSocket.OPEN) {
-                ws.send(JSON.stringify({ type: 'user', text: text }));
-            } else {
-                addMessage('ai', 'Xin lỗi, CHIRI đang mất kết nối mạng!');
-                setThinking(false);
-                isProcessing = false;
-            }
-        }
-        
-        function setThinking(isThinking) {
-            const robotFace = document.getElementById('robotFace');
-            if (isThinking) {
-                robotFace.classList.add('thinking');
-            } else {
+    <button class="start-btn" id="startMicroBtn">🎙️ CHO PHÉP MICRO & BẮT ĐẦU</button>
+
+    <div class="chat-box" id="chatBox">
+        <div class="msg-ai"><span>🐹 Chào bạn! Hãy nhấn nút bên trên để cấp quyền micro.</span></div>
+    </div>
+    <div class="tip">💡 Sau khi cấp quyền, CHIRI sẽ luôn lắng nghe. Nói "CHIRI ơi" hoặc trực tiếp câu hỏi.</div>
+</div>
+
+<!-- Nút hỗ trợ iOS (hiện ra khi micro bị ngắt) -->
+<div class="ios-wake" id="iosWakeBtn">🔴 Bấm để kích hoạt lại micro</div>
+
+<script>
+    // ==================== KHỞI TẠO ====================
+    let ws = null;
+    let isProcessing = false;
+    let currentAudio = null;
+    let mediaStream = null;
+    let recognition = null;
+    let isAwake = true;
+    let inactivityTimer = null;
+    let isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+    const INACTIVITY_LIMIT = 120000;
+
+    const robotFace = document.getElementById('robotFace');
+    const statusDiv = document.getElementById('statusText');
+    const chatBox = document.getElementById('chatBox');
+    const startBtn = document.getElementById('startMicroBtn');
+    const iosWakeBtn = document.getElementById('iosWakeBtn');
+
+    function addMessage(type, text) {
+        const msgDiv = document.createElement('div');
+        msgDiv.className = type === 'user' ? 'msg-user' : 'msg-ai';
+        msgDiv.innerHTML = `<span>${type === 'user' ? '👤 ' : '🐹 '}${text}</span>`;
+        chatBox.appendChild(msgDiv);
+        chatBox.scrollTop = chatBox.scrollHeight;
+        if(chatBox.children.length > 15) chatBox.removeChild(chatBox.firstChild);
+    }
+
+    // WebSocket
+    function connectWS() {
+        const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+        ws = new WebSocket(`${protocol}//${location.host}`);
+        ws.onopen = () => console.log("✅ WS Connected");
+        ws.onmessage = (e) => {
+            const data = JSON.parse(e.data);
+            if(data.type === 'ai') {
                 robotFace.classList.remove('thinking');
-            }
-        }
-        
-        // Play audio from OpenAI TTS
-        async function playAudio(text) {
-            console.log('[PlayAudio] Starting for text:', text);
-            
-            try {
-                if (currentAudio) {
-                    console.log('[PlayAudio] Stopping current audio');
-                    currentAudio.pause();
-                    currentAudio = null;
-                }
-                
-                const url = `/tts?text=${encodeURIComponent(text)}`;
-                console.log('[PlayAudio] Fetching:', url);
-                
-                const response = await fetch(url);
-                console.log('[PlayAudio] Response status:', response.status);
-                
-                if (!response.ok) {
-                    const errorText = await response.text();
-                    console.error('[PlayAudio] HTTP Error:', response.status, errorText);
-                    throw new Error(`HTTP ${response.status}`);
-                }
-                
-                const audioBlob = await response.blob();
-                console.log('[PlayAudio] Received blob size:', audioBlob.size, 'bytes');
-                
-                if (audioBlob.size < 100) {
-                    console.error('[PlayAudio] Audio blob too small!');
-                    throw new Error('Audio file too small');
-                }
-                
-                const audioUrl = URL.createObjectURL(audioBlob);
-                currentAudio = new Audio(audioUrl);
-                
-                currentAudio.onplay = () => {
-                    console.log('[PlayAudio] Audio started playing');
-                    document.getElementById('robotFace').classList.add('speaking');
-                };
-                
-                currentAudio.onended = () => {
-                    console.log('[PlayAudio] Audio ended');
-                    document.getElementById('robotFace').classList.remove('speaking');
-                    URL.revokeObjectURL(audioUrl);
-                    currentAudio = null;
-                    setThinking(false);
-                    isProcessing = false;
-                    
-                    if (isAwake) {
-                        document.getElementById('statusText').innerHTML = '🎤 CHIRI đang lắng nghe... Hãy nói!';
-                    }
-                };
-                
-                currentAudio.onerror = (e) => {
-                    console.error('[PlayAudio] Audio error:', e);
-                    document.getElementById('robotFace').classList.remove('speaking');
-                    URL.revokeObjectURL(audioUrl);
-                    currentAudio = null;
-                    setThinking(false);
-                    isProcessing = false;
-                    fallbackSpeak(text);
-                };
-                
-                await currentAudio.play();
-                
-            } catch (error) {
-                console.error('[PlayAudio] Fatal error:', error);
-                document.getElementById('robotFace').classList.remove('speaking');
-                setThinking(false);
-                isProcessing = false;
-                fallbackSpeak(text);
-            }
-        }
-        
-        // Fallback Web Speech API
-        function fallbackSpeak(text) {
-            console.log('[Fallback] Using Web Speech API for:', text);
-            
-            if ('speechSynthesis' in window) {
-                const utterance = new SpeechSynthesisUtterance(text);
-                const hasVietnamese = /[àáảãạăắằẵặâấầẫậđèéẻẽẹêếềễệìíỉĩịòóỏõọôốồỗộơớờỡợùúủũụưứừữựỳýỷỹỵ]/i.test(text);
-                utterance.lang = hasVietnamese ? 'vi-VN' : 'en-US';
-                utterance.rate = 0.9;
-                utterance.pitch = 1.1;
-                
-                utterance.onstart = () => {
-                    document.getElementById('robotFace').classList.add('speaking');
-                };
-                
-                utterance.onend = () => {
-                    document.getElementById('robotFace').classList.remove('speaking');
-                    setThinking(false);
-                    isProcessing = false;
-                };
-                
-                window.speechSynthesis.cancel();
-                window.speechSynthesis.speak(utterance);
-            } else {
-                console.error('[Fallback] Web Speech API not supported');
-                setThinking(false);
-                isProcessing = false;
-            }
-        }
-        
-        function addMessage(type, text) {
-            const chatBox = document.getElementById('chatBox');
-            const messageDiv = document.createElement('div');
-            messageDiv.className = `message ${type}`;
-            messageDiv.innerHTML = `<div class="bubble">${text}</div>`;
-            chatBox.appendChild(messageDiv);
-            chatBox.scrollTop = chatBox.scrollHeight;
-            
-            while (chatBox.children.length > 20) {
-                chatBox.removeChild(chatBox.firstChild);
-            }
-        }
-        
-        // WebSocket
-        function connectWebSocket() {
-            const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
-            ws = new WebSocket(`${protocol}//${location.host}`);
-            
-            ws.onopen = () => {
-                console.log('WebSocket connected');
-            };
-            
-            ws.onmessage = (event) => {
-                const data = JSON.parse(event.data);
-                if (data.type === 'ai') {
-                    addMessage('ai', data.text);
-                    playAudio(data.text);
-                }
-            };
-            
-            ws.onclose = () => {
-                console.log('WebSocket disconnected, reconnecting...');
-                setTimeout(connectWebSocket, 3000);
-            };
-        }
-        
-        // Manual wake button
-        document.getElementById('manualWake').addEventListener('click', () => {
-            if (!isAwake) {
-                wakeUp();
-            } else {
+                addMessage('ai', data.text);
+                speakText(data.text);
                 resetInactivityTimer();
-                const msg = "Dạ, CHIRI đây! Bạn cần gì ạ?";
-                addMessage('ai', msg);
-                playAudio(msg);
             }
-        });
-        
-        // Khởi tạo
-        initSpeechRecognition();
-        connectWebSocket();
+        };
+        ws.onclose = () => setTimeout(connectWS, 2000);
+    }
+
+    // TTS
+    async function speakText(text) {
+        if(currentAudio) { currentAudio.pause(); currentAudio = null; }
+        robotFace.classList.add('speaking');
+        try {
+            const res = await fetch(`/tts?text=${encodeURIComponent(text)}`);
+            if(res.ok) {
+                const blob = await res.blob();
+                const url = URL.createObjectURL(blob);
+                currentAudio = new Audio(url);
+                currentAudio.onended = () => {
+                    robotFace.classList.remove('speaking');
+                    URL.revokeObjectURL(url);
+                    currentAudio = null;
+                    isProcessing = false;
+                };
+                currentAudio.onerror = () => fallbackSpeech(text);
+                await currentAudio.play();
+                return;
+            }
+        } catch(e) {}
+        fallbackSpeech(text);
+    }
+
+    function fallbackSpeech(text) {
+        if(!window.speechSynthesis) return;
+        window.speechSynthesis.cancel();
+        const utterance = new SpeechSynthesisUtterance(text);
+        const hasVN = /[àáảãạă]/.test(text);
+        utterance.lang = hasVN ? 'vi-VN' : 'en-US';
+        utterance.rate = 0.9;
+        utterance.onstart = () => robotFace.classList.add('speaking');
+        utterance.onend = () => {
+            robotFace.classList.remove('speaking');
+            isProcessing = false;
+        };
+        utterance.onerror = () => {
+            robotFace.classList.remove('speaking');
+            isProcessing = false;
+        };
+        window.speechSynthesis.speak(utterance);
+    }
+
+    function sendToAI(text) {
+        if(!text.trim() || isProcessing) return;
+        isProcessing = true;
+        addMessage('user', text);
+        robotFace.classList.add('thinking');
+        statusDiv.innerText = "🤔 Đang suy nghĩ...";
         resetInactivityTimer();
         
-        console.log('CHIRI Ready - Say "Hello" or "Chào CHIRI" to wake up!');
-    </script>
+        if(ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ type: 'user', text: text }));
+        } else {
+            addMessage('ai', "Mất kết nối, đang kết nối lại...");
+            isProcessing = false;
+            robotFace.classList.remove('thinking');
+        }
+    }
+
+    function resetInactivityTimer() {
+        if(inactivityTimer) clearTimeout(inactivityTimer);
+        inactivityTimer = setTimeout(() => {
+            if(!isProcessing) {
+                statusDiv.innerText = "🎤 Đang lắng nghe... Hãy nói chuyện!";
+                robotFace.classList.remove('thinking', 'speaking');
+                
+                // Trên iOS, hiển thị nút wake để người dùng kích hoạt lại nếu cần
+                if(isIOS) {
+                    iosWakeBtn.classList.add('show');
+                }
+            }
+        }, INACTIVITY_LIMIT);
+    }
+
+    // Khởi tạo micro (nhấn nút)
+    let isContinuousListening = false;
+    
+    function startContinuousListening() {
+        if(isContinuousListening) return;
+        if(!window.webkitSpeechRecognition && !window.SpeechRecognition) {
+            statusDiv.innerText = "❌ Trình duyệt không hỗ trợ micro";
+            return;
+        }
+        
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        recognition = new SpeechRecognition();
+        recognition.continuous = true;
+        recognition.interimResults = true;
+        recognition.lang = 'vi-VN';
+        
+        recognition.onstart = () => {
+            console.log("🎤 Continuous listening started");
+            isContinuousListening = true;
+            statusDiv.innerText = "🎤 CHIRI đang lắng nghe... Hãy nói!";
+            robotFace.classList.add('listening');
+            iosWakeBtn.classList.remove('show');
+        };
+        
+        recognition.onresult = (event) => {
+            for(let i = event.resultIndex; i < event.results.length; i++) {
+                const transcript = event.results[i][0].transcript.toLowerCase().trim();
+                if(transcript && event.results[i].isFinal) {
+                    console.log("🎙️ Heard:", transcript);
+                    
+                    if(transcript.includes("chiri ơi") || transcript.includes("chiri oi") || 
+                       transcript.includes("xin chào") || transcript.includes("hello chiri")) {
+                        statusDiv.innerText = "🎤 Dạ, CHIRI nghe rõ!";
+                        continue;
+                    }
+                    
+                    if(transcript.length > 2 && !transcript.includes("chiri ơi")) {
+                        recognition.stop();
+                        sendToAI(transcript);
+                        setTimeout(() => {
+                            if(recognition) {
+                                try { recognition.start(); } catch(e) { console.log(e); }
+                            }
+                        }, 2000);
+                        break;
+                    }
+                }
+            }
+        };
+        
+        recognition.onerror = (event) => {
+            console.error("Recognition error:", event.error);
+            if(event.error === 'not-allowed') {
+                statusDiv.innerText = "❌ Chưa cấp quyền micro!";
+                startBtn.classList.remove('hidden');
+            } else if(event.error === 'no-speech') {
+                // Thường gặp trên iOS, thử khởi động lại
+                setTimeout(() => {
+                    if(recognition) {
+                        try { recognition.start(); } catch(e) {}
+                    }
+                }, 500);
+            }
+        };
+        
+        recognition.onend = () => {
+            console.log("Recognition ended");
+            isContinuousListening = false;
+            robotFace.classList.remove('listening');
+            // Tự khởi động lại
+            if(!isProcessing) {
+                setTimeout(() => {
+                    if(recognition) {
+                        try { recognition.start(); } catch(e) {}
+                    }
+                }, 500);
+            }
+        };
+        
+        recognition.start();
+    }
+
+    async function initMicrophone() {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            mediaStream = stream;
+            console.log("✅ Microphone permission granted");
+            statusDiv.innerText = "🎤 Đã có quyền micro! Đang khởi động...";
+            
+            startBtn.classList.add('hidden');
+            startContinuousListening();
+            connectWS();
+            resetInactivityTimer();
+            
+            setTimeout(() => {
+                const welcome = "Chào bạn! CHIRI đã sẵn sàng, hãy nói chuyện tự nhiên nhé!";
+                addMessage('ai', welcome);
+                speakText(welcome);
+            }, 1000);
+            
+        } catch(err) {
+            console.error("Micro error:", err);
+            statusDiv.innerText = "❌ Không thể truy cập micro. Hãy kiểm tra quyền!";
+            alert("Vui lòng cấp quyền micro để sử dụng CHIRI!");
+        }
+    }
+    
+    // iOS wake button - kích hoạt lại micro
+    iosWakeBtn.addEventListener('click', () => {
+        if(recognition) {
+            try {
+                recognition.stop();
+                setTimeout(() => {
+                    recognition.start();
+                    statusDiv.innerText = "🎤 Đã kích hoạt lại! Hãy nói chuyện!";
+                    iosWakeBtn.classList.remove('show');
+                }, 500);
+            } catch(e) {
+                initMicrophone();
+            }
+        } else {
+            initMicrophone();
+        }
+    });
+    
+    startBtn.addEventListener('click', initMicrophone);
+    
+    console.log("CHIRI ready - Platform:", isIOS ? "iOS" : "Android/Desktop");
+</script>
 </body>
 </html>
