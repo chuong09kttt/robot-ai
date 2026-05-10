@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>🤖 AI Robot Pika - Học tiếng Anh cùng Robot</title>
+    <title>🎙️ AI Robot Pika - Giao tiếp bằng giọng nói</title>
     <style>
         * {
             margin: 0;
@@ -12,7 +12,7 @@
         }
 
         body {
-            font-family: 'Segoe UI', 'Arial', sans-serif;
+            font-family: 'Segoe UI', Arial, sans-serif;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             min-height: 100vh;
             display: flex;
@@ -28,19 +28,12 @@
             max-width: 500px;
             width: 100%;
             box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-            animation: fadeIn 0.5s ease;
-        }
-
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(20px); }
-            to { opacity: 1; transform: translateY(0); }
         }
 
         /* Robot Header */
         .robot-header {
             text-align: center;
             margin-bottom: 20px;
-            position: relative;
         }
 
         .robot-avatar {
@@ -53,16 +46,14 @@
             align-items: center;
             justify-content: center;
             position: relative;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
-            animation: bounce 2s infinite;
+            cursor: pointer;
+            transition: transform 0.3s ease;
         }
 
-        @keyframes bounce {
-            0%, 100% { transform: translateY(0); }
-            50% { transform: translateY(-10px); }
+        .robot-avatar:active {
+            transform: scale(0.95);
         }
 
-        /* Mặt Robot */
         .robot-face {
             position: relative;
             width: 80px;
@@ -87,64 +78,48 @@
             width: 40px;
             height: 20px;
             margin: 0 auto;
+            background: #333;
             border-radius: 0 0 20px 20px;
             transition: all 0.3s ease;
         }
 
-        /* Cảm xúc khác nhau */
-        .emotion-happy .mouth {
-            background: #333;
-            border-radius: 0 0 30px 30px;
-            height: 25px;
-        }
-
-        .emotion-sad .mouth {
-            background: #333;
-            border-radius: 30px 30px 0 0;
-            height: 25px;
-        }
-
-        .emotion-surprised .mouth {
-            background: #333;
-            border-radius: 50%;
-            width: 30px;
-            height: 30px;
-            margin-top: -5px;
-        }
-
-        .emotion-excited .eye {
-            transform: scale(1.3);
+        /* Cảm xúc */
+        .listening .eye {
             background: #ff6b6b;
+            animation: pulse 0.5s infinite;
         }
 
-        .emotion-thinking .eye {
-            animation: blink 2s infinite;
+        .listening .mouth {
+            width: 30px;
+            height: 15px;
+            border-radius: 50%;
         }
 
-        @keyframes blink {
-            0%, 90%, 100% { transform: scaleY(1); }
-            95% { transform: scaleY(0.1); }
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.3); }
+        }
+
+        .speaking .mouth {
+            animation: talk 0.2s infinite;
+        }
+
+        @keyframes talk {
+            0%, 100% { height: 10px; }
+            50% { height: 25px; }
         }
 
         .robot-name {
             font-size: 24px;
             font-weight: bold;
             color: #667eea;
-            margin-top: 10px;
         }
 
-        .robot-status {
-            font-size: 14px;
-            color: #666;
-            margin-top: 5px;
-        }
-
-        /* Trạng thái kết nối */
         .connection-status {
             text-align: center;
             padding: 8px;
             border-radius: 20px;
-            margin-bottom: 20px;
+            margin: 15px 0;
             font-weight: bold;
             font-size: 14px;
         }
@@ -159,14 +134,54 @@
             color: #721c24;
         }
 
+        /* Microphone Button */
+        .mic-button {
+            width: 70px;
+            height: 70px;
+            margin: 10px auto;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.2);
+        }
+
+        .mic-button.listening {
+            background: linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%);
+            animation: shake 1s infinite;
+            transform: scale(1.1);
+        }
+
+        @keyframes shake {
+            0%, 100% { transform: scale(1.1); }
+            25% { transform: scale(1.15); }
+            75% { transform: scale(1.05); }
+        }
+
+        .mic-button svg {
+            width: 35px;
+            height: 35px;
+            fill: white;
+        }
+
+        .mic-text {
+            text-align: center;
+            margin-top: 5px;
+            font-size: 12px;
+            color: #666;
+        }
+
         /* Chat Box */
         .chat-box {
             border: 2px solid #e0e0e0;
             border-radius: 20px;
-            height: 350px;
+            height: 300px;
             overflow-y: auto;
             padding: 15px;
-            margin-bottom: 20px;
+            margin: 15px 0;
             background: #f9f9f9;
         }
 
@@ -179,11 +194,11 @@
         @keyframes slideIn {
             from {
                 opacity: 0;
-                transform: translateX(-20px);
+                transform: translateY(10px);
             }
             to {
                 opacity: 1;
-                transform: translateX(0);
+                transform: translateY(0);
             }
         }
 
@@ -191,7 +206,7 @@
             justify-content: flex-end;
         }
 
-        .message.bubble {
+        .message .bubble {
             max-width: 70%;
             padding: 10px 15px;
             border-radius: 20px;
@@ -211,10 +226,6 @@
             border-radius: 20px 20px 20px 5px;
         }
 
-        .message.ai {
-            justify-content: flex-start;
-        }
-
         .message-avatar {
             width: 35px;
             height: 35px;
@@ -228,69 +239,32 @@
             font-size: 20px;
         }
 
-        /* Input Area */
+        /* Input Text */
         .input-area {
             display: flex;
             gap: 10px;
-            margin-bottom: 15px;
+            margin-top: 10px;
         }
 
         input {
             flex: 1;
-            padding: 15px;
+            padding: 12px;
             border: 2px solid #e0e0e0;
             border-radius: 25px;
             font-size: 16px;
             outline: none;
-            transition: all 0.3s ease;
-        }
-
-        input:focus {
-            border-color: #667eea;
-            box-shadow: 0 0 10px rgba(102, 126, 234, 0.3);
         }
 
         button {
-            padding: 15px 25px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 12px 20px;
+            background: #667eea;
             color: white;
             border: none;
             border-radius: 25px;
             cursor: pointer;
-            font-size: 16px;
             font-weight: bold;
-            transition: transform 0.2s ease;
         }
 
-        button:active {
-            transform: scale(0.95);
-        }
-
-        /* Quick Commands */
-        .quick-commands {
-            display: flex;
-            gap: 8px;
-            flex-wrap: wrap;
-            justify-content: center;
-        }
-
-        .quick-btn {
-            padding: 8px 15px;
-            background: #f0f0f0;
-            border: none;
-            border-radius: 20px;
-            font-size: 12px;
-            cursor: pointer;
-            transition: all 0.3s ease;
-        }
-
-        .quick-btn:hover {
-            background: #667eea;
-            color: white;
-            transform: translateY(-2px);
-        }
-
-        /* Typing Indicator */
         .typing-indicator {
             display: none;
             padding: 10px;
@@ -307,18 +281,14 @@
             animation: typing 1.4s infinite;
         }
 
-        .typing-dot:nth-child(2) { animation-delay: 0.2s; }
-        .typing-dot:nth-child(3) { animation-delay: 0.4s; }
-
         @keyframes typing {
-            0%, 60%, 100% { transform: translateY(0); opacity: 0.5; }
-            30% { transform: translateY(-10px); opacity: 1; }
+            0%, 60%, 100% { transform: translateY(0); }
+            30% { transform: translateY(-10px); }
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <!-- Robot Header -->
         <div class="robot-header">
             <div class="robot-avatar" id="robotAvatar">
                 <div class="robot-face" id="robotFace">
@@ -329,122 +299,127 @@
                     <div class="mouth" id="robotMouth"></div>
                 </div>
             </div>
-            <div class="robot-name">🤖 Pika Robot</div>
-            <div class="robot-status" id="robotStatus">Học tiếng Anh cùng Pika nào!</div>
+            <div class="robot-name">🎙️ Pika AI Robot</div>
         </div>
 
-        <!-- Connection Status -->
         <div class="connection-status offline" id="connectionStatus">
             🔌 Đang kết nối...
         </div>
 
-        <!-- Chat Box -->
+        <!-- Microphone Button -->
+        <div class="mic-button" id="micButton">
+            <svg viewBox="0 0 24 24">
+                <path d="M12 16c-2.21 0-4-1.79-4-4V6c0-2.21 1.79-4 4-4s4 1.79 4 4v6c0 2.21-1.79 4-4 4zm-6-4c0 .66.54 1.2 1.2 1.2h.6c.66 0 1.2-.54 1.2-1.2V6c0-.66-.54-1.2-1.2-1.2h-.6c-.66 0-1.2.54-1.2 1.2v6zm12 0c0 .66.54 1.2 1.2 1.2h.6c.66 0 1.2-.54 1.2-1.2V6c0-.66-.54-1.2-1.2-1.2h-.6c-.66 0-1.2.54-1.2 1.2v6z"/>
+            </svg>
+        </div>
+        <div class="mic-text" id="micText">Nhấn và nói để giao tiếp</div>
+
         <div class="chat-box" id="chatBox">
             <div class="message ai">
                 <div class="message-avatar">🤖</div>
                 <div class="bubble">
                     Xin chào! Mình là Pika 🤖<br>
-                    Mình sẽ giúp bạn học tiếng Anh qua trò chuyện!<br>
-                    Hãy nói chuyện với mình nhé!
+                    Hãy nhấn vào micro và nói chuyện với mình nhé!<br>
+                    Mình sẽ trả lời bằng cả văn bản và giọng nói.
                 </div>
             </div>
         </div>
 
-        <!-- Typing Indicator -->
         <div class="typing-indicator" id="typingIndicator">
             <div class="typing-dot"></div>
             <div class="typing-dot"></div>
             <div class="typing-dot"></div>
         </div>
 
-        <!-- Input Area -->
         <div class="input-area">
-            <input type="text" id="messageInput" placeholder="Nhập tin nhắn của bạn..." />
-            <button id="sendBtn">📤 Gửi</button>
-        </div>
-
-        <!-- Quick Commands -->
-        <div class="quick-commands">
-            <button class="quick-btn" data-text="Hello! How are you?">👋 Hello</button>
-            <button class="quick-btn" data-text="What is your name?">📛 Name</button>
-            <button class="quick-btn" data-text="I love learning English">❤️ Love</button>
-            <button class="quick-btn" data-text="Can you help me?">🆘 Help</button>
-            <button class="quick-btn" data-text="Thank you very much">🙏 Thanks</button>
-            <button class="quick-btn" data-text="Goodbye! See you later">👋 Goodbye</button>
+            <input type="text" id="messageInput" placeholder="Hoặc nhập văn bản..." />
+            <button id="sendBtn">Gửi</button>
         </div>
     </div>
 
     <script>
         let ws = null;
-        let currentEmotion = 'happy';
+        let recognition = null;
+        let isListening = false;
 
-        // Các cảm xúc của robot
-        const emotions = {
-            happy: {
-                eyeStyle: 'normal',
-                mouthClass: 'emotion-happy',
-                status: '😊 Mình đang rất vui!'
-            },
-            sad: {
-                eyeStyle: 'normal',
-                mouthClass: 'emotion-sad',
-                status: '😔 Mình hơi buồn...'
-            },
-            surprised: {
-                eyeStyle: 'big',
-                mouthClass: 'emotion-surprised',
-                status: '😲 Thật bất ngờ!'
-            },
-            excited: {
-                eyeStyle: 'big',
-                mouthClass: 'emotion-excited',
-                status: '🤩 Wow! Thú vị quá!'
-            },
-            thinking: {
-                eyeStyle: 'blink',
-                mouthClass: 'normal',
-                status: '🤔 Mình đang nghĩ...'
+        // Khởi tạo Speech Recognition
+        if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            recognition = new SpeechRecognition();
+            recognition.lang = 'vi-VN'; // Tiếng Việt
+            recognition.continuous = false;
+            recognition.interimResults = false;
+            recognition.maxAlternatives = 1;
+
+            recognition.onstart = () => {
+                isListening = true;
+                document.getElementById('micButton').classList.add('listening');
+                document.getElementById('micText').innerHTML = '🎙️ Đang nghe... Hãy nói!';
+                document.getElementById('robotFace').classList.add('listening');
+            };
+
+            recognition.onresult = (event) => {
+                const text = event.results[0][0].transcript;
+                document.getElementById('micText').innerHTML = `🗣️ "${text}"`;
+                sendMessage(text);
+                stopListening();
+            };
+
+            recognition.onerror = (event) => {
+                console.error('Lỗi nhận dạng:', event.error);
+                document.getElementById('micText').innerHTML = '❌ Không nghe rõ, thử lại!';
+                stopListening();
+            };
+
+            recognition.onend = () => {
+                stopListening();
+            };
+        } else {
+            document.getElementById('micText').innerHTML = '⚠️ Trình duyệt không hỗ trợ micro';
+            document.getElementById('micButton').style.opacity = '0.5';
+        }
+
+        function startListening() {
+            if (recognition && !isListening) {
+                try {
+                    recognition.start();
+                } catch (e) {
+                    console.error('Lỗi:', e);
+                }
             }
-        };
+        }
 
-        function setEmotion(emotion) {
-            currentEmotion = emotion;
-            const robotFace = document.getElementById('robotFace');
-            const robotStatus = document.getElementById('robotStatus');
-            const leftEye = document.getElementById('leftEye');
-            const rightEye = document.getElementById('rightEye');
-            
-            // Xóa các class cảm xúc cũ
-            robotFace.className = 'robot-face';
-            if (emotions[emotion]) {
-                robotFace.classList.add(emotions[emotion].mouthClass);
-                robotStatus.textContent = emotions[emotion].status;
-                
-                // Thay đổi mắt theo cảm xúc
-                if (emotions[emotion].eyeStyle === 'big') {
-                    leftEye.style.transform = 'scale(1.5)';
-                    rightEye.style.transform = 'scale(1.5)';
-                } else {
-                    leftEye.style.transform = 'scale(1)';
-                    rightEye.style.transform = 'scale(1)';
-                }
-                
-                if (emotions[emotion].eyeStyle === 'blink') {
-                    setInterval(() => {
-                        leftEye.style.transform = 'scaleY(0.1)';
-                        rightEye.style.transform = 'scaleY(0.1)';
-                        setTimeout(() => {
-                            leftEye.style.transform = 'scaleY(1)';
-                            rightEye.style.transform = 'scaleY(1)';
-                        }, 100);
-                    }, 3000);
-                }
+        function stopListening() {
+            isListening = false;
+            document.getElementById('micButton').classList.remove('listening');
+            document.getElementById('robotFace').classList.remove('listening');
+            if (recognition) {
+                try {
+                    recognition.stop();
+                } catch (e) {}
+            }
+        }
+
+        // Text-to-Speech
+        function speak(text) {
+            if ('speechSynthesis' in window) {
+                const utterance = new SpeechSynthesisUtterance(text);
+                utterance.lang = 'vi-VN';
+                utterance.rate = 0.9;
+                utterance.pitch = 1.2;
+                utterance.onstart = () => {
+                    document.getElementById('robotFace').classList.add('speaking');
+                };
+                utterance.onend = () => {
+                    document.getElementById('robotFace').classList.remove('speaking');
+                };
+                window.speechSynthesis.cancel();
+                window.speechSynthesis.speak(utterance);
             }
         }
 
         function showTyping() {
             document.getElementById('typingIndicator').style.display = 'block';
-            setEmotion('thinking');
         }
 
         function hideTyping() {
@@ -462,23 +437,11 @@
                     <div class="bubble">${text}</div>
                 `;
             } else {
-                messageDiv.innerHTML = `
-                    <div class="bubble">${text}</div>
-                `;
+                messageDiv.innerHTML = `<div class="bubble">${text}</div>`;
             }
             
             chatBox.appendChild(messageDiv);
             chatBox.scrollTop = chatBox.scrollHeight;
-            
-            // Phát âm thanh (tùy chọn)
-            if (type === 'ai') {
-                // Tạo hiệu ứng rung nhẹ cho avatar
-                const avatar = document.querySelector('.robot-avatar');
-                avatar.style.transform = 'scale(1.05)';
-                setTimeout(() => {
-                    avatar.style.transform = 'scale(1)';
-                }, 200);
-            }
         }
 
         function connect() {
@@ -488,37 +451,15 @@
             ws.onopen = () => {
                 const statusDiv = document.getElementById('connectionStatus');
                 statusDiv.className = 'connection-status online';
-                statusDiv.innerHTML = '✅ Đã kết nối - Pika đang sẵn sàng!';
-                setEmotion('happy');
+                statusDiv.innerHTML = '✅ Đã kết nối - Sẵn sàng nghe bạn nói!';
             };
             
-            ws.onmessage = async (event) => {
+            ws.onmessage = (event) => {
                 const data = JSON.parse(event.data);
                 if (data.type === 'ai') {
                     hideTyping();
                     addMessage('ai', data.text);
-                    
-                    // Thay đổi cảm xúc dựa trên nội dung
-                    if (data.text.includes('happy') || data.text.includes('vui') || data.text.includes(':)')) {
-                        setEmotion('happy');
-                    } else if (data.text.includes('sad') || data.text.includes('buồn')) {
-                        setEmotion('sad');
-                    } else if (data.text.includes('surprise') || data.text.includes('bất ngờ')) {
-                        setEmotion('surprised');
-                    } else if (data.text.includes('excited') || data.text.includes('thú vị')) {
-                        setEmotion('excited');
-                    } else {
-                        setEmotion('happy');
-                    }
-                    
-                    // Đọc văn bản (Text-to-Speech)
-                    if ('speechSynthesis' in window) {
-                        const utterance = new SpeechSynthesisUtterance(data.text);
-                        utterance.lang = 'vi-VN';
-                        utterance.rate = 0.9;
-                        window.speechSynthesis.cancel();
-                        window.speechSynthesis.speak(utterance);
-                    }
+                    speak(data.text); // Đọc to câu trả lời
                 }
             };
             
@@ -526,14 +467,13 @@
                 const statusDiv = document.getElementById('connectionStatus');
                 statusDiv.className = 'connection-status offline';
                 statusDiv.innerHTML = '❌ Mất kết nối - Đang thử lại...';
-                setEmotion('sad');
                 setTimeout(connect, 3000);
             };
         }
         
-        async function sendMessage(text) {
+        function sendMessage(text) {
             if (!text.trim() || !ws || ws.readyState !== WebSocket.OPEN) {
-                addMessage('ai', '❌ Xin lỗi, mình đang mất kết nối!');
+                addMessage('ai', '❌ Mất kết nối server!');
                 return;
             }
             
@@ -551,36 +491,14 @@
         
         document.getElementById('messageInput').addEventListener('keypress', (e) => {
             if (e.key === 'Enter') {
-                const input = document.getElementById('messageInput');
-                sendMessage(input.value);
+                sendMessage(e.target.value);
             }
         });
         
-        // Quick command buttons
-        document.querySelectorAll('.quick-btn').forEach(btn => {
-            btn.addEventListener('click', () => {
-                const text = btn.getAttribute('data-text');
-                sendMessage(text);
-            });
-        });
+        document.getElementById('micButton').addEventListener('click', startListening);
         
-        // Khởi tạo kết nối
+        // Khởi tạo
         connect();
-        
-        // Animation cho robot
-        setInterval(() => {
-            if (currentEmotion === 'happy') {
-                const eyes = document.querySelectorAll('.eye');
-                eyes.forEach(eye => {
-                    eye.style.transform = `translate(${Math.random() * 4 - 2}px, ${Math.random() * 4 - 2}px)`;
-                });
-                setTimeout(() => {
-                    eyes.forEach(eye => {
-                        eye.style.transform = 'translate(0, 0)';
-                    });
-                }, 200);
-            }
-        }, 3000);
     </script>
 </body>
 </html>
