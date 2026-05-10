@@ -1,20 +1,14 @@
 {
-  "name": "robot-ai",
+  "name": "robot-ai-websocket",
   "version": "1.0.0",
   "type": "module",
-  "main": "server.js",
   "scripts": {
     "start": "node server.js"
   },
   "dependencies": {
-    "dotenv": "^16.6.1",
-    "express": "^4.22.1",
-    "openai": "^4.104.0",
-    "ws": "^8.20.0"
-  },
-  "description": "",
-  "keywords": [],
-  "author": "",
-  "license": "ISC"
+    "express": "^4.18.2",
+    "ws": "^8.14.2",
+    "openai": "^4.20.1",
+    "dotenv": "^16.3.1"
+  }
 }
-
