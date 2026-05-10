@@ -7,117 +7,83 @@ import dotenv from "dotenv";
 dotenv.config();
 
 const app = express();
-
 app.use(express.static("public"));
 
 const server = createServer(app);
-
 const wss = new WebSocketServer({ server });
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-let esp32Client = null;
+let esp32 = null;
+let lastCmd = "";
+
+function safeJSON(str) {
+  try { return JSON.parse(str); }
+  catch { return null; }
+}
 
 wss.on("connection", (ws) => {
 
-  console.log("Client connected");
+  ws.on("message", async (msg) => {
 
-  ws.on("message", async (message) => {
+    const data = safeJSON(msg.toString());
+    if (!data) return;
 
-    try {
+    // ESP32 CONNECT
+    if (data.type === "esp32") {
+      esp32 = ws;
 
-      const data = JSON.parse(message);
+      ws.on("close", () => {
+        if (esp32 === ws) esp32 = null;
+      });
 
-      // ESP32 REGISTER
-      if(data.type === "esp32") {
-
-        esp32Client = ws;
-
-        console.log("ESP32 connected");
-
-        return;
-      }
-
-      // USER MESSAGE
-      if(data.type === "user") {
-
-        console.log("User:", data.text);
-
-        const completion =
-          await openai.chat.completions.create({
-
-          model: "gpt-4.1-mini",
-
-          messages: [
-            {
-              role: "system",
-              content:
-              `
-              Bạn là AI robot.
-
-              Nếu người dùng yêu cầu điều khiển robot,
-              hãy trả JSON.
-
-              Ví dụ:
-              {"speech":"Đang tiến lên","cmd":"forward"}
-
-              Lệnh:
-              forward
-              backward
-              left
-              right
-              stop
-              `
-            },
-
-            {
-              role: "user",
-              content: data.text
-            }
-          ]
-        });
-
-        const reply =
-          completion.choices[0].message.content;
-
-        console.log(reply);
-
-        // SEND TO WEB
-        ws.send(JSON.stringify({
-          type:"ai",
-          text:reply
-        }));
-
-        // TRY PARSE COMMAND
-        try {
-
-          const obj = JSON.parse(reply);
-
-          if(obj.cmd && esp32Client) {
-
-            esp32Client.send(JSON.stringify({
-              cmd:obj.cmd
-            }));
-          }
-
-        } catch(err) {}
-
-      }
-
-    } catch(err) {
-
-      console.log(err);
-
+      console.log("ESP32 connected");
+      return;
     }
 
-  });
+    // USER MESSAGE
+    if (data.type === "user") {
 
+      const ai = await openai.chat.completions.create({
+        model: "gpt-4.1-mini",
+        messages: [
+          {
+            role: "system",
+            content: `
+Bạn là AI điều khiển robot.
+
+Luôn trả JSON:
+{"speech":"...","cmd":"..."}
+
+cmd: forward, backward, left, right, stop, none
+            `
+          },
+          { role: "user", content: data.text }
+        ]
+      });
+
+      const reply = ai.choices[0].message.content;
+      const obj = safeJSON(reply);
+
+      ws.send(JSON.stringify({
+        type: "ai",
+        text: obj?.speech || reply
+      }));
+
+      // SEND TO ESP32 (ANTI SPAM)
+      if (obj?.cmd && obj.cmd !== "none") {
+
+        if (obj.cmd !== lastCmd && esp32?.readyState === 1) {
+          esp32.send(JSON.stringify({ cmd: obj.cmd }));
+          lastCmd = obj.cmd;
+        }
+      }
+    }
+  });
 });
 
-server.listen(3000, () => {
-
+server.listen(process.env.PORT || 3000, () => {
   console.log("Server running");
-
 });
