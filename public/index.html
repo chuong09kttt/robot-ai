@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>🐹 CHIRI Robot - Trợ lý AI thông minh</title>
+    <title>🐹 CHIRI - Trợ lý AI thức tỉnh bằng giọng nói</title>
     <style>
         * {
             margin: 0;
@@ -12,77 +12,113 @@
         }
 
         body {
-            font-family: 'Segoe UI', 'Arial', sans-serif;
-            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #0f0c29 0%, #302b63 50%, #24243e 100%);
             min-height: 100vh;
             display: flex;
             justify-content: center;
             align-items: center;
             padding: 10px;
-            overflow: hidden;
         }
 
         .container {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             border-radius: 50px;
-            padding: 15px;
-            max-width: 480px;
+            padding: 25px;
+            max-width: 500px;
             width: 100%;
-            height: 95vh;
-            box-shadow: 0 30px 60px rgba(0,0,0,0.4);
-            display: flex;
-            flex-direction: column;
+            box-shadow: 0 30px 60px rgba(0,0,0,0.5);
             position: relative;
         }
 
-        /* Robot Avatar - LỚN */
-        .robot-section {
-            flex: 3;
+        /* Wake word indicator */
+        .wake-badge {
+            position: absolute;
+            top: 15px;
+            left: 15px;
+            background: rgba(0,0,0,0.6);
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 11px;
+            color: white;
+            backdrop-filter: blur(5px);
             display: flex;
-            flex-direction: column;
-            justify-content: center;
             align-items: center;
-            background: rgba(255,255,255,0.1);
-            border-radius: 40px;
-            margin-bottom: 15px;
-            padding: 20px;
+            gap: 8px;
+        }
+
+        .wake-dot {
+            width: 10px;
+            height: 10px;
+            background: #2ecc71;
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.5; transform: scale(1.2); }
+        }
+
+        .wake-dot.listening {
+            background: #e74c3c;
+            animation: fastPulse 0.5s infinite;
+        }
+
+        @keyframes fastPulse {
+            0%, 100% { transform: scale(1); background: #e74c3c; }
+            50% { transform: scale(1.3); background: #ff6b6b; }
+        }
+
+        /* Timer */
+        .sleep-timer {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            background: rgba(0,0,0,0.6);
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 11px;
+            color: white;
+            font-family: monospace;
+        }
+
+        /* Robot section */
+        .robot-section {
+            text-align: center;
+            margin: 30px 0 20px;
         }
 
         .robot-avatar {
-            width: 220px;
-            height: 220px;
+            width: 260px;
+            height: 260px;
             margin: 0 auto;
-            background: linear-gradient(135deg, #f5f7fa 0%, #e8eef5 100%);
+            background: radial-gradient(circle at 30% 30%, #f5f7fa, #c3cfe2);
             border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
             position: relative;
             box-shadow: 0 20px 40px rgba(0,0,0,0.3);
-            cursor: pointer;
             transition: all 0.3s ease;
-        }
-
-        .robot-avatar:active {
-            transform: scale(0.98);
         }
 
         .robot-face {
             position: relative;
-            width: 140px;
-            height: 140px;
+            width: 170px;
+            height: 170px;
         }
 
         .eyes {
             display: flex;
             justify-content: space-between;
-            margin-bottom: 25px;
-            gap: 30px;
+            margin-bottom: 35px;
+            gap: 45px;
         }
 
         .eye {
-            width: 30px;
-            height: 30px;
+            width: 38px;
+            height: 38px;
             background: #2c3e50;
             border-radius: 50%;
             transition: all 0.1s ease;
@@ -92,84 +128,74 @@
         .eye::after {
             content: '';
             position: absolute;
-            width: 12px;
-            height: 12px;
+            width: 15px;
+            height: 15px;
             background: white;
             border-radius: 50%;
-            top: 5px;
-            left: 5px;
+            top: 7px;
+            left: 7px;
+        }
+
+        /* Sleeping eyes */
+        .sleeping .eye {
+            height: 8px;
+            margin-top: 15px;
+            background: #555;
+        }
+
+        .sleeping .eye::after {
+            display: none;
         }
 
         .mouth {
-            width: 70px;
-            height: 35px;
+            width: 85px;
+            height: 45px;
             margin: 0 auto;
             background: #2c3e50;
-            border-radius: 0 0 35px 35px;
-            transition: all 0.2s ease;
+            border-radius: 0 0 45px 45px;
+            transition: all 0.1s ease;
         }
 
-        /* Cảm xúc */
-        .emotion-happy .mouth {
-            border-radius: 0 0 40px 40px;
-            height: 40px;
-            background: #27ae60;
+        /* Sleeping mouth */
+        .sleeping .mouth {
+            width: 60px;
+            height: 8px;
+            border-radius: 10px;
+            background: #555;
         }
 
-        .emotion-sad .mouth {
-            border-radius: 40px 40px 0 0;
-            height: 40px;
-            background: #e74c3c;
-        }
-
-        .emotion-surprised .mouth {
-            border-radius: 50%;
-            width: 50px;
-            height: 50px;
-            background: #f39c12;
-        }
-
-        .emotion-thinking .eye {
-            animation: thinkBlink 2s infinite;
-        }
-
-        @keyframes thinkBlink {
-            0%, 90%, 100% { transform: scaleY(1); }
-            95% { transform: scaleY(0.1); }
-        }
-
-        /* Trạng thái */
+        /* Animation states */
         .listening .eye {
-            animation: listeningPulse 0.5s infinite;
+            animation: listenPulse 0.5s infinite;
             background: #e74c3c;
         }
 
-        @keyframes listeningPulse {
+        @keyframes listenPulse {
             0%, 100% { transform: scale(1); }
-            50% { transform: scale(1.2); background: #ff6b6b; }
+            50% { transform: scale(1.3); background: #ff6b6b; }
         }
 
         .speaking .mouth {
-            animation: speakAnim 0.15s infinite;
+            animation: speakAnim 0.12s infinite;
         }
 
         @keyframes speakAnim {
-            0%, 100% { height: 20px; border-radius: 0 0 20px 20px; }
-            50% { height: 45px; border-radius: 0 0 45px 45px; }
+            0%, 100% { height: 25px; border-radius: 0 0 25px 25px; }
+            50% { height: 60px; border-radius: 0 0 60px 60px; }
         }
 
         .thinking .eye {
-            animation: thinkMove 1s ease-in-out infinite;
+            animation: thinkMove 0.8s ease-in-out infinite;
         }
 
         @keyframes thinkMove {
             0%, 100% { transform: translate(0, 0); }
-            25% { transform: translate(-5px, 0); }
-            75% { transform: translate(5px, 0); }
+            25% { transform: translate(-10px, 0); }
+            75% { transform: translate(10px, 0); }
         }
 
         .robot-name {
-            font-size: 32px;
+            font-size: 38px;
             font-weight: bold;
             color: white;
             margin-top: 15px;
@@ -177,30 +203,49 @@
         }
 
         .status-text {
-            font-size: 14px;
+            font-size: 13px;
             color: rgba(255,255,255,0.9);
             margin-top: 8px;
-            text-align: center;
+            padding: 5px 10px;
+            background: rgba(0,0,0,0.3);
+            border-radius: 20px;
+            display: inline-block;
         }
 
-        /* Chat Box - NHỎ */
+        /* Wake word examples */
+        .wake-examples {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            margin: 15px 0;
+            flex-wrap: wrap;
+        }
+
+        .wake-example {
+            background: rgba(255,255,255,0.2);
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            color: white;
+        }
+
+        /* Chat box */
         .chat-section {
-            flex: 1;
             background: rgba(0,0,0,0.3);
-            border-radius: 30px;
+            border-radius: 20px;
             padding: 12px;
-            backdrop-filter: blur(10px);
+            margin-top: 15px;
         }
 
         .chat-box {
-            height: 120px;
+            height: 110px;
             overflow-y: auto;
             font-size: 12px;
         }
 
         .message {
-            margin-bottom: 8px;
-            animation: fadeIn 0.3s ease;
+            margin-bottom: 6px;
+            animation: fadeIn 0.2s ease;
         }
 
         @keyframes fadeIn {
@@ -214,8 +259,8 @@
 
         .message .bubble {
             display: inline-block;
-            padding: 6px 12px;
-            border-radius: 15px;
+            padding: 5px 10px;
+            border-radius: 12px;
             max-width: 85%;
             font-size: 11px;
         }
@@ -230,36 +275,18 @@
             color: #333;
         }
 
-        /* Wake Word Indicator */
-        .wake-indicator {
-            position: absolute;
-            top: 20px;
-            right: 20px;
-            width: 12px;
-            height: 12px;
-            background: #2ecc71;
-            border-radius: 50%;
-            animation: pulse 2s infinite;
-        }
-
-        @keyframes pulse {
-            0%, 100% { opacity: 1; transform: scale(1); }
-            50% { opacity: 0.5; transform: scale(1.2); }
-        }
-
-        .wake-text {
-            position: absolute;
-            top: 15px;
-            left: 20px;
-            background: rgba(0,0,0,0.6);
-            padding: 5px 12px;
-            border-radius: 20px;
+        .tip {
+            text-align: center;
             font-size: 11px;
-            color: white;
+            color: rgba(255,255,255,0.7);
+            margin-top: 12px;
+            padding: 8px;
+            background: rgba(0,0,0,0.2);
+            border-radius: 20px;
         }
 
-        /* Mic Button nhỏ */
-        .mic-manual {
+        /* Manual wake button (nhỏ gọn) */
+        .manual-wake {
             position: absolute;
             bottom: 20px;
             right: 20px;
@@ -272,27 +299,27 @@
             justify-content: center;
             cursor: pointer;
             backdrop-filter: blur(5px);
+            transition: all 0.2s;
         }
 
-        .mic-manual svg {
+        .manual-wake:active {
+            transform: scale(0.9);
+        }
+
+        .manual-wake svg {
             width: 25px;
             height: 25px;
             fill: white;
-        }
-
-        .inactivity-timer {
-            position: absolute;
-            bottom: 20px;
-            left: 20px;
-            font-size: 10px;
-            color: rgba(255,255,255,0.6);
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <div class="wake-text">🔊 Nói "Chiri ơi" để đánh thức</div>
-        <div class="wake-indicator" id="wakeIndicator"></div>
+        <div class="wake-badge">
+            <div class="wake-dot" id="wakeDot"></div>
+            <span id="wakeText">Đang lắng nghe</span>
+        </div>
+        <div class="sleep-timer" id="sleepTimer">😴 Sẽ ngủ sau 2:00</div>
 
         <div class="robot-section">
             <div class="robot-avatar" id="robotAvatar">
@@ -305,242 +332,303 @@
                 </div>
             </div>
             <div class="robot-name">🐹 CHIRI</div>
-            <div class="status-text" id="statusText">Đang chờ lệnh "Chiri ơi"...</div>
+            <div class="status-text" id="statusText">🎤 Nói "Chào CHIRI" hoặc "Hello" để đánh thức</div>
+        </div>
+
+        <div class="wake-examples">
+            <span class="wake-example">🗣️ "Chào CHIRI"</span>
+            <span class="wake-example">🗣️ "Hello"</span>
+            <span class="wake-example">🗣️ "Hi CHIRI"</span>
+            <span class="wake-example">🗣️ "Xin chào"</span>
         </div>
 
         <div class="chat-section">
             <div class="chat-box" id="chatBox">
                 <div class="message ai">
-                    <div class="bubble">🐹 Chào bạn! Mình là Chiri. Hãy nói "Chiri ơi" để trò chuyện nhé!</div>
+                    <div class="bubble">🐹 Chào bạn! Mình là CHIRI. Hãy gọi "CHIRI ơi" hoặc "Hello" để trò chuyện nhé! Mình sẽ tự động ngủ sau 2 phút không nói chuyện.</div>
                 </div>
             </div>
         </div>
+        <div class="tip">💡 Mẹo: Nói "CHIRI ơi", "Xin chào", "Hello" để đánh thức. Sau 2 phút không nói, CHIRI sẽ tự ngủ!</div>
 
-        <div class="mic-manual" id="micManual">
+        <div class="manual-wake" id="manualWake">
             <svg viewBox="0 0 24 24">
                 <path d="M12 16c-2.21 0-4-1.79-4-4V6c0-2.21 1.79-4 4-4s4 1.79 4 4v6c0 2.21-1.79 4-4 4zm-6-4c0 .66.54 1.2 1.2 1.2h.6c.66 0 1.2-.54 1.2-1.2V6c0-.66-.54-1.2-1.2-1.2h-.6c-.66 0-1.2.54-1.2 1.2v6zm12 0c0 .66.54 1.2 1.2 1.2h.6c.66 0 1.2-.54 1.2-1.2V6c0-.66-.54-1.2-1.2-1.2h-.6c-.66 0-1.2.54-1.2 1.2v6z"/>
             </svg>
         </div>
-        <div class="inactivity-timer" id="timer">⏱️ Sẽ tự động nghỉ sau 3 phút không nói</div>
     </div>
 
     <script>
         let ws = null;
         let recognition = null;
-        let isAwake = false;
-        let inactivityTimeout = null;
-        let mediaRecorder = null;
-        let audioChunks = [];
-        let isManualMode = false;
-
+        let isAwake = true; // Bắt đầu thức
+        let inactivityTimer = null;
+        let isProcessing = false;
+        let currentAudio = null;
+        
         // Cấu hình
-        const WAKE_WORD = "chiri ơi";
-        const INACTIVITY_LIMIT = 180000; // 3 phút
+        const INACTIVITY_LIMIT = 120000; // 2 phút = 120000ms
+        const WAKE_WORDS = ['chiri', 'chào chiri', 'xin chào', 'hello chiri', 'hi chiri', 'chiri ơi', 'hey chiri', 'chào bạn'];
+        
         let lastActivityTime = Date.now();
-
-        // Khởi tạo Speech Recognition
+        let countdownInterval = null;
+        
+        // Khởi tạo Speech Recognition (luôn chạy nền)
         function initSpeechRecognition() {
             if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
                 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
                 recognition = new SpeechRecognition();
                 recognition.lang = 'vi-VN';
-                recognition.continuous = true;
+                recognition.continuous = true; // Luôn lắng nghe
                 recognition.interimResults = true;
                 recognition.maxAlternatives = 1;
-
+                
+                recognition.onstart = () => {
+                    console.log('🎤 Continuous listening started');
+                    updateWakeIndicator('listening');
+                };
+                
                 recognition.onresult = (event) => {
-                    const last = event.results.length - 1;
-                    const text = event.results[last][0].transcript.toLowerCase();
-                    const isFinal = event.results[last].isFinal;
-                    
-                    console.log('Nghe thấy:', text);
-                    
-                    if (isFinal && text.trim()) {
-                        if (!isAwake && text.includes(WAKE_WORD)) {
-                            wakeUp();
-                        } else if (isAwake) {
-                            processCommand(text);
+                    for (let i = event.resultIndex; i < event.results.length; i++) {
+                        const transcript = event.results[i][0].transcript.toLowerCase().trim();
+                        const isFinal = event.results[i].isFinal;
+                        
+                        if (transcript) {
+                            console.log('🎙️ Heard:', transcript);
+                            
+                            // Kiểm tra wake word
+                            if (!isAwake && !isProcessing) {
+                                for (const word of WAKE_WORDS) {
+                                    if (transcript.includes(word)) {
+                                        console.log('🔊 Wake word detected!');
+                                        wakeUp();
+                                        break;
+                                    }
+                                }
+                            }
+                            
+                            // Nếu đang thức và có câu lệnh
+                            if (isAwake && !isProcessing && isFinal && transcript.length > 2) {
+                                // Bỏ qua nếu chỉ là wake word
+                                let isOnlyWakeWord = false;
+                                for (const word of WAKE_WORDS) {
+                                    if (transcript === word || transcript === word + ' ơi') {
+                                        isOnlyWakeWord = true;
+                                        break;
+                                    }
+                                }
+                                
+                                if (!isOnlyWakeWord && !transcript.includes('chiri ơi')) {
+                                    processCommand(transcript);
+                                }
+                            }
                         }
                     }
                 };
-
+                
                 recognition.onerror = (event) => {
-                    console.error('Lỗi:', event.error);
+                    console.error('Recognition error:', event.error);
                     if (event.error === 'no-speech') {
-                        // Không làm gì, tiếp tục nghe
-                    } else {
-                        stopContinuousListening();
-                        setTimeout(() => startContinuousListening(), 1000);
+                        // Không làm gì, tiếp tục
+                    } else if (event.error === 'not-allowed') {
+                        updateWakeIndicator('error');
+                        document.getElementById('statusText').innerHTML = '❌ Cần cấp quyền micro!';
                     }
                 };
-
+                
                 recognition.onend = () => {
-                    console.log('Recognition ended');
-                    if (isAwake || !isManualMode) {
-                        setTimeout(() => startContinuousListening(), 500);
+                    console.log('Recognition ended, restarting...');
+                    if (!isProcessing) {
+                        setTimeout(() => {
+                            try {
+                                recognition.start();
+                            } catch (e) {
+                                console.log('Restart error:', e);
+                            }
+                        }, 500);
                     }
                 };
+                
+                // Bắt đầu
+                recognition.start();
             } else {
-                document.getElementById('statusText').innerHTML = '⚠️ Trình duyệt không hỗ trợ nhận dạng giọng nói';
+                document.getElementById('statusText').innerHTML = '⚠️ Trình duyệt không hỗ trợ! Dùng Chrome/Edge nhé!';
             }
         }
-
-        function startContinuousListening() {
-            if (recognition && !isManualMode) {
-                try {
-                    recognition.start();
-                    console.log('Bắt đầu nghe liên tục...');
-                } catch (e) {
-                    console.log('Lỗi start:', e);
-                }
+        
+        function updateWakeIndicator(state) {
+            const dot = document.getElementById('wakeDot');
+            const text = document.getElementById('wakeText');
+            
+            if (state === 'listening') {
+                dot.classList.add('listening');
+                text.innerHTML = '🎤 Đang nghe...';
+            } else if (state === 'awake') {
+                dot.classList.remove('listening');
+                dot.style.background = '#f39c12';
+                text.innerHTML = '💬 Đang thức';
+            } else if (state === 'sleeping') {
+                dot.classList.remove('listening');
+                dot.style.background = '#2ecc71';
+                text.innerHTML = '😴 Đang ngủ';
             }
         }
-
-        function stopContinuousListening() {
-            if (recognition) {
-                try {
-                    recognition.stop();
-                } catch (e) {}
-            }
-        }
-
-        // Đánh thức Chiri
+        
         function wakeUp() {
             if (isAwake) return;
             
             isAwake = true;
-            document.getElementById('wakeIndicator').style.background = '#f39c12';
-            document.getElementById('statusText').innerHTML = '🔊 Chiri đang lắng nghe... Hãy nói!';
-            setEmotion('happy');
+            lastActivityTime = Date.now();
             
-            // Nói câu chào
-            speakWithEmotion('Dạ, Chiri đây ạ! Bạn cần gì ạ?');
-            
+            // Reset timer
             resetInactivityTimer();
+            
+            // Cập nhật UI
+            const robotFace = document.getElementById('robotFace');
+            robotFace.classList.remove('sleeping');
+            updateWakeIndicator('awake');
+            
+            // Chào thức tỉnh
+            const greetings = [
+                "Dạ, CHIRI đây ạ! Có gì cần giúp không ạ?",
+                "Vâng ạ! CHIRI nghe rõ!",
+                "Chào bạn! CHIRI đây, cần gì ạ?"
+            ];
+            const greeting = greetings[Math.floor(Math.random() * greetings.length)];
+            addMessage('ai', greeting);
+            playAudio(greeting);
+            
+            document.getElementById('statusText').innerHTML = '🎤 CHIRI đang lắng nghe... Hãy nói!';
         }
-
-        // Xử lý câu lệnh
-        async function processCommand(text) {
-            console.log('Xử lý:', text);
+        
+        function goToSleep() {
+            if (!isAwake) return;
             
-            resetInactivityTimer();
+            isAwake = false;
             
-            // Hiển thị
-            addMessage('user', text);
-            setEmotion('thinking');
-            document.getElementById('statusText').innerHTML = '🤔 Đang suy nghĩ...';
+            // Cập nhật UI
+            const robotFace = document.getElementById('robotFace');
+            robotFace.classList.add('sleeping');
+            updateWakeIndicator('sleeping');
             
-            // Gửi lên server
-            if (ws && ws.readyState === WebSocket.OPEN) {
-                ws.send(JSON.stringify({ type: 'user', text: text }));
-            } else {
-                addMessage('ai', 'Xin lỗi, Chiri đang mất kết nối mạng!');
-                setEmotion('sad');
+            // Thông báo
+            const sleepMsg = "CHIRI đi ngủ đây ạ. Khi nào cần hãy gọi CHIRI nhé!";
+            addMessage('ai', sleepMsg);
+            playAudio(sleepMsg);
+            
+            document.getElementById('statusText').innerHTML = '😴 CHIRI đang ngủ - Hãy nói "Chào CHIRI" để đánh thức';
+            
+            // Clear timer
+            if (inactivityTimer) {
+                clearTimeout(inactivityTimer);
+                inactivityTimer = null;
             }
+            if (countdownInterval) {
+                clearInterval(countdownInterval);
+                countdownInterval = null;
+            }
+            document.getElementById('sleepTimer').innerHTML = '😴 Đang ngủ';
         }
-
-        // Reset timer không hoạt động
+        
         function resetInactivityTimer() {
             lastActivityTime = Date.now();
             
-            if (inactivityTimeout) {
-                clearTimeout(inactivityTimeout);
+            if (inactivityTimer) {
+                clearTimeout(inactivityTimer);
             }
             
-            inactivityTimeout = setTimeout(() => {
+            inactivityTimer = setTimeout(() => {
                 if (isAwake && (Date.now() - lastActivityTime) >= INACTIVITY_LIMIT) {
                     goToSleep();
                 }
             }, INACTIVITY_LIMIT);
             
-            updateTimerDisplay();
+            // Cập nhật countdown display
+            if (countdownInterval) clearInterval(countdownInterval);
+            countdownInterval = setInterval(() => {
+                if (isAwake) {
+                    const elapsed = Date.now() - lastActivityTime;
+                    const remaining = Math.max(0, INACTIVITY_LIMIT - elapsed);
+                    const seconds = Math.floor(remaining / 1000);
+                    const minutes = Math.floor(seconds / 60);
+                    const secs = seconds % 60;
+                    document.getElementById('sleepTimer').innerHTML = `😴 Ngủ sau ${minutes}:${secs.toString().padStart(2, '0')}`;
+                } else {
+                    if (countdownInterval) clearInterval(countdownInterval);
+                }
+            }, 1000);
         }
-
-        function updateTimerDisplay() {
-            if (isAwake) {
-                const elapsed = Date.now() - lastActivityTime;
-                const remaining = Math.max(0, INACTIVITY_LIMIT - elapsed);
-                const seconds = Math.floor(remaining / 1000);
-                document.getElementById('timer').innerHTML = `⏱️ Sẽ nghỉ sau ${seconds}s không nói`;
-                setTimeout(updateTimerDisplay, 1000);
-            } else {
-                document.getElementById('timer').innerHTML = '😴 Chiri đang nghỉ - Nói "Chiri ơi" để gọi';
-            }
-        }
-
-        function goToSleep() {
-            isAwake = false;
-            document.getElementById('wakeIndicator').style.background = '#2ecc71';
-            document.getElementById('statusText').innerHTML = '😴 Chiri đang nghỉ - Nói "Chiri ơi" để đánh thức';
-            setEmotion('normal');
-            speakWithEmotion('Chiri đi nghỉ đây, khi nào cần hãy gọi nhé!');
-        }
-
-        // Cảm xúc
-        function setEmotion(emotion) {
-            const robotFace = document.getElementById('robotFace');
-            robotFace.className = 'robot-face';
+        
+        async function processCommand(text) {
+            if (isProcessing) return;
             
-            switch(emotion) {
-                case 'happy':
-                    robotFace.classList.add('emotion-happy');
-                    break;
-                case 'sad':
-                    robotFace.classList.add('emotion-sad');
-                    break;
-                case 'surprised':
-                    robotFace.classList.add('emotion-surprised');
-                    break;
-                case 'thinking':
-                    robotFace.classList.add('thinking');
-                    break;
-                default:
-                    robotFace.classList.remove('emotion-happy', 'emotion-sad', 'emotion-surprised', 'thinking');
+            isProcessing = true;
+            resetInactivityTimer();
+            
+            // Hiển thị và animation
+            addMessage('user', text);
+            setThinking(true);
+            document.getElementById('statusText').innerHTML = '🤔 CHIRI đang suy nghĩ...';
+            
+            // Gửi lên server
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type: 'user', text: text }));
+            } else {
+                addMessage('ai', 'Xin lỗi, CHIRI đang mất kết nối mạng!');
+                setThinking(false);
+                isProcessing = false;
             }
         }
-
-        // Nói với cảm xúc
-        function speakWithEmotion(text, emotion = 'happy') {
-            if ('speechSynthesis' in window) {
-                // Phát hiện ngôn ngữ
-                const isEnglish = /[a-zA-Z]/.test(text) && !/[àáảãạăắằẵặâấầẫậđèéẻẽẹêếềễệìíỉĩịòóỏõọôốồỗộơớờỡợùúủũụưứừữựỳýỷỹỵ]/.test(text);
-                const lang = isEnglish ? 'en-US' : 'vi-VN';
-                
-                // Chọn giọng tự nhiên
-                const utterance = new SpeechSynthesisUtterance(text);
-                utterance.lang = lang;
-                utterance.rate = 0.9;
-                utterance.pitch = 1.1;
-                utterance.volume = 1;
-                
-                // Chọn giọng nữ tự nhiên
-                if (speechSynthesis.getVoices) {
-                    const voices = speechSynthesis.getVoices();
-                    const preferredVoice = voices.find(voice => 
-                        (lang === 'vi-VN' && voice.lang.includes('vi') && voice.name.includes('Google')) ||
-                        (lang === 'en-US' && voice.lang.includes('en') && (voice.name.includes('Google') || voice.name.includes('Samantha')))
-                    );
-                    if (preferredVoice) utterance.voice = preferredVoice;
+        
+        function setThinking(isThinking) {
+            const robotFace = document.getElementById('robotFace');
+            if (isThinking) {
+                robotFace.classList.add('thinking');
+            } else {
+                robotFace.classList.remove('thinking');
+            }
+        }
+        
+        // Play audio from OpenAI TTS
+        async function playAudio(text) {
+            try {
+                if (currentAudio) {
+                    currentAudio.pause();
+                    currentAudio = null;
                 }
                 
-                utterance.onstart = () => {
+                const response = await fetch(`/tts?text=${encodeURIComponent(text)}`);
+                if (!response.ok) throw new Error('TTS failed');
+                
+                const audioBlob = await response.blob();
+                const audioUrl = URL.createObjectURL(audioBlob);
+                currentAudio = new Audio(audioUrl);
+                
+                currentAudio.onplay = () => {
                     document.getElementById('robotFace').classList.add('speaking');
-                    setEmotion(emotion);
                 };
                 
-                utterance.onend = () => {
+                currentAudio.onended = () => {
                     document.getElementById('robotFace').classList.remove('speaking');
+                    URL.revokeObjectURL(audioUrl);
+                    currentAudio = null;
+                    setThinking(false);
+                    isProcessing = false;
+                    
                     if (isAwake) {
-                        document.getElementById('statusText').innerHTML = '🔊 Chiri đang lắng nghe... Hãy nói!';
-                        setEmotion('happy');
+                        document.getElementById('statusText').innerHTML = '🎤 CHIRI đang lắng nghe... Hãy nói!';
                     }
                 };
                 
-                window.speechSynthesis.cancel();
-                window.speechSynthesis.speak(utterance);
+                currentAudio.play();
+            } catch (error) {
+                console.error('Audio error:', error);
+                document.getElementById('robotFace').classList.remove('speaking');
+                setThinking(false);
+                isProcessing = false;
             }
         }
-
+        
         function addMessage(type, text) {
             const chatBox = document.getElementById('chatBox');
             const messageDiv = document.createElement('div');
@@ -549,72 +637,56 @@
             chatBox.appendChild(messageDiv);
             chatBox.scrollTop = chatBox.scrollHeight;
             
-            // Giữ chỉ 20 tin nhắn cuối
             while (chatBox.children.length > 20) {
                 chatBox.removeChild(chatBox.firstChild);
             }
         }
-
+        
         // WebSocket
-        function connect() {
+        function connectWebSocket() {
             const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
             ws = new WebSocket(`${protocol}//${location.host}`);
             
             ws.onopen = () => {
                 console.log('WebSocket connected');
-                document.getElementById('statusText').innerHTML = '✅ Chiri đã sẵn sàng! Nói "Chiri ơi" để bắt đầu';
+                document.getElementById('statusText').innerHTML = '🎤 CHIRI đang lắng nghe... Nói "CHIRI ơi" để bắt đầu';
             };
             
             ws.onmessage = (event) => {
                 const data = JSON.parse(event.data);
                 if (data.type === 'ai') {
                     addMessage('ai', data.text);
-                    
-                    // Phân tích cảm xúc từ nội dung
-                    if (data.text.includes('vui') || data.text.includes('happy')) {
-                        speakWithEmotion(data.text, 'happy');
-                    } else if (data.text.includes('buồn') || data.text.includes('sad')) {
-                        speakWithEmotion(data.text, 'sad');
-                    } else if (data.text.includes('bất ngờ') || data.text.includes('surprise')) {
-                        speakWithEmotion(data.text, 'surprised');
-                    } else {
-                        speakWithEmotion(data.text, 'happy');
-                    }
-                    
-                    resetInactivityTimer();
+                    playAudio(data.text);
                 }
             };
             
             ws.onclose = () => {
-                console.log('WebSocket disconnected');
-                setTimeout(connect, 3000);
+                console.log('WebSocket disconnected, reconnecting...');
+                setTimeout(connectWebSocket, 3000);
             };
         }
-
-        // Manual mode
-        document.getElementById('micManual').addEventListener('click', () => {
+        
+        // Manual wake button
+        document.getElementById('manualWake').addEventListener('click', () => {
             if (!isAwake) {
                 wakeUp();
-            }
-            
-            if ('webkitSpeechRecognition' in window) {
-                const tempRecognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
-                tempRecognition.lang = 'vi-VN';
-                tempRecognition.onresult = (event) => {
-                    const text = event.results[0][0].transcript;
-                    processCommand(text);
-                };
-                tempRecognition.start();
+            } else {
+                // Nếu đang thức, reset timer
+                resetInactivityTimer();
+                const msg = "Dạ, CHIRI đây! Bạn cần gì ạ?";
+                addMessage('ai', msg);
+                playAudio(msg);
             }
         });
-
+        
         // Khởi tạo
         initSpeechRecognition();
-        startContinuousListening();
-        connect();
+        connectWebSocket();
         
-        // Cập nhật timer
-        setInterval(updateTimerDisplay, 1000);
+        // Bắt đầu ở trạng thái thức
+        resetInactivityTimer();
+        
+        console.log('CHIRI Ready - Say "Hello" or "Chào CHIRI" to wake up!');
     </script>
 </body>
 </html>
