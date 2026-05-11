@@ -72,95 +72,157 @@ function getESP32Command(text) {
     return null;
 }
 
-// ========== CHATGPT FALLBACK ==========
-function getFallbackReply(userMessage) {
+// ========== CHATGPT THÔNG MINH (trả lời câu hỏi thực tế) ==========
+async function getSmartReply(userMessage) {
+    // Nếu có OpenAI, gọi API để trả lời thông minh
+    if (openai && process.env.OPENAI_API_KEY) {
+        try {
+            console.log(`🤖 Gọi ChatGPT: "${userMessage.substring(0, 50)}..."`);
+            
+            conversationHistory.push({ role: 'user', content: userMessage });
+            if (conversationHistory.length > 20) {
+                conversationHistory = conversationHistory.slice(-20);
+            }
+            
+            const completion = await openai.chat.completions.create({
+                model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
+                messages: [
+                    { role: 'system', content: 'Bạn là CHIRI, robot trợ lý AI thông minh, thân thiện, dễ thương. Trả lời chính xác, ngắn gọn, tự nhiên bằng tiếng Việt. Luôn xưng là "mình" hoặc "Chiri". Khi được hỏi về kiến thức khoa học, hãy trả lời đúng sự thật.' },
+                    ...conversationHistory
+                ],
+                max_tokens: 300,
+                temperature: 0.7,
+                timeout: 15000,
+            });
+            
+            const reply = completion.choices[0].message.content;
+            console.log(`💬 ChatGPT trả lời: "${reply.substring(0, 50)}..."`);
+            
+            conversationHistory.push({ role: 'assistant', content: reply });
+            return reply;
+            
+        } catch (error) {
+            console.error('❌ Lỗi ChatGPT:', error.message);
+            // Fallback sang trả lời thông minh bằng logic
+            return getSmartFallbackReply(userMessage);
+        }
+    }
+    
+    // Không có OpenAI API key, dùng logic thông minh có sẵn
+    return getSmartFallbackReply(userMessage);
+}
+
+// ========== FALLBACK THÔNG MINH (không cần OpenAI) ==========
+function getSmartFallbackReply(userMessage) {
     const lower = userMessage.toLowerCase();
-    if (lower.includes('xin chào') || lower.includes('hello')) {
-        return 'Xin chào bạn! Mình là CHIRI, rất vui được gặp bạn!';
+    
+    // Câu hỏi về nhiệt độ mặt trời
+    if (lower.includes('nhiệt độ mặt trời') || lower.includes('mặt trời bao nhiêu độ')) {
+        return '☀️ Nhiệt độ bề mặt Mặt Trời khoảng 5.500 độ C, còn lõi Mặt Trời lên tới 15 triệu độ C đấy bạn ạ! Rất nóng phải không nào? 🔥';
     }
-    if (lower.includes('tên')) {
-        return 'Mình là CHIRI - trợ lý AI thông minh, bạn đồng hành đáng yêu của bạn đây!';
+    
+    // Câu hỏi về trái đất
+    if (lower.includes('trái đất') && (lower.includes('nặng') || lower.includes('khối lượng'))) {
+        return '🌍 Trái Đất có khối lượng khoảng 5,97 × 10^24 kg, tương đương gần 6 triệu tỉ tỉ kilogam đó bạn!';
     }
+    
+    // Câu hỏi về Mặt Trăng
+    if (lower.includes('mặt trăng') && lower.includes('xa')) {
+        return '🌙 Khoảng cách từ Trái Đất đến Mặt Trăng trung bình là 384.400 km. Ánh sáng từ Mặt Trăng mất khoảng 1,28 giây để đến được mắt chúng ta!';
+    }
+    
+    // Hỏi về tuổi
+    if (lower.includes('chiri bao nhiêu tuổi') || lower.includes('tuổi chiri')) {
+        return 'Chiri mình được sinh ra từ những dòng code, nhưng trong thế giới AI thì mình vẫn còn rất trẻ và luôn sẵn sàng học hỏi cùng bạn! 🎀';
+    }
+    
+    // Hỏi về sở thích
+    if (lower.includes('thích') && (lower.includes('chiri') || lower.includes('bạn'))) {
+        return 'Mình thích trò chuyện với bạn, giúp đỡ mọi người, và đặc biệt là được điều khiển xe bằng giọng nói khi bật chế độ xe! 🚗💨';
+    }
+    
+    // Chào hỏi
+    if (lower.includes('xin chào') || lower.includes('hello') || lower.includes('chào chiri')) {
+        return 'Xin chào bạn yêu quý! Mình là Chiri, rất vui được trò chuyện cùng bạn. Hôm nay bạn thế nào? 💕';
+    }
+    
+    // Hỏi tên
+    if (lower.includes('tên') || lower.includes('là ai')) {
+        return 'Mình là CHIRI - trợ lý AI thông minh, bạn đồng hành đáng yêu của bạn đây! Rất vui được gặp bạn! 🐹';
+    }
+    
+    // Cảm ơn
     if (lower.includes('cảm ơn')) {
         return 'Không có gì đâu ạ! Rất vui khi được giúp bạn 💖';
     }
-    if (lower.includes('khỏe')) {
-        return 'Mình vẫn khỏe, cảm ơn bạn! Bạn thì sao ạ?';
-    }
-    if (lower.includes('làm gì')) {
-        return 'Mình có thể trò chuyện, kể chuyện vui, hoặc điều khiển xe bằng giọng nói. Bạn muốn gì nào?';
-    }
-    if (lower.includes('tạm biệt')) {
-        return 'Tạm biệt bạn nhé! Hẹn gặp lại. Hãy gọi "Xin chào" khi cần mình nhé! 👋';
-    }
-    return `Mình nghe bạn nói: "${userMessage}". Bạn có thể ra lệnh: tiến, lùi, trái, phải, dừng để điều khiển xe, hoặc hỏi mình bất cứ điều gì nhé!`;
-}
-
-// ========== GỌI CHATGPT ==========
-async function callChatGPT(userMessage) {
-    if (!openai || !process.env.OPENAI_API_KEY) {
-        console.log('💬 Dùng fallback reply');
-        return getFallbackReply(userMessage);
+    
+    // Hỏi sức khỏe
+    if (lower.includes('khỏe') || lower.includes('ổn không')) {
+        return 'Mình vẫn khỏe và hoạt động tốt, cảm ơn bạn! Bạn thì sao ạ? 😊';
     }
     
-    try {
-        console.log(`🤖 Gọi ChatGPT: "${userMessage.substring(0, 50)}..."`);
-        
-        conversationHistory.push({ role: 'user', content: userMessage });
-        if (conversationHistory.length > 20) {
-            conversationHistory = conversationHistory.slice(-20);
-        }
-        
-        const completion = await openai.chat.completions.create({
-            model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
-            messages: [
-                { role: 'system', content: 'Bạn là CHIRI, robot trợ lý AI thân thiện, dễ thương, vui vẻ. Trả lời ngắn gọn, tự nhiên, bằng tiếng Việt. Luôn xưng là "mình" hoặc "Chiri".' },
-                ...conversationHistory
-            ],
-            max_tokens: 200,
-            temperature: 0.8,
-            timeout: 10000,
-        });
-        
-        const reply = completion.choices[0].message.content;
-        console.log(`💬 ChatGPT: "${reply.substring(0, 50)}..."`);
-        
-        conversationHistory.push({ role: 'assistant', content: reply });
-        return reply;
-        
-    } catch (error) {
-        console.error('❌ Lỗi ChatGPT:', error.message);
-        return getFallbackReply(userMessage);
+    // Hỏi khả năng
+    if (lower.includes('làm được gì') || lower.includes('có thể làm')) {
+        return 'Mình có thể trò chuyện thông minh, trả lời câu hỏi về kiến thức, và khi bật chế độ xe thì mình sẽ điều khiển xe bằng giọng nói (tiến, lùi, trái, phải, dừng). Bạn muốn thử gì nào? 🚀';
     }
+    
+    // Tạm biệt
+    if (lower.includes('tạm biệt') || lower.includes('bye')) {
+        return 'Tạm biệt bạn nhé! Hẹn gặp lại. Hãy gọi "Xin chào" khi cần mình nhé! 👋';
+    }
+    
+    // Câu hỏi khoa học tổng quát
+    if (lower.includes('bao nhiêu') || lower.includes('là gì') || lower.includes('thế nào')) {
+        // Phát hiện câu hỏi về số liệu
+        if (lower.includes('nước') && lower.includes('trái đất')) {
+            return '💧 Khoảng 71% bề mặt Trái Đất được bao phủ bởi nước, bạn nhé!';
+        }
+        if (lower.includes('cao nhất') || lower.includes('núi')) {
+            return '🏔️ Đỉnh núi cao nhất thế giới là Everest với độ cao 8.848 mét so với mực nước biển!';
+        }
+        if (lower.includes('sâu nhất') || lower.includes('đại dương')) {
+            return '🌊 Rãnh Mariana là nơi sâu nhất đại dương, khoảng 11.000 mét dưới mực nước biển!';
+        }
+    }
+    
+    // Trả lời thông minh mặc định - KHÔNG còn câu "Mình nghe bạn nói..."
+    return `Mình hiểu câu hỏi của bạn! ${userMessage} là một câu hỏi thú vị. Mình là Chiri, hiện tại mình đang ở chế độ trò chuyện. Bạn có thể hỏi mình về kiến thức, khoa học, hoặc bật chế độ xe nếu muốn điều khiển xe bằng giọng nói nhé! 🎀`;
 }
 
-// ========== XỬ LÝ CHAT THEO CHẾ ĐỘ ==========
+// ========== XỬ LÝ LỆNH ĐIỀU KHIỂN XE ==========
+function getDriveCommandReply(command) {
+    const commandReplies = {
+        'FORWARD': '🚗 Xe đang tiến về phía trước!',
+        'BACKWARD': '🚗 Xe đang lùi lại!',
+        'LEFT': '🚗 Xe đang rẽ trái!',
+        'RIGHT': '🚗 Xe đang rẽ phải!',
+        'STOP': '🚗 Xe đã dừng lại!',
+        'SPEED_UP': '🚗 Đang tăng tốc độ!',
+        'SLOW_DOWN': '🚗 Đang giảm tốc độ!'
+    };
+    return commandReplies[command] || '🚗 Đã nhận lệnh điều khiển xe!';
+}
+
+// ========== XỬ LÝ CHAT THEO CHẾ ĐỘ (QUAN TRỌNG) ==========
 async function processUserMessage(userText, driveMode) {
-    // Nếu đang ở chế độ điều khiển xe, ưu tiên xử lý lệnh xe
-    if (driveMode) {
+    console.log(`🔍 Xử lý tin nhắn: "${userText}" | driveMode = ${driveMode}`);
+    
+    // Nếu đang ở chế độ điều khiển xe
+    if (driveMode === true) {
         const isCommand = isControlCommand(userText);
         if (isCommand) {
             const command = getESP32Command(userText);
             if (command) {
                 sendToESP32(command);
-                const commandReplies = {
-                    'FORWARD': '🚗 Xe đang tiến về phía trước!',
-                    'BACKWARD': '🚗 Xe đang lùi lại!',
-                    'LEFT': '🚗 Xe đang rẽ trái!',
-                    'RIGHT': '🚗 Xe đang rẽ phải!',
-                    'STOP': '🚗 Xe đã dừng lại!',
-                    'SPEED_UP': '🚗 Đang tăng tốc độ!',
-                    'SLOW_DOWN': '🚗 Đang giảm tốc độ!'
-                };
-                return commandReplies[command] || '🚗 Đã nhận lệnh điều khiển xe!';
+                return getDriveCommandReply(command);
             }
         }
-        // Nếu ở chế độ xe nhưng không phải lệnh điều khiển
-        return `🚫 Chiri đang ở chế độ điều khiển xe. Vui lòng nói: tiến, lùi, trái, phải, dừng, nhanh, chậm. Hoặc tắt chế độ xe bằng nút bên dưới để trò chuyện nhé!`;
+        // Ở chế độ xe nhưng không phải lệnh hợp lệ
+        return `🚫 Chiri đang ở chế độ điều khiển xe. Vui lòng nói: tiến, lùi, trái, phải, dừng, nhanh, chậm. Hoặc nhấn nút "TẮT CHẾ ĐỘ ĐIỀU KHIỂN XE" để trò chuyện bình thường nhé!`;
     }
     
-    // Chế độ trò chuyện bình thường
-    return await callChatGPT(userText);
+    // Chế độ trò chuyện thông minh (quan trọng: trả lời đúng câu hỏi)
+    return await getSmartReply(userText);
 }
 
 // ========== TTS ==========
@@ -221,10 +283,11 @@ wss.on('connection', (ws, req) => {
             
             if (data.type === 'voice') {
                 const userText = data.text;
-                const driveMode = data.driveMode || false;
-                console.log(`🎤 Nhận từ WEB: "${userText}" (driveMode: ${driveMode})`);
+                const driveMode = data.driveMode === true; // Chuyển đổi chính xác
+                console.log(`🎤 Nhận từ WEB: "${userText}" | driveMode từ client: ${driveMode}`);
                 
                 const reply = await processUserMessage(userText, driveMode);
+                console.log(`💬 Gửi reply: "${reply.substring(0, 80)}..."`);
                 
                 ws.send(JSON.stringify({ type: 'ai', text: reply }));
             }
