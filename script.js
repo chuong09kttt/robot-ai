@@ -6,6 +6,8 @@ const robotSvg = document.querySelector('.robot-svg');
 const statusText = document.getElementById('statusText');
 const chatBox = document.getElementById('chatBox');
 const manualWake = document.getElementById('manualWake');
+const driveModeBtn = document.getElementById('driveModeBtn');
+const driveHint = document.getElementById('driveHint');
 
 // State variables
 let ws = null;
@@ -16,10 +18,30 @@ let countdownInterval = null;
 let isProcessing = false;
 let currentAudio = null;
 let lastActivityTime = Date.now();
+let driveControlMode = false; // Chế độ điều khiển xe
 
 // Constants
 const INACTIVITY_LIMIT = 120000; // 2 minutes
-const WAKE_WORDS = ['xin chào', 'hello', 'hi', 'chào pika', 'pika ơi', 'hey pika', 'chào bạn', 'alô'];
+const WAKE_WORDS = ['xin chào', 'hello', 'hi', 'chào chiri', 'chiri ơi', 'hey chiri', 'chào bạn', 'alô'];
+
+// Hàm cập nhật giao diện nút điều khiển xe
+function updateDriveModeUI() {
+    if (driveControlMode) {
+        driveModeBtn.innerHTML = '🚗 TẮT CHẾ ĐỘ ĐIỀU KHIỂN XE';
+        driveModeBtn.classList.add('drive-active');
+        if (driveHint) driveHint.style.background = '#ffcc80';
+        if (isAwake) {
+            statusText.innerHTML = '🎮 CHẾ ĐỘ LÁI XE: nói tiến, lùi, trái, phải, dừng';
+        }
+    } else {
+        driveModeBtn.innerHTML = '🚗 BẬT CHẾ ĐỘ ĐIỀU KHIỂN XE';
+        driveModeBtn.classList.remove('drive-active');
+        if (driveHint) driveHint.style.background = '#fff1df';
+        if (isAwake) {
+            statusText.innerHTML = '💬 CHẾ ĐỘ TRÒ CHUYỆN: hỏi đáp thông minh';
+        }
+    }
+}
 
 // ========== BIỂU CẢM KHUÔN MẶT ==========
 function setExpression(expression) {
@@ -123,35 +145,42 @@ function fallbackSpeak(text) {
 function wakeUp() {
     if (isAwake) return;
     
-    console.log('🔊 Robot thức dậy');
+    console.log('🔊 Chiri thức dậy');
     isAwake = true;
     lastActivityTime = Date.now();
     
     resetInactivityTimer();
     updateWakeIndicator('awake');
+    updateDriveModeUI();
     
-    const greeting = "Dạ, Pika đây ạ! Có gì cần giúp không ạ?";
+    const modeText = driveControlMode ? 
+        "Chiri đang ở chế độ điều khiển xe. Bạn có thể ra lệnh: tiến, lùi, trái, phải, dừng!" :
+        "Chiri đây! Mình sẵn sàng trò chuyện. Bạn muốn hỏi gì nào?";
+    
+    const greeting = `Dạ, Chiri đây ạ! ${modeText}`;
     addMessage('ai', greeting);
     playAudio(greeting);
     
-    statusText.innerHTML = '🎤 Pika đang lắng nghe... Hãy nói!';
+    statusText.innerHTML = driveControlMode ? 
+        '🎤 Chế độ xe: Hãy nói lệnh điều khiển' : 
+        '🎤 Chiri đang lắng nghe... Hãy nói!';
     setExpression('listening');
 }
 
 function goToSleep() {
     if (!isAwake) return;
     
-    console.log('😴 Robot đi ngủ');
+    console.log('😴 Chiri đi ngủ');
     isAwake = false;
     
     updateWakeIndicator('sleeping');
     setExpression('sleepy');
     
-    const sleepMsg = "Pika đi ngủ đây ạ. Khi nào cần hãy gọi Pika nhé!";
+    const sleepMsg = "Chiri đi ngủ đây ạ. Khi nào cần hãy gọi Chiri nhé!";
     addMessage('ai', sleepMsg);
     playAudio(sleepMsg);
     
-    statusText.innerHTML = '😴 Pika đang ngủ - Hãy nói "Xin chào" để đánh thức';
+    statusText.innerHTML = '😴 Chiri đang ngủ - Hãy nói "Xin chào" để đánh thức';
     
     if (inactivityTimer) clearTimeout(inactivityTimer);
     if (countdownInterval) clearInterval(countdownInterval);
@@ -192,13 +221,17 @@ async function processCommand(text) {
     
     addMessage('user', text);
     setExpression('thinking');
-    statusText.innerHTML = '🤔 Pika đang suy nghĩ...';
+    statusText.innerHTML = '🤔 Chiri đang suy nghĩ...';
     
     if (ws && ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({ type: 'voice', text: text }));
+        ws.send(JSON.stringify({ 
+            type: 'voice', 
+            text: text,
+            driveMode: driveControlMode 
+        }));
     } else {
         console.log('WebSocket chưa kết nối');
-        addMessage('ai', 'Xin lỗi, Pika đang mất kết nối!');
+        addMessage('ai', 'Xin lỗi, Chiri đang mất kết nối!');
         setExpression('listening');
         isProcessing = false;
     }
@@ -221,7 +254,9 @@ function initSpeechRecognition() {
         console.log('🎤 Micro đang lắng nghe...');
         if (isAwake) {
             setExpression('listening');
-            statusText.innerHTML = '🎤 Đang lắng nghe... Hãy nói!';
+            statusText.innerHTML = driveControlMode ? 
+                '🎤 Đang nghe lệnh xe... Hãy nói tiến/lùi/trái/phải!' : 
+                '🎤 Đang lắng nghe... Hãy nói!';
         }
     };
     
@@ -294,17 +329,38 @@ manualWake.addEventListener('click', () => {
         wakeUp();
     } else {
         resetInactivityTimer();
-        const msg = "Dạ, Pika đây! Bạn cần gì ạ?";
+        const msg = driveControlMode ? 
+            "Dạ, Chiri đang ở chế độ lái xe. Bạn muốn ra lệnh gì ạ?" : 
+            "Dạ, Chiri đây! Bạn cần gì ạ?";
         addMessage('ai', msg);
         playAudio(msg);
     }
 });
 
+// ========== DRIVE MODE BUTTON ==========
+driveModeBtn.addEventListener('click', () => {
+    driveControlMode = !driveControlMode;
+    updateDriveModeUI();
+    
+    const msg = driveControlMode ?
+        "Đã bật chế độ điều khiển xe. Bạn có thể ra lệnh: tiến, lùi, trái, phải, dừng, nhanh, chậm. Chiri sẽ không trả lời câu hỏi thường mà chỉ nhận lệnh lái xe nhé!" :
+        "Đã tắt chế độ xe. Chiri sẽ trò chuyện và trả lời câu hỏi như một AI thông minh. Hãy hỏi mình bất cứ điều gì!";
+    
+    if (isAwake) {
+        addMessage('ai', msg);
+        playAudio(msg);
+        statusText.innerHTML = driveControlMode ?
+            '🎤 Chế độ xe: Hãy nói lệnh điều khiển' :
+            '🎤 Chế độ trò chuyện: Hỏi gì cũng trả lời';
+    }
+});
+
 // ========== INITIALIZATION ==========
 function init() {
-    console.log('🚀 Pika AI khởi động...');
+    console.log('🚀 Chiri AI khởi động...');
     setExpression('sleepy');
     statusText.innerHTML = '🎤 Nói "Xin chào" hoặc "Hello" để đánh thức';
+    updateDriveModeUI();
     
     connectWebSocket();
     initSpeechRecognition();
