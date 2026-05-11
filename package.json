@@ -4,7 +4,8 @@
   "description": "CHIRI - Trợ lý AI với điều khiển xe robot ESP32",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "dev": "node server.js"
   },
   "dependencies": {
     "express": "^4.18.2",
