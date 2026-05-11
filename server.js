@@ -4,35 +4,26 @@ const WebSocket = require('ws');
 const path = require('path');
 const OpenAI = require('openai');
 
-// Railway tự động cung cấp PORT
 const app = express();
 const server = http.createServer(app);
 const wss = new WebSocket.Server({ server });
 
 app.use(express.static(path.join(__dirname, '/')));
 
-// ========== KHỞI TẠO OPENAI (Lấy API Key từ Railway Environment) ==========
+// ========== KHỞI TẠO OPENAI ==========
 const openai = new OpenAI({
-    apiKey: process.env.OPENAI_API_KEY,  // Railway sẽ inject key này
+    apiKey: process.env.OPENAI_API_KEY,
 });
 
-// Kiểm tra API Key
 if (!process.env.OPENAI_API_KEY) {
     console.error('❌ LỖI: OPENAI_API_KEY chưa được set trong Railway Environment!');
-    console.log('💡 Vào Railway Dashboard → Variables → Thêm OPENAI_API_KEY');
 } else {
     console.log('✅ OpenAI API Key đã được cấu hình');
 }
 
-// ========== CẤU HÌNH ESP32 (CHO RAILWAY - CÓ THỂ DÙNG WEBSOCKET HOẶC TCP) ==========
-// Railway không hỗ trợ Serial Port trực tiếp
-// Bạn cần ESP32 kết nối qua WebSocket hoặc MQTT
-// Dưới đây là cấu hình WebSocket cho ESP32
-
-// Lưu các ESP32 đang kết nối
+// ========== LƯU ESP32 CLIENTS ==========
 const esp32Clients = new Map();
 
-// Hàm gửi lệnh đến tất cả ESP32 đang kết nối
 function sendToESP32(command) {
     let sent = false;
     for (const [id, client] of esp32Clients) {
@@ -42,14 +33,13 @@ function sendToESP32(command) {
             sent = true;
         }
     }
-    
     if (!sent) {
         console.log('⚠️ Không có ESP32 nào đang kết nối');
     }
     return sent;
 }
 
-// ========== NHẬN DIỆN LỆNH ĐIỀU KHIỂN XE ==========
+// ========== NHẬN DIỆN LỆNH ĐIỀU KHIỂN ==========
 function isControlCommand(text) {
     const lowerText = text.toLowerCase();
     const controlWords = [
@@ -76,16 +66,16 @@ function getESP32Command(text) {
     return null;
 }
 
-// ========== GỌI CHATGPT API ==========
+// ========== GỌI CHATGPT ==========
 let conversationHistory = [];
 
 async function callChatGPT(userMessage) {
     if (!process.env.OPENAI_API_KEY) {
-        return 'Xin lỗi, API key chưa được cấu hình. Vui lòng liên hệ quản trị viên để thêm OPENAI_API_KEY vào Railway.';
+        return 'Xin lỗi, API key chưa được cấu hình. Vui lòng liên hệ quản trị viên.';
     }
     
     try {
-        console.log(`🤖 Gọi ChatGPT với câu: "${userMessage}"`);
+        console.log(`🤖 Gọi ChatGPT: "${userMessage.substring(0, 50)}..."`);
         
         conversationHistory.push({ role: 'user', content: userMessage });
         
@@ -96,7 +86,7 @@ async function callChatGPT(userMessage) {
         const systemPrompt = `Bạn là CHIRI, một robot trợ lý AI thông minh, thân thiện, vui tính và dễ thương.
 Bạn có thể trò chuyện về mọi chủ đề, trả lời câu hỏi, kể chuyện, giúp đỡ người dùng.
 Bạn cũng có thể điều khiển một chiếc xe robot khi người dùng ra lệnh như "tiến", "lùi", "trái", "phải", "dừng".
-Hãy trả lời ngắn gọn, tự nhiên, dễ thương, dùng tiếng Việt, xưng hô "mình - bạn" hoặc "CHIRI - bạn".`;
+Hãy trả lời ngắn gọn, tự nhiên, dễ thương, dùng tiếng Việt, xưng hô "mình - bạn".`;
         
         const messages = [
             { role: 'system', content: systemPrompt },
@@ -104,7 +94,6 @@ Hãy trả lời ngắn gọn, tự nhiên, dễ thương, dùng tiếng Việt,
         ];
         
         const model = process.env.OPENAI_MODEL || 'gpt-4o-mini';
-        console.log(`📡 Sử dụng model: ${model}`);
         
         const completion = await openai.chat.completions.create({
             model: model,
@@ -114,7 +103,7 @@ Hãy trả lời ngắn gọn, tự nhiên, dễ thương, dùng tiếng Việt,
         });
         
         const reply = completion.choices[0].message.content;
-        console.log(`💬 ChatGPT trả lời: "${reply.substring(0, 100)}..."`);
+        console.log(`💬 ChatGPT: "${reply.substring(0, 50)}..."`);
         
         conversationHistory.push({ role: 'assistant', content: reply });
         
@@ -122,7 +111,7 @@ Hãy trả lời ngắn gọn, tự nhiên, dễ thương, dùng tiếng Việt,
         
     } catch (error) {
         console.error('❌ Lỗi ChatGPT:', error);
-        return 'Xin lỗi, CHIRI đang gặp chút vấn đề kết nối. Bạn vui lòng thử lại sau nhé!';
+        return 'Xin lỗi, CHIRI đang gặp chút vấn đề. Bạn vui lòng thử lại sau nhé!';
     }
 }
 
@@ -155,18 +144,15 @@ app.get('/tts', async (req, res) => {
     }
 });
 
-// ========== WEBSOCKET XỬ LÝ CLIENT (Web + ESP32) ==========
+// ========== WEBSOCKET ==========
 wss.on('connection', (ws, req) => {
-    const clientType = req.headers['user-agent']?.includes('ESP32') ? 'ESP32' : 'WEB';
+    const isESP32 = req.headers['user-agent']?.includes('ESP32') || false;
     const clientId = Date.now() + '-' + Math.random().toString(36).substr(2, 6);
     
-    console.log(`🔌 ${clientType} client ${clientId} đã kết nối`);
+    console.log(`🔌 ${isESP32 ? 'ESP32' : 'WEB'} client ${clientId} kết nối`);
     
-    // Nếu là ESP32, lưu lại để gửi lệnh
-    if (clientType === 'ESP32') {
+    if (isESP32) {
         esp32Clients.set(clientId, ws);
-        console.log(`✅ ESP32 ${clientId} đã sẵn sàng nhận lệnh`);
-        
         ws.send(JSON.stringify({ type: 'system', message: 'Connected to CHIRI server' }));
     }
     
@@ -174,7 +160,6 @@ wss.on('connection', (ws, req) => {
         try {
             const data = JSON.parse(message);
             
-            // Xử lý tin nhắn từ Web Client (giọng nói)
             if (data.type === 'voice') {
                 const userText = data.text;
                 console.log(`🎤 Nhận từ WEB: "${userText}"`);
@@ -184,7 +169,6 @@ wss.on('connection', (ws, req) => {
                 let sentCommand = null;
                 
                 if (isCommand) {
-                    // LỆNH ĐIỀU KHIỂN XE
                     sentCommand = getESP32Command(userText);
                     if (sentCommand) {
                         sendToESP32(sentCommand);
@@ -201,8 +185,6 @@ wss.on('connection', (ws, req) => {
                         default: reply = '🚗 Đã nhận lệnh điều khiển xe!';
                     }
                 } else {
-                    // TRÒ CHUYỆN BÌNH THƯỜNG
-                    console.log(`💬 Gọi ChatGPT...`);
                     reply = await callChatGPT(userText);
                 }
                 
@@ -214,13 +196,12 @@ wss.on('connection', (ws, req) => {
                 }));
             }
             
-            // Xử lý tin nhắn từ ESP32
             if (data.type === 'esp32_status') {
                 console.log(`📡 ESP32 báo: ${data.status}`);
             }
             
         } catch(e) {
-            console.error('Lỗi xử lý message:', e);
+            console.error('Lỗi:', e);
         }
     });
     
@@ -228,23 +209,19 @@ wss.on('connection', (ws, req) => {
         console.log(`🔌 Client ${clientId} ngắt kết nối`);
         if (esp32Clients.has(clientId)) {
             esp32Clients.delete(clientId);
-            console.log(`✅ Đã xóa ESP32 ${clientId} khỏi danh sách`);
         }
     });
 });
 
-// ========== KHỞI ĐỘNG SERVER ==========
+// ========== KHỞI ĐỘNG ==========
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
-    console.log(`\n🚀 CHIRI AI Robot đang chạy tại: https://${process.env.RAILWAY_PUBLIC_DOMAIN || 'localhost:' + PORT}`);
-    console.log(`📡 WebSocket: wss://${process.env.RAILWAY_PUBLIC_DOMAIN || 'localhost:' + PORT}`);
+    console.log(`\n🚀 CHIRI AI Robot đang chạy tại cổng ${PORT}`);
     console.log(`🤖 ChatGPT Model: ${process.env.OPENAI_MODEL || 'gpt-4o-mini'}`);
     console.log(`📊 ESP32 clients: ${esp32Clients.size}`);
     
     if (!process.env.OPENAI_API_KEY) {
         console.log('\n⚠️ CẢNH BÁO: OPENAI_API_KEY chưa được cấu hình!');
         console.log('💡 Vào Railway Dashboard → Variables → Thêm OPENAI_API_KEY\n');
-    } else {
-        console.log('\n✅ Hệ thống sẵn sàng!\n');
     }
 });
