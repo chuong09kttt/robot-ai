@@ -79,15 +79,21 @@ function getFallbackReply(userMessage) {
         return 'Xin chào bạn! Mình là CHIRI, rất vui được gặp bạn!';
     }
     if (lower.includes('tên')) {
-        return 'Mình là CHIRI - trợ lý AI thông minh!';
+        return 'Mình là CHIRI - trợ lý AI thông minh, bạn đồng hành đáng yêu của bạn đây!';
     }
     if (lower.includes('cảm ơn')) {
-        return 'Không có gì đâu ạ!';
+        return 'Không có gì đâu ạ! Rất vui khi được giúp bạn 💖';
     }
     if (lower.includes('khỏe')) {
-        return 'Mình vẫn khỏe, cảm ơn bạn!';
+        return 'Mình vẫn khỏe, cảm ơn bạn! Bạn thì sao ạ?';
     }
-    return `Mình nghe bạn nói: "${userMessage}". Bạn có thể ra lệnh: tiến, lùi, trái, phải, dừng để điều khiển xe nhé!`;
+    if (lower.includes('làm gì')) {
+        return 'Mình có thể trò chuyện, kể chuyện vui, hoặc điều khiển xe bằng giọng nói. Bạn muốn gì nào?';
+    }
+    if (lower.includes('tạm biệt')) {
+        return 'Tạm biệt bạn nhé! Hẹn gặp lại. Hãy gọi "Xin chào" khi cần mình nhé! 👋';
+    }
+    return `Mình nghe bạn nói: "${userMessage}". Bạn có thể ra lệnh: tiến, lùi, trái, phải, dừng để điều khiển xe, hoặc hỏi mình bất cứ điều gì nhé!`;
 }
 
 // ========== GỌI CHATGPT ==========
@@ -108,7 +114,7 @@ async function callChatGPT(userMessage) {
         const completion = await openai.chat.completions.create({
             model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
             messages: [
-                { role: 'system', content: 'Bạn là CHIRI, robot trợ lý AI thân thiện. Trả lời ngắn gọn, dễ thương, tiếng Việt.' },
+                { role: 'system', content: 'Bạn là CHIRI, robot trợ lý AI thân thiện, dễ thương, vui vẻ. Trả lời ngắn gọn, tự nhiên, bằng tiếng Việt. Luôn xưng là "mình" hoặc "Chiri".' },
                 ...conversationHistory
             ],
             max_tokens: 200,
@@ -126,6 +132,35 @@ async function callChatGPT(userMessage) {
         console.error('❌ Lỗi ChatGPT:', error.message);
         return getFallbackReply(userMessage);
     }
+}
+
+// ========== XỬ LÝ CHAT THEO CHẾ ĐỘ ==========
+async function processUserMessage(userText, driveMode) {
+    // Nếu đang ở chế độ điều khiển xe, ưu tiên xử lý lệnh xe
+    if (driveMode) {
+        const isCommand = isControlCommand(userText);
+        if (isCommand) {
+            const command = getESP32Command(userText);
+            if (command) {
+                sendToESP32(command);
+                const commandReplies = {
+                    'FORWARD': '🚗 Xe đang tiến về phía trước!',
+                    'BACKWARD': '🚗 Xe đang lùi lại!',
+                    'LEFT': '🚗 Xe đang rẽ trái!',
+                    'RIGHT': '🚗 Xe đang rẽ phải!',
+                    'STOP': '🚗 Xe đã dừng lại!',
+                    'SPEED_UP': '🚗 Đang tăng tốc độ!',
+                    'SLOW_DOWN': '🚗 Đang giảm tốc độ!'
+                };
+                return commandReplies[command] || '🚗 Đã nhận lệnh điều khiển xe!';
+            }
+        }
+        // Nếu ở chế độ xe nhưng không phải lệnh điều khiển
+        return `🚫 Chiri đang ở chế độ điều khiển xe. Vui lòng nói: tiến, lùi, trái, phải, dừng, nhanh, chậm. Hoặc tắt chế độ xe bằng nút bên dưới để trò chuyện nhé!`;
+    }
+    
+    // Chế độ trò chuyện bình thường
+    return await callChatGPT(userText);
 }
 
 // ========== TTS ==========
@@ -186,31 +221,12 @@ wss.on('connection', (ws, req) => {
             
             if (data.type === 'voice') {
                 const userText = data.text;
-                console.log(`🎤 Nhận từ WEB: "${userText}"`);
+                const driveMode = data.driveMode || false;
+                console.log(`🎤 Nhận từ WEB: "${userText}" (driveMode: ${driveMode})`);
                 
-                const isCommand = isControlCommand(userText);
-                let reply = '';
-                let sentCommand = null;
+                const reply = await processUserMessage(userText, driveMode);
                 
-                if (isCommand) {
-                    sentCommand = getESP32Command(userText);
-                    if (sentCommand) sendToESP32(sentCommand);
-                    
-                    const commandReplies = {
-                        'FORWARD': '🚗 Xe đang tiến về phía trước!',
-                        'BACKWARD': '🚗 Xe đang lùi lại!',
-                        'LEFT': '🚗 Xe đang rẽ trái!',
-                        'RIGHT': '🚗 Xe đang rẽ phải!',
-                        'STOP': '🚗 Xe đã dừng lại!',
-                        'SPEED_UP': '🚗 Đang tăng tốc độ!',
-                        'SLOW_DOWN': '🚗 Đang giảm tốc độ!'
-                    };
-                    reply = commandReplies[sentCommand] || '🚗 Đã nhận lệnh điều khiển xe!';
-                } else {
-                    reply = await callChatGPT(userText);
-                }
-                
-                ws.send(JSON.stringify({ type: 'ai', text: reply, isCommand: isCommand, command: sentCommand }));
+                ws.send(JSON.stringify({ type: 'ai', text: reply }));
             }
             
             if (data.type === 'esp32_status') {
