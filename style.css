@@ -5,34 +5,90 @@
 }
 
 body {
-    font-family: 'Segoe UI', 'SF Pro Text', system-ui, -apple-system, sans-serif;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    font-family: 'Segoe UI', 'SF Pro Text', system-ui, sans-serif;
+    background: linear-gradient(135deg, #0f0c29 0%, #302b63 50%, #24243e 100%);
     min-height: 100vh;
-    overflow: hidden;
-}
-
-.app {
-    width: 100vw;
-    height: 100vh;
-    display: flex;
-    flex-direction: column;
-    background: rgba(0, 0, 0, 0.2);
-    backdrop-filter: blur(8px);
-}
-
-.robot-area {
-    flex: 2;
     display: flex;
     justify-content: center;
     align-items: center;
-    position: relative;
-    transition: all 0.3s ease;
-    min-height: 0;
+    padding: 10px;
 }
 
-.robot-container {
+.container {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-radius: 50px;
+    padding: 25px;
+    max-width: 500px;
+    width: 100%;
+    box-shadow: 0 30px 60px rgba(0,0,0,0.5);
+    position: relative;
+}
+
+/* Wake badge */
+.wake-badge {
+    position: absolute;
+    top: 15px;
+    left: 15px;
+    background: rgba(0,0,0,0.6);
+    padding: 5px 12px;
+    border-radius: 20px;
+    font-size: 11px;
+    color: white;
+    backdrop-filter: blur(5px);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    z-index: 10;
+}
+
+.wake-dot {
+    width: 10px;
+    height: 10px;
+    background: #2ecc71;
+    border-radius: 50%;
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.5; transform: scale(1.2); }
+}
+
+.wake-dot.listening {
+    background: #e74c3c;
+    animation: fastPulse 0.5s infinite;
+}
+
+@keyframes fastPulse {
+    0%, 100% { transform: scale(1); background: #e74c3c; }
+    50% { transform: scale(1.3); background: #ff6b6b; }
+}
+
+/* Timer */
+.sleep-timer {
+    position: absolute;
+    top: 15px;
+    right: 15px;
+    background: rgba(0,0,0,0.6);
+    padding: 5px 12px;
+    border-radius: 20px;
+    font-size: 11px;
+    color: white;
+    font-family: monospace;
+    z-index: 10;
+}
+
+/* Robot section */
+.robot-section {
     text-align: center;
-    padding: 20px;
+    margin: 40px 0 20px;
+}
+
+.robot-avatar {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin: 0 auto;
 }
 
 .robot-svg {
@@ -42,6 +98,7 @@ body {
     transition: all 0.2s ease;
 }
 
+/* Biểu cảm khuôn mặt */
 .robot-svg .pupil {
     transition: all 0.1s ease;
 }
@@ -55,23 +112,39 @@ body {
     transition: all 0.2s ease;
 }
 
-/* Trạng thái lắng nghe */
+.robot-svg #tongue {
+    transition: all 0.2s ease;
+}
+
+/* Trạng thái lắng nghe - nhún nhảy */
 .robot-svg.listening {
-    animation: listenBounce 0.8s ease infinite;
+    animation: listenBounce 0.6s ease infinite;
 }
 
 @keyframes listenBounce {
     0%, 100% { transform: translateY(0px); }
-    50% { transform: translateY(-8px); }
+    50% { transform: translateY(-5px); }
 }
 
 /* Trạng thái vui */
 .robot-svg.happy #mouth {
-    d: path("M160 270 Q200 310 240 270");
+    d: path("M165 275 Q200 315 235 275");
+}
+.robot-svg.happy #tongue {
+    opacity: 0.8;
 }
 .robot-svg.happy #leftEyebrow,
 .robot-svg.happy #rightEyebrow {
     d: path("M115 150 Q145 130 175 150");
+    d: path("M225 150 Q255 130 285 150");
+}
+.robot-svg.happy .eye {
+    animation: happyEye 0.3s ease infinite;
+}
+
+@keyframes happyEye {
+    0%, 100% { transform: scaleY(1); }
+    50% { transform: scaleY(0.8); }
 }
 
 /* Trạng thái suy nghĩ */
@@ -85,24 +158,48 @@ body {
     75% { transform: rotate(-2deg); }
 }
 
+.robot-svg.thinking #leftEyebrow,
+.robot-svg.thinking #rightEyebrow {
+    d: path("M115 145 Q145 160 175 145");
+    d: path("M225 145 Q255 160 285 145");
+}
+
+/* Trạng thái ngạc nhiên */
+.robot-svg.surprised #mouth {
+    d: path("M180 280 Q200 260 220 280");
+}
+.robot-svg.surprised .pupil {
+    r: 10;
+}
+.robot-svg.surprised #leftEyebrow,
+.robot-svg.surprised #rightEyebrow {
+    d: path("M115 140 Q145 125 175 140");
+    d: path("M225 140 Q255 125 285 140");
+}
+
 /* Trạng thái ngủ */
 .robot-svg.sleepy .pupil {
+    opacity: 0;
+}
+.robot-svg.sleepy .eye-glow,
+.robot-svg.sleepy .eye-star {
     opacity: 0;
 }
 .robot-svg.sleepy #leftEyebrow,
 .robot-svg.sleepy #rightEyebrow {
     d: path("M115 160 Q145 160 175 160");
+    d: path("M225 160 Q255 160 285 160");
 }
 .robot-svg.sleepy #mouth {
-    d: path("M170 280 Q200 275 230 280");
+    d: path("M180 280 Q200 275 220 280");
+}
+.robot-svg.sleepy .robot-avatar {
+    filter: brightness(0.8);
 }
 
-.robot-info {
-    margin-top: 20px;
-}
-
+/* Tên robot */
 .robot-name {
-    font-size: 28px;
+    font-size: 32px;
     font-weight: 800;
     background: linear-gradient(135deg, #FFE259, #FFA751);
     -webkit-background-clip: text;
@@ -110,143 +207,137 @@ body {
     color: transparent;
     text-shadow: 0 2px 5px rgba(0,0,0,0.2);
     letter-spacing: 2px;
-}
-
-.countdown-badge {
-    font-size: 20px;
-    font-weight: bold;
-    background: rgba(0,0,0,0.6);
-    backdrop-filter: blur(10px);
-    display: inline-block;
-    padding: 6px 20px;
-    border-radius: 40px;
     margin-top: 10px;
-    color: #FFE259;
-    font-family: monospace;
-    border: 1px solid rgba(255,255,255,0.3);
-    transition: all 0.2s;
 }
 
-.chat-area {
-    background: rgba(30, 30, 50, 0.85);
-    backdrop-filter: blur(20px);
-    border-top-left-radius: 30px;
-    border-top-right-radius: 30px;
-    padding: 16px;
-    transition: all 0.3s ease;
-    max-height: 40%;
+.status-text {
+    font-size: 13px;
+    color: rgba(255,255,255,0.9);
+    margin-top: 8px;
+    padding: 5px 10px;
+    background: rgba(0,0,0,0.3);
+    border-radius: 20px;
+    display: inline-block;
+}
+
+/* Wake examples */
+.wake-examples {
     display: flex;
-    flex-direction: column;
+    justify-content: center;
+    gap: 12px;
+    margin: 15px 0;
+    flex-wrap: wrap;
 }
 
-.chat-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 12px;
-    padding: 0 8px;
-}
-
-.toggle-btn {
+.wake-example {
     background: rgba(255,255,255,0.2);
-    border: 1px solid rgba(255,255,255,0.3);
-    padding: 6px 16px;
-    border-radius: 40px;
+    padding: 5px 12px;
+    border-radius: 20px;
+    font-size: 12px;
     color: white;
-    font-size: 14px;
-    cursor: pointer;
-    transition: all 0.2s;
+    backdrop-filter: blur(5px);
 }
 
-.toggle-btn:active {
-    transform: scale(0.95);
-}
-
-.status {
-    color: white;
-    font-size: 14px;
-    background: rgba(0,0,0,0.5);
-    padding: 6px 16px;
-    border-radius: 40px;
-}
-
-.chat-messages {
-    flex: 1;
-    overflow-y: auto;
+/* Chat section */
+.chat-section {
     background: rgba(0,0,0,0.3);
     border-radius: 20px;
     padding: 12px;
-    margin-bottom: 12px;
-    max-height: 180px;
+    margin-top: 15px;
 }
 
-.msg-user, .msg-ai {
-    margin-bottom: 10px;
-    word-break: break-word;
-    white-space: pre-wrap;
+.chat-box {
+    height: 110px;
+    overflow-y: auto;
+    font-size: 12px;
+}
+
+.message {
+    margin-bottom: 8px;
     animation: fadeIn 0.2s ease;
 }
 
 @keyframes fadeIn {
-    from { opacity: 0; transform: translateY(10px); }
+    from { opacity: 0; transform: translateY(5px); }
     to { opacity: 1; transform: translateY(0); }
 }
 
-.msg-user {
+.message.user {
     text-align: right;
 }
-.msg-user span {
-    background: linear-gradient(135deg, #667eea, #764ba2);
+
+.message .bubble {
     display: inline-block;
-    padding: 8px 16px;
-    border-radius: 20px 20px 4px 20px;
+    padding: 8px 12px;
+    border-radius: 18px;
+    max-width: 85%;
+    font-size: 12px;
+    word-break: break-word;
+}
+
+.message.user .bubble {
+    background: linear-gradient(135deg, #3498db, #2980b9);
     color: white;
-    max-width: 80%;
 }
 
-.msg-ai span {
+.message.ai .bubble {
     background: rgba(255,255,255,0.95);
-    display: inline-block;
-    padding: 8px 16px;
-    border-radius: 20px 20px 20px 4px;
     color: #333;
-    max-width: 80%;
 }
 
-/* Chế độ full màn hình */
-.app.fullscreen .chat-area {
-    display: none;
-}
-.app.fullscreen .robot-area {
-    flex: 1;
-}
-.app.fullscreen .robot-svg {
-    width: 400px;
-    height: 400px;
+/* Tip */
+.tip {
+    text-align: center;
+    font-size: 10px;
+    color: rgba(255,255,255,0.7);
+    margin-top: 12px;
+    padding: 8px;
+    background: rgba(0,0,0,0.2);
+    border-radius: 20px;
 }
 
-@media (max-width: 600px) {
+/* Manual wake button */
+.manual-wake {
+    position: absolute;
+    bottom: 20px;
+    right: 20px;
+    width: 45px;
+    height: 45px;
+    background: rgba(255,255,255,0.2);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    backdrop-filter: blur(5px);
+    transition: all 0.2s;
+    z-index: 10;
+}
+
+.manual-wake:active {
+    transform: scale(0.9);
+}
+
+.manual-wake svg {
+    width: 25px;
+    height: 25px;
+    fill: white;
+}
+
+/* Responsive */
+@media (max-width: 500px) {
+    .container {
+        padding: 15px;
+    }
     .robot-svg {
         width: 220px;
         height: 220px;
     }
-    .app.fullscreen .robot-svg {
-        width: 300px;
-        height: 300px;
-    }
     .robot-name {
-        font-size: 22px;
+        font-size: 26px;
     }
-}
-
-/* Hiệu ứng đếm ngược sắp hết giờ */
-@keyframes pulse {
-    0%, 100% { opacity: 1; transform: scale(1); background: #ff4444; }
-    50% { opacity: 0.7; transform: scale(1.05); background: #ff0000; }
-}
-
-/* Hiệu ứng nhấp nháy mắt */
-@keyframes blink {
-    0%, 90%, 100% { transform: scaleY(1); }
-    95% { transform: scaleY(0.1); }
+    .wake-example {
+        font-size: 10px;
+        padding: 4px 10px;
+    }
 }
