@@ -55,6 +55,15 @@ body {
     transition: all 0.2s ease;
 }
 
+.robot-svg.listening {
+    animation: bounce 0.5s ease infinite;
+}
+
+@keyframes bounce {
+    0%, 100% { transform: translateY(0px); }
+    50% { transform: translateY(-5px); }
+}
+
 .robot-svg.happy #mouth {
     d: path("M160 270 Q200 310 240 270");
 }
@@ -63,16 +72,14 @@ body {
     d: path("M115 150 Q145 130 175 150");
 }
 
-.robot-svg.sad #mouth {
-    d: path("M160 280 Q200 250 240 280");
-}
-.robot-svg.sad #leftEyebrow,
-.robot-svg.sad #rightEyebrow {
-    d: path("M115 150 Q145 165 175 150");
+.robot-svg.thinking {
+    animation: shake 0.3s ease infinite;
 }
 
-.robot-svg.surprised #mouth {
-    d: path("M175 275 Q200 290 225 275");
+@keyframes shake {
+    0%, 100% { transform: rotate(0deg); }
+    25% { transform: rotate(2deg); }
+    75% { transform: rotate(-2deg); }
 }
 
 .robot-svg.sleepy .pupil {
@@ -84,25 +91,6 @@ body {
 }
 .robot-svg.sleepy #mouth {
     d: path("M170 280 Q200 275 230 280");
-}
-
-.robot-svg.listening .pupil {
-    animation: listenPulse 0.8s infinite;
-}
-
-@keyframes listenPulse {
-    0%, 100% { r: 14px; }
-    50% { r: 18px; fill: #4CAF50; }
-}
-
-.robot-svg.thinking {
-    animation: shake 0.5s ease-in-out infinite;
-}
-
-@keyframes shake {
-    0%, 100% { transform: rotate(0deg); }
-    25% { transform: rotate(3deg); }
-    75% { transform: rotate(-3deg); }
 }
 
 .robot-info {
@@ -218,6 +206,34 @@ body {
     border-radius: 20px 20px 20px 4px;
     color: #333;
     max-width: 80%;
+}
+
+.micro-btn {
+    background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+    border: none;
+    padding: 14px;
+    border-radius: 60px;
+    font-weight: bold;
+    font-size: 18px;
+    color: white;
+    cursor: pointer;
+    transition: all 0.2s;
+    margin-top: 8px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+}
+
+.micro-btn:active {
+    transform: scale(0.95);
+}
+
+.micro-btn.recording {
+    background: linear-gradient(135deg, #ff4444, #cc0000);
+    animation: pulseRed 0.8s infinite;
+}
+
+@keyframes pulseRed {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.02); box-shadow: 0 0 20px rgba(255,0,0,0.5); }
 }
 
 .app.fullscreen .chat-area {
