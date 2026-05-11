@@ -2,73 +2,390 @@
 <html lang="vi">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
-    <title>🤖 Pika AI - Robot thông minh</title>
-    <link rel="stylesheet" href="style.css">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>🐹 CHIRI - Trợ lý AI thức tỉnh bằng giọng nói</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #0f0c29 0%, #302b63 50%, #24243e 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 10px;
+        }
+
+        .container {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 50px;
+            padding: 25px;
+            max-width: 500px;
+            width: 100%;
+            box-shadow: 0 30px 60px rgba(0,0,0,0.5);
+            position: relative;
+        }
+
+        /* Wake word indicator */
+        .wake-badge {
+            position: absolute;
+            top: 15px;
+            left: 15px;
+            background: rgba(0,0,0,0.6);
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 11px;
+            color: white;
+            backdrop-filter: blur(5px);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .wake-dot {
+            width: 10px;
+            height: 10px;
+            background: #2ecc71;
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.5; transform: scale(1.2); }
+        }
+
+        .wake-dot.listening {
+            background: #e74c3c;
+            animation: fastPulse 0.5s infinite;
+        }
+
+        @keyframes fastPulse {
+            0%, 100% { transform: scale(1); background: #e74c3c; }
+            50% { transform: scale(1.3); background: #ff6b6b; }
+        }
+
+        /* Timer */
+        .sleep-timer {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            background: rgba(0,0,0,0.6);
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 11px;
+            color: white;
+            font-family: monospace;
+        }
+
+        /* Robot section */
+        .robot-section {
+            text-align: center;
+            margin: 40px 0 20px;
+        }
+
+        .robot-avatar {
+            width: 260px;
+            height: 260px;
+            margin: 0 auto;
+            background: radial-gradient(circle at 30% 30%, #f5f7fa, #c3cfe2);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+            transition: all 0.3s ease;
+        }
+
+        .robot-face {
+            position: relative;
+            width: 170px;
+            height: 170px;
+        }
+
+        .eyes {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 35px;
+            gap: 45px;
+        }
+
+        .eye {
+            width: 38px;
+            height: 38px;
+            background: #2c3e50;
+            border-radius: 50%;
+            transition: all 0.1s ease;
+            position: relative;
+        }
+
+        .eye::after {
+            content: '';
+            position: absolute;
+            width: 15px;
+            height: 15px;
+            background: white;
+            border-radius: 50%;
+            top: 7px;
+            left: 7px;
+        }
+
+        /* Sleeping eyes */
+        .sleeping .eye {
+            height: 8px;
+            margin-top: 15px;
+            background: #555;
+        }
+
+        .sleeping .eye::after {
+            display: none;
+        }
+
+        .mouth {
+            width: 85px;
+            height: 45px;
+            margin: 0 auto;
+            background: #2c3e50;
+            border-radius: 0 0 45px 45px;
+            transition: all 0.1s ease;
+        }
+
+        /* Sleeping mouth */
+        .sleeping .mouth {
+            width: 60px;
+            height: 8px;
+            border-radius: 10px;
+            background: #555;
+        }
+
+        /* Animation states */
+        .listening .eye {
+            animation: listenPulse 0.5s infinite;
+            background: #e74c3c;
+        }
+
+        @keyframes listenPulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.3); background: #ff6b6b; }
+        }
+
+        .speaking .mouth {
+            animation: speakAnim 0.12s infinite;
+        }
+
+        @keyframes speakAnim {
+            0%, 100% { height: 25px; border-radius: 0 0 25px 25px; }
+            50% { height: 60px; border-radius: 0 0 60px 60px; }
+        }
+
+        .thinking .eye {
+            animation: thinkMove 0.8s ease-in-out infinite;
+        }
+
+        @keyframes thinkMove {
+            0%, 100% { transform: translate(0, 0); }
+            25% { transform: translate(-10px, 0); }
+            75% { transform: translate(10px, 0); }
+        }
+
+        .robot-name {
+            font-size: 38px;
+            font-weight: bold;
+            color: white;
+            margin-top: 15px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .status-text {
+            font-size: 13px;
+            color: rgba(255,255,255,0.9);
+            margin-top: 8px;
+            padding: 5px 10px;
+            background: rgba(0,0,0,0.3);
+            border-radius: 20px;
+            display: inline-block;
+        }
+
+        /* Wake word examples */
+        .wake-examples {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            margin: 15px 0;
+            flex-wrap: wrap;
+        }
+
+        .wake-example {
+            background: rgba(255,255,255,0.2);
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            color: white;
+        }
+
+        /* Chat box */
+        .chat-section {
+            background: rgba(0,0,0,0.3);
+            border-radius: 20px;
+            padding: 12px;
+            margin-top: 15px;
+        }
+
+        .chat-box {
+            height: 110px;
+            overflow-y: auto;
+            font-size: 12px;
+        }
+
+        .message {
+            margin-bottom: 6px;
+            animation: fadeIn 0.2s ease;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(5px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .message.user {
+            text-align: right;
+        }
+
+        .message .bubble {
+            display: inline-block;
+            padding: 5px 10px;
+            border-radius: 12px;
+            max-width: 85%;
+            font-size: 11px;
+        }
+
+        .message.user .bubble {
+            background: #3498db;
+            color: white;
+        }
+
+        .message.ai .bubble {
+            background: rgba(255,255,255,0.9);
+            color: #333;
+        }
+
+        .tip {
+            text-align: center;
+            font-size: 11px;
+            color: rgba(255,255,255,0.7);
+            margin-top: 12px;
+            padding: 8px;
+            background: rgba(0,0,0,0.2);
+            border-radius: 20px;
+        }
+
+        /* Manual wake button */
+        .manual-wake {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            width: 45px;
+            height: 45px;
+            background: rgba(255,255,255,0.2);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            backdrop-filter: blur(5px);
+            transition: all 0.2s;
+        }
+
+        .manual-wake:active {
+            transform: scale(0.9);
+        }
+
+        .manual-wake svg {
+            width: 25px;
+            height: 25px;
+            fill: white;
+        }
+
+        /* Command indicator */
+        .command-badge {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            background: rgba(0,0,0,0.6);
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 10px;
+            color: #ffa500;
+            display: none;
+        }
+
+        .command-badge.show {
+            display: block;
+            animation: fadeInOut 1s ease;
+        }
+
+        @keyframes fadeInOut {
+            0% { opacity: 0; transform: translateY(10px); }
+            20% { opacity: 1; transform: translateY(0); }
+            80% { opacity: 1; transform: translateY(0); }
+            100% { opacity: 0; transform: translateY(-10px); }
+        }
+    </style>
 </head>
 <body>
-    <div class="app" id="app">
-        <div class="robot-area" id="robotArea">
-            <div class="robot-container">
-                <div class="robot-face-wrapper">
-                    <svg class="robot-svg" viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg">
-                        <!-- Tai -->
-                        <circle cx="100" cy="100" r="45" fill="#FFB347" stroke="#E67E22" stroke-width="3"/>
-                        <circle cx="300" cy="100" r="45" fill="#FFB347" stroke="#E67E22" stroke-width="3"/>
-                        
-                        <!-- Đầu chính -->
-                        <ellipse cx="200" cy="200" rx="130" ry="140" fill="#FFD699" stroke="#E67E22" stroke-width="4"/>
-                        
-                        <!-- Mắt trái -->
-                        <g id="leftEye">
-                            <ellipse cx="145" cy="190" rx="28" ry="32" fill="white" stroke="#333" stroke-width="3"/>
-                            <circle class="pupil" cx="150" cy="190" r="14" fill="#2C3E50"/>
-                            <circle class="eye-glow" cx="146" cy="184" r="5" fill="white" opacity="0.9"/>
-                        </g>
-                        
-                        <!-- Mắt phải -->
-                        <g id="rightEye">
-                            <ellipse cx="255" cy="190" rx="28" ry="32" fill="white" stroke="#333" stroke-width="3"/>
-                            <circle class="pupil" cx="260" cy="190" r="14" fill="#2C3E50"/>
-                            <circle class="eye-glow" cx="256" cy="184" r="5" fill="white" opacity="0.9"/>
-                        </g>
-                        
-                        <!-- Lông mày -->
-                        <path id="leftEyebrow" d="M115 150 Q145 135 175 150" stroke="#5D4037" stroke-width="6" fill="none" stroke-linecap="round"/>
-                        <path id="rightEyebrow" d="M225 150 Q255 135 285 150" stroke="#5D4037" stroke-width="6" fill="none" stroke-linecap="round"/>
-                        
-                        <!-- Mũi -->
-                        <ellipse cx="200" cy="230" rx="12" ry="8" fill="#E67E22"/>
-                        
-                        <!-- Miệng -->
-                        <path id="mouth" d="M160 270 Q200 310 240 270" stroke="#5D4037" stroke-width="5" fill="none" stroke-linecap="round"/>
-                        
-                        <!-- Má hồng -->
-                        <ellipse cx="110" cy="240" rx="18" ry="12" fill="#FF9999" opacity="0.6"/>
-                        <ellipse cx="290" cy="240" rx="18" ry="12" fill="#FF9999" opacity="0.6"/>
-                    </svg>
+    <div class="container">
+        <div class="wake-badge">
+            <div class="wake-dot" id="wakeDot"></div>
+            <span id="wakeText">Đang lắng nghe</span>
+        </div>
+        <div class="sleep-timer" id="sleepTimer">😴 Sẽ ngủ sau 2:00</div>
+
+        <div class="robot-section">
+            <div class="robot-avatar" id="robotAvatar">
+                <div class="robot-face" id="robotFace">
+                    <div class="eyes">
+                        <div class="eye" id="leftEye"></div>
+                        <div class="eye" id="rightEye"></div>
+                    </div>
+                    <div class="mouth" id="robotMouth"></div>
                 </div>
-                
-                <div class="robot-info">
-                    <div class="robot-name">🤖 PIKA AI</div>
-                    <div class="countdown-badge" id="countdownBadge">⏱️ 60s</div>
+            </div>
+            <div class="robot-name">🐹 CHIRI</div>
+            <div class="status-text" id="statusText">🎤 Nói "Chào CHIRI" hoặc "Hello" để đánh thức</div>
+        </div>
+
+        <div class="wake-examples">
+            <span class="wake-example">🗣️ "Chào CHIRI"</span>
+            <span class="wake-example">🗣️ "Hello"</span>
+            <span class="wake-example">🗣️ "Hi CHIRI"</span>
+            <span class="wake-example">🗣️ "Xin chào"</span>
+            <span class="wake-example">🚗 "Tiến"</span>
+            <span class="wake-example">🚗 "Lùi"</span>
+        </div>
+
+        <div class="chat-section">
+            <div class="chat-box" id="chatBox">
+                <div class="message ai">
+                    <div class="bubble">🐹 Chào bạn! Mình là CHIRI. Hãy gọi "CHIRI ơi" hoặc "Hello" để trò chuyện nhé! Mình sẽ tự động ngủ sau 2 phút không nói chuyện.</div>
                 </div>
             </div>
         </div>
-        
-        <div class="chat-area" id="chatArea">
-            <div class="chat-header">
-                <button id="toggleChatBtn" class="toggle-btn">🔽 Ẩn chat</button>
-                <div class="status" id="statusText">🟢 Đang khởi động...</div>
-            </div>
-            <div class="chat-messages" id="chatMessages">
-                <div class="msg-ai">
-                    <span>🤖 Pika AI đã sẵn sàng! Hãy nói <strong style="color:#f5576c">"Xin chào"</strong> hoặc <strong style="color:#f5576c">"Hello"</strong> để đánh thức tôi nhé!</span>
-                </div>
-            </div>
+        <div class="tip">💡 Mẹo: Nói "CHIRI ơi", "Xin chào", "Hello" để đánh thức. Sau 2 phút không nói, CHIRI sẽ tự ngủ! 🚗 Lệnh xe: Tiến, Lùi, Trái, Phải, Dừng</div>
+
+        <div class="manual-wake" id="manualWake">
+            <svg viewBox="0 0 24 24">
+                <path d="M12 16c-2.21 0-4-1.79-4-4V6c0-2.21 1.79-4 4-4s4 1.79 4 4v6c0 2.21-1.79 4-4 4zm-6-4c0 .66.54 1.2 1.2 1.2h.6c.66 0 1.2-.54 1.2-1.2V6c0-.66-.54-1.2-1.2-1.2h-.6c-.66 0-1.2.54-1.2 1.2v6zm12 0c0 .66.54 1.2 1.2 1.2h.6c.66 0 1.2-.54 1.2-1.2V6c0-.66-.54-1.2-1.2-1.2h-.6c-.66 0-1.2.54-1.2 1.2v6z"/>
+            </svg>
         </div>
+        <div class="command-badge" id="commandBadge">🚗 Đã gửi lệnh</div>
     </div>
-    
+
     <script src="script.js"></script>
 </body>
 </html>
