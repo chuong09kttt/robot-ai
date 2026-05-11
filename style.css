@@ -86,12 +86,23 @@ body {
     d: path("M170 280 Q200 275 230 280");
 }
 
-@keyframes blink {
-    0%, 90%, 100% { transform: scaleY(1); }
-    95% { transform: scaleY(0.05); }
+.robot-svg.listening .pupil {
+    animation: listenPulse 0.8s infinite;
 }
-.blink .eye-outer {
-    animation: blink 3s infinite;
+
+@keyframes listenPulse {
+    0%, 100% { r: 14px; }
+    50% { r: 18px; fill: #4CAF50; }
+}
+
+.robot-svg.thinking {
+    animation: shake 0.5s ease-in-out infinite;
+}
+
+@keyframes shake {
+    0%, 100% { transform: rotate(0deg); }
+    25% { transform: rotate(3deg); }
+    75% { transform: rotate(-3deg); }
 }
 
 .robot-info {
@@ -207,23 +218,6 @@ body {
     border-radius: 20px 20px 20px 4px;
     color: #333;
     max-width: 80%;
-}
-
-.micro-btn {
-    background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-    border: none;
-    padding: 12px;
-    border-radius: 60px;
-    font-weight: bold;
-    font-size: 16px;
-    color: white;
-    cursor: pointer;
-    transition: all 0.2s;
-    margin-top: 8px;
-}
-
-.micro-btn:active {
-    transform: scale(0.97);
 }
 
 .app.fullscreen .chat-area {
