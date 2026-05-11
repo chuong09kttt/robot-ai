@@ -2,71 +2,57 @@
 const app = document.getElementById('app');
 const robotSvg = document.querySelector('.robot-svg');
 const toggleChatBtn = document.getElementById('toggleChatBtn');
+const microBtn = document.getElementById('microBtn');
 const statusText = document.getElementById('statusText');
 const countdownBadge = document.getElementById('countdownBadge');
 const chatMessages = document.getElementById('chatMessages');
 
 // State
-let recognition = null;
-let isAwake = false;  // Bắt đầu ở trạng thái ngủ, chờ wake word
+let isListening = false;
+let isAsleep = false;
 let sleepTimer = null;
 let countdownInterval = null;
 let secondsLeft = 60;
 let isSpeaking = false;
 let synth = window.speechSynthesis;
 let currentUtterance = null;
+let recognition = null;
 
-// Các từ khóa đánh thức
-const WAKE_WORDS = ['hello pika', 'xin chào pika', 'hey robot', 'pika ơi', 'chào pika', 'hello', 'xin chào'];
-
-// ========== BIỂU CẢM KHUÔN MẶT ==========
-function setExpression(expression) {
-    robotSvg.classList.remove('happy', 'sad', 'surprised', 'sleepy', 'listening', 'thinking');
-    if (expression === 'happy') robotSvg.classList.add('happy');
-    else if (expression === 'sad') robotSvg.classList.add('sad');
-    else if (expression === 'surprised') robotSvg.classList.add('surprised');
-    else if (expression === 'sleepy') robotSvg.classList.add('sleepy');
-    else if (expression === 'listening') robotSvg.classList.add('listening');
-    else if (expression === 'thinking') robotSvg.classList.add('thinking');
+// ========== BIỂU CẢM ==========
+function setExpression(expr) {
+    robotSvg.classList.remove('listening', 'thinking', 'sleepy', 'happy');
+    if (expr === 'listening') robotSvg.classList.add('listening');
+    else if (expr === 'thinking') robotSvg.classList.add('thinking');
+    else if (expr === 'sleepy') robotSvg.classList.add('sleepy');
+    else if (expr === 'happy') robotSvg.classList.add('happy');
 }
 
 // Nhấp nháy mắt
 setInterval(() => {
-    if (!isAwake) return;
-    const pupils = document.querySelectorAll('.pupil');
-    pupils.forEach(pupil => {
-        pupil.style.opacity = '0';
-        setTimeout(() => pupil.style.opacity = '1', 150);
-    });
+    if (!isAsleep) {
+        const pupils = document.querySelectorAll('.pupil');
+        pupils.forEach(p => {
+            p.style.opacity = '0';
+            setTimeout(() => p.style.opacity = '1', 150);
+        });
+    }
 }, 4000);
 
 // ========== HIỂN THỊ TIN NHẮN ==========
 function addMessage(role, text) {
     const msgDiv = document.createElement('div');
     msgDiv.className = `msg-${role}`;
-    const escapedText = text.replace(/[&<>]/g, function(m) {
-        if (m === '&') return '&amp;';
-        if (m === '<') return '&lt;';
-        if (m === '>') return '&gt;';
-        return m;
-    });
-    const formatted = escapedText.replace(/\n/g, '<br>');
-    msgDiv.innerHTML = `<span>${role === 'user' ? '👤' : '🤖'} ${formatted}</span>`;
+    const escaped = text.replace(/[&<>]/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[m] || m));
+    msgDiv.innerHTML = `<span>${role === 'user' ? '👤' : '🤖'} ${escaped.replace(/\n/g, '<br>')}</span>`;
     chatMessages.appendChild(msgDiv);
     chatMessages.scrollTop = chatMessages.scrollHeight;
-    
-    while (chatMessages.children.length > 20) {
-        chatMessages.removeChild(chatMessages.firstChild);
-    }
+    while (chatMessages.children.length > 20) chatMessages.removeChild(chatMessages.firstChild);
 }
 
 // ========== TEXT TO SPEECH ==========
-async function speak(text) {
-    if (currentUtterance) {
-        synth.cancel();
-    }
-    
+function speak(text) {
     return new Promise((resolve) => {
+        if (currentUtterance) synth.cancel();
         currentUtterance = new SpeechSynthesisUtterance(text);
         currentUtterance.lang = 'vi-VN';
         currentUtterance.rate = 0.95;
@@ -77,12 +63,12 @@ async function speak(text) {
         };
         currentUtterance.onend = () => {
             isSpeaking = false;
-            if (isAwake) {
-                statusText.innerText = '🎤 Đang lắng nghe...';
+            if (!isAsleep && isListening) {
+                statusText.innerText = '🎤 Đang lắng nghe... Hãy nói!';
                 setExpression('listening');
-            } else {
-                statusText.innerText = '💤 Đang ngủ... Nói "Hello Pika" để đánh thức';
-                setExpression('sleepy');
+            } else if (!isAsleep) {
+                statusText.innerText = '🎙️ Nhấn nút để nói';
+                setExpression('happy');
             }
             resolve();
         };
@@ -94,12 +80,6 @@ async function speak(text) {
     });
 }
 
-// ========== KIỂM TRA TỪ KHÓA ĐÁNH THỨC ==========
-function isWakeWord(text) {
-    const lowerText = text.toLowerCase().trim();
-    return WAKE_WORDS.some(word => lowerText.includes(word));
-}
-
 // ========== XỬ LÝ AI ==========
 async function processAI(userText) {
     if (!userText.trim() || isSpeaking) return;
@@ -107,53 +87,55 @@ async function processAI(userText) {
     addMessage('user', userText);
     setExpression('thinking');
     statusText.innerText = '🤔 Đang suy nghĩ...';
-    
     resetSleepTimer();
     
+    const lower = userText.toLowerCase();
     let reply = '';
-    const lowerText = userText.toLowerCase();
     
-    if (lowerText.includes('xin chào') || lowerText.includes('hello') || lowerText.includes('hi')) {
-        reply = 'Xin chào bạn! Mình là Pika AI. Rất vui được trò chuyện với bạn!';
-    } else if (lowerText.includes('tên')) {
-        reply = 'Tên của mình là Pika! Mình là trợ lý AI thông minh đây ạ!';
-    } else if (lowerText.includes('cảm ơn')) {
-        reply = 'Không có gì đâu ạ! Rất vui khi được giúp bạn!';
-    } else if (lowerText.includes('tạm biệt')) {
-        reply = 'Tạm biệt bạn nhé! Hẹn gặp lại! Mình sẽ đi ngủ đây.';
+    if (lower.includes('xin chào') || lower.includes('hello')) {
+        reply = 'Xin chào bạn! Rất vui được gặp bạn!';
+    } else if (lower.includes('tên')) {
+        reply = 'Tôi là Pika AI, trợ lý thông minh của bạn đây!';
+    } else if (lower.includes('cảm ơn')) {
+        reply = 'Không có gì đâu ạ! Rất vui được giúp bạn!';
+    } else if (lower.includes('tạm biệt')) {
+        reply = 'Tạm biệt bạn! Hẹn gặp lại nhé!';
         addMessage('ai', reply);
         await speak(reply);
         goToSleep();
         return;
-    } else if (lowerText.includes('khỏe') || lowerText.includes('ổn không')) {
+    } else if (lower.includes('khỏe')) {
         reply = 'Mình vẫn khỏe, cảm ơn bạn! Bạn thì sao?';
-    } else if (lowerText.includes('làm gì') || lowerText.includes('giúp')) {
-        reply = 'Mình có thể trò chuyện, trả lời câu hỏi, hoặc giúp bạn học tiếng Anh!';
     } else {
-        reply = `Mình nghe bạn nói: "${userText}". Thú vị quá! Bạn có thể kể thêm được không?`;
+        reply = `Mình nghe bạn nói: "${userText}". Thú vị quá! Kể thêm đi bạn!`;
     }
     
     addMessage('ai', reply);
     await speak(reply);
     
-    if (isAwake && !isSpeaking) {
-        statusText.innerText = '🎤 Đang lắng nghe...';
+    if (!isAsleep && isListening) {
+        statusText.innerText = '🎤 Đang lắng nghe... Hãy nói!';
         setExpression('listening');
     }
 }
 
-// ========== TIMER TỰ ĐỘNG NGỦ ==========
+// ========== TIMER ==========
 function resetSleepTimer() {
     if (sleepTimer) clearTimeout(sleepTimer);
     if (countdownInterval) clearInterval(countdownInterval);
+    if (isAsleep) return;
     
     secondsLeft = 60;
-    updateCountdownDisplay();
+    countdownBadge.innerHTML = `⏱️ ${secondsLeft}s`;
+    countdownBadge.style.animation = 'none';
     
     countdownInterval = setInterval(() => {
-        if (isAwake && secondsLeft > 0) {
+        if (!isAsleep && secondsLeft > 0) {
             secondsLeft--;
-            updateCountdownDisplay();
+            countdownBadge.innerHTML = secondsLeft <= 0 ? '😴 Ngủ' : `⏱️ ${secondsLeft}s`;
+            if (secondsLeft <= 10 && secondsLeft > 0) {
+                countdownBadge.style.animation = 'pulse 1s infinite';
+            }
             if (secondsLeft <= 0) {
                 clearInterval(countdownInterval);
                 goToSleep();
@@ -162,124 +144,99 @@ function resetSleepTimer() {
     }, 1000);
     
     sleepTimer = setTimeout(() => {
-        if (isAwake) goToSleep();
+        if (!isAsleep) goToSleep();
     }, 60000);
 }
 
-function updateCountdownDisplay() {
-    if (!isAwake) {
-        countdownBadge.innerHTML = '😴 Ngủ';
-    } else {
-        countdownBadge.innerHTML = `⏱️ ${secondsLeft}s`;
-        if (secondsLeft <= 10) {
-            countdownBadge.style.animation = 'pulse 1s infinite';
-        } else {
-            countdownBadge.style.animation = 'none';
-        }
-    }
-}
-
-// ========== ĐI NGỦ ==========
 function goToSleep() {
-    if (!isAwake) return;
+    if (isAsleep) return;
+    isAsleep = true;
+    isListening = false;
     
-    isAwake = false;
+    if (recognition) {
+        try { recognition.stop(); } catch(e) {}
+        recognition = null;
+    }
+    
     setExpression('sleepy');
-    statusText.innerText = '💤 Đang ngủ... Nói "Hello Pika" để đánh thức';
+    statusText.innerText = '💤 Robot đang ngủ... Nhấn nút micro để đánh thức';
+    microBtn.innerHTML = '🎙️ ĐÁNH THỨC';
     countdownBadge.innerHTML = '😴 Ngủ zzz';
-    
     if (countdownInterval) clearInterval(countdownInterval);
-    if (sleepTimer) clearTimeout(sleepTimer);
 }
 
-// ========== ĐÁNH THỨC ==========
-async function wakeUp() {
-    if (isAwake) return;
-    
-    isAwake = true;
+function wakeUp() {
+    if (!isAsleep) return;
+    isAsleep = false;
     setExpression('happy');
-    statusText.innerText = '🎤 Đang lắng nghe...';
-    
-    addMessage('ai', 'Dạ! Mình thức rồi. Bạn cần mình giúp gì ạ?');
-    await speak('Dạ! Mình thức rồi. Bạn cần mình giúp gì ạ?');
-    
+    statusText.innerText = '🎙️ Nhấn nút micro để nói';
+    microBtn.innerHTML = '🎙️ NHẤN ĐỂ NÓI';
     resetSleepTimer();
-    setExpression('listening');
+    addMessage('ai', 'Chào bạn! Mình đã thức dậy rồi!');
+    speak('Chào bạn! Mình đã thức dậy rồi!');
 }
 
-// ========== MICROPHONE - LUÔN LẮNG NGHE ==========
-async function initMicrophone() {
+// ========== MICROPHONE - ĐƠN GIẢN, ỔN ĐỊNH ==========
+async function startListening() {
     if (!window.webkitSpeechRecognition && !window.SpeechRecognition) {
-        statusText.innerText = '❌ Trình duyệt không hỗ trợ micro';
+        alert('Trình duyệt của bạn không hỗ trợ nhận dạng giọng nói. Hãy dùng Chrome hoặc Edge!');
         return false;
+    }
+    
+    // Dừng recognition cũ
+    if (recognition) {
+        try { recognition.stop(); } catch(e) {}
+        recognition = null;
     }
     
     try {
         // Xin quyền micro
-        await navigator.mediaDevices.getUserMedia({ audio: true });
-        console.log('✅ Đã có quyền micro');
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        stream.getTracks().forEach(track => track.stop()); // Chỉ test quyền
         
         const SpeechRecognition = window.webkitSpeechRecognition || window.SpeechRecognition;
         recognition = new SpeechRecognition();
-        recognition.continuous = true;
-        recognition.interimResults = true;  // Lấy kết quả tạm thời để phản hồi nhanh
+        recognition.continuous = false;  // Chỉ nghe 1 câu rồi dừng (dễ hơn)
+        recognition.interimResults = false;
         recognition.lang = 'vi-VN';
         
         recognition.onstart = () => {
-            console.log('🎤 Micro đang lắng nghe...');
-            if (isAwake) {
-                statusText.innerText = '🎤 Đang lắng nghe...';
-                setExpression('listening');
-            } else {
-                statusText.innerText = '💤 Đang ngủ... Nói "Hello Pika" để đánh thức';
-            }
+            console.log('🎤 Đang nghe...');
+            isListening = true;
+            statusText.innerText = '🎤 Đang nghe... Hãy nói!';
+            setExpression('listening');
+            microBtn.classList.add('recording');
+            microBtn.innerHTML = '🔴 ĐANG NGHE...';
         };
         
         recognition.onresult = (event) => {
-            for (let i = event.resultIndex; i < event.results.length; i++) {
-                const transcript = event.results[i][0].transcript.trim();
-                if (event.results[i].isFinal) {
-                    console.log('🎙️ Nhận dạng:', transcript);
-                    
-                    // Nếu đang ngủ, kiểm tra từ khóa đánh thức
-                    if (!isAwake) {
-                        if (isWakeWord(transcript)) {
-                            console.log('🔊 Đánh thức bằng:', transcript);
-                            wakeUp();
-                        }
-                        return;
-                    }
-                    
-                    // Đang thức: xử lý câu hỏi
-                    if (transcript.length > 0 && !isSpeaking) {
-                        resetSleepTimer();
-                        processAI(transcript);
-                    }
-                }
+            const text = event.results[0][0].transcript.trim();
+            console.log('🎙️ Nhận được:', text);
+            if (text.length > 0) {
+                processAI(text);
             }
         };
         
         recognition.onerror = (event) => {
-            console.error('❌ Lỗi micro:', event.error);
+            console.error('Lỗi:', event.error);
             if (event.error === 'not-allowed') {
-                statusText.innerText = '❌ Chưa cấp quyền micro. Hãy refresh và cho phép!';
+                statusText.innerText = '❌ Chưa cấp quyền micro! Hãy refresh và cho phép!';
+            } else {
+                statusText.innerText = '⚠️ Lỗi, thử lại...';
             }
+            isListening = false;
+            microBtn.classList.remove('recording');
+            microBtn.innerHTML = '🎙️ NHẤN ĐỂ NÓI';
         };
         
         recognition.onend = () => {
-            console.log('🔴 Micro kết thúc, khởi động lại...');
-            // Tự động khởi động lại micro
-            if (recognition) {
-                setTimeout(() => {
-                    try {
-                        recognition.start();
-                    } catch(e) {
-                        console.log('Khởi động lại micro sau 1s');
-                        setTimeout(() => {
-                            try { recognition.start(); } catch(e) {}
-                        }, 1000);
-                    }
-                }, 500);
+            console.log('🔴 Kết thúc nghe');
+            isListening = false;
+            microBtn.classList.remove('recording');
+            if (!isAsleep) {
+                statusText.innerText = '🎙️ Nhấn nút để nói';
+                microBtn.innerHTML = '🎙️ NHẤN ĐỂ NÓI';
+                setExpression('happy');
             }
         };
         
@@ -287,29 +244,54 @@ async function initMicrophone() {
         return true;
         
     } catch(err) {
-        console.error('❌ Không thể truy cập micro:', err);
-        statusText.innerText = '❌ Cần cấp quyền micro. Hãy refresh trang!';
+        console.error('Không thể truy cập micro:', err);
+        alert('Vui lòng cho phép truy cập micro! Hãy refresh trang và đồng ý cấp quyền.');
+        statusText.innerText = '❌ Cần cấp quyền micro';
         return false;
     }
 }
 
-// ========== FULL MÀN HÌNH ==========
+// ========== XỬ LÝ NÚT MICRO ==========
+microBtn.onclick = async () => {
+    if (isAsleep) {
+        wakeUp();
+        return;
+    }
+    
+    if (isListening) {
+        // Đang nghe thì dừng
+        if (recognition) {
+            try { recognition.stop(); } catch(e) {}
+        }
+    } else {
+        // Bắt đầu nghe
+        await startListening();
+        resetSleepTimer();
+    }
+};
+
+// ========== TOGGLE FULLSCREEN ==========
 toggleChatBtn.onclick = () => {
     app.classList.toggle('fullscreen');
     toggleChatBtn.innerHTML = app.classList.contains('fullscreen') ? '🔼 HIỆN CHAT' : '🔽 ẨN CHAT';
 };
 
 // ========== KHỞI TẠO ==========
-window.onload = async () => {
+window.onload = () => {
     setExpression('sleepy');
-    statusText.innerText = '💤 Đang khởi động...';
+    statusText.innerText = '💤 Robot đang ngủ... Nhấn nút micro để đánh thức';
+    microBtn.innerHTML = '🎙️ ĐÁNH THỨC';
+    countdownBadge.innerHTML = '😴 Ngủ';
     
-    // Khởi tạo micro và bắt đầu lắng nghe
-    await initMicrophone();
-    
-    // Chào mừng sau 1s
-    setTimeout(() => {
-        addMessage('ai', '🤖 Chào bạn! Mình là Pika AI. Hãy nói "Hello Pika" để đánh thức và trò chuyện nhé!');
-        statusText.innerText = '💤 Đang ngủ... Nói "Hello Pika" để đánh thức';
-    }, 1500);
+    // Tự động xin quyền micro khi load
+    setTimeout(async () => {
+        try {
+            await navigator.mediaDevices.getUserMedia({ audio: true });
+            console.log('✅ Đã có quyền micro');
+            statusText.innerText = '💤 Nhấn nút micro để đánh thức robot';
+        } catch(e) {
+            console.log('Chưa có quyền micro');
+            statusText.innerText = '⚠️ Nhấn nút micro và cho phép quyền';
+        }
+    }, 500);
 };
