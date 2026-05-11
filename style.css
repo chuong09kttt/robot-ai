@@ -5,12 +5,10 @@
 }
 
 body {
-    background: linear-gradient(145deg, #1a2a6c, #b21f1f, #fdbb4d);
+    font-family: 'Segoe UI', 'SF Pro Text', system-ui, -apple-system, sans-serif;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     min-height: 100vh;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    font-family: 'Segoe UI', system-ui, sans-serif;
+    overflow: hidden;
 }
 
 .app {
@@ -18,83 +16,251 @@ body {
     height: 100vh;
     display: flex;
     flex-direction: column;
-    background: rgba(0, 0, 0, 0.3);
-    backdrop-filter: blur(4px);
+    background: rgba(0, 0, 0, 0.2);
+    backdrop-filter: blur(8px);
 }
 
-.robot-stage {
+/* Khu vực robot */
+.robot-area {
     flex: 2;
     display: flex;
-    flex-direction: column;
     justify-content: center;
     align-items: center;
     position: relative;
-    transition: all 0.3s;
+    transition: all 0.3s ease;
+    min-height: 0;
 }
 
-.countdown {
-    font-size: 24px;
+.robot-container {
+    text-align: center;
+    padding: 20px;
+}
+
+.robot-svg {
+    width: 280px;
+    height: 280px;
+    filter: drop-shadow(0 20px 30px rgba(0,0,0,0.3));
+    transition: all 0.2s ease;
+}
+
+/* Biểu cảm động */
+.robot-svg .pupil {
+    transition: all 0.1s ease;
+}
+
+.robot-svg #mouth {
+    transition: all 0.2s ease;
+}
+
+.robot-svg #leftEyebrow,
+.robot-svg #rightEyebrow {
+    transition: all 0.2s ease;
+}
+
+/* Trạng thái vui */
+.robot-svg.happy #mouth {
+    d: path("M160 270 Q200 310 240 270");
+}
+.robot-svg.happy #leftEyebrow,
+.robot-svg.happy #rightEyebrow {
+    d: path("M115 150 Q145 130 175 150");
+}
+
+/* Trạng thái buồn */
+.robot-svg.sad #mouth {
+    d: path("M160 280 Q200 250 240 280");
+}
+.robot-svg.sad #leftEyebrow,
+.robot-svg.sad #rightEyebrow {
+    d: path("M115 150 Q145 165 175 150");
+}
+
+/* Trạng thái ngạc nhiên */
+.robot-svg.surprised #mouth {
+    d: path("M175 275 Q200 290 225 275");
+}
+.robot-svg.surprised #leftEyebrow,
+.robot-svg.surprised #rightEyebrow {
+    d: path("M115 150 Q145 140 175 150");
+}
+
+/* Trạng thái ngủ */
+.robot-svg.sleepy .pupil {
+    opacity: 0;
+}
+.robot-svg.sleepy #leftEyebrow,
+.robot-svg.sleepy #rightEyebrow {
+    d: path("M115 160 Q145 160 175 160");
+}
+.robot-svg.sleepy #mouth {
+    d: path("M170 280 Q200 275 230 280");
+}
+
+/* Nhấp nháy mắt */
+@keyframes blink {
+    0%, 90%, 100% { transform: scaleY(1); }
+    95% { transform: scaleY(0.05); }
+}
+.blink .eye-outer {
+    animation: blink 3s infinite;
+}
+
+.robot-info {
+    margin-top: 20px;
+}
+
+.robot-name {
+    font-size: 28px;
+    font-weight: 800;
+    background: linear-gradient(135deg, #FFE259, #FFA751);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    text-shadow: 0 2px 5px rgba(0,0,0,0.2);
+    letter-spacing: 2px;
+}
+
+.countdown-badge {
+    font-size: 20px;
     font-weight: bold;
-    background: rgba(0, 0, 0, 0.6);
-    padding: 8px 20px;
-    border-radius: 60px;
-    color: #ffd966;
-    margin-top: 16px;
+    background: rgba(0,0,0,0.6);
+    backdrop-filter: blur(10px);
+    display: inline-block;
+    padding: 6px 20px;
+    border-radius: 40px;
+    margin-top: 10px;
+    color: #FFE259;
     font-family: monospace;
+    border: 1px solid rgba(255,255,255,0.3);
 }
 
-.chat-panel {
-    flex: 1;
+/* Khu vực chat */
+.chat-area {
     background: rgba(30, 30, 50, 0.85);
     backdrop-filter: blur(20px);
-    border-top-left-radius: 32px;
-    border-top-right-radius: 32px;
+    border-top-left-radius: 30px;
+    border-top-right-radius: 30px;
     padding: 16px;
-    transition: all 0.3s;
+    transition: all 0.3s ease;
+    max-height: 40%;
+    display: flex;
+    flex-direction: column;
 }
 
 .chat-header {
     display: flex;
     justify-content: space-between;
+    align-items: center;
     margin-bottom: 12px;
+    padding: 0 8px;
+}
+
+.toggle-btn {
+    background: rgba(255,255,255,0.2);
+    border: 1px solid rgba(255,255,255,0.3);
+    padding: 6px 16px;
+    border-radius: 40px;
     color: white;
-}
-
-.chat-box {
-    height: 200px;
-    overflow-y: auto;
-    background: rgba(0, 0, 0, 0.4);
-    border-radius: 24px;
-    padding: 12px;
     font-size: 14px;
+    cursor: pointer;
+    transition: all 0.2s;
 }
 
-/* Tin nhắn không bị dính */
+.toggle-btn:active {
+    transform: scale(0.95);
+}
+
+.status {
+    color: white;
+    font-size: 14px;
+    background: rgba(0,0,0,0.5);
+    padding: 6px 16px;
+    border-radius: 40px;
+}
+
+.chat-messages {
+    flex: 1;
+    overflow-y: auto;
+    background: rgba(0,0,0,0.3);
+    border-radius: 20px;
+    padding: 12px;
+    margin-bottom: 12px;
+    max-height: 200px;
+}
+
 .msg-user, .msg-ai {
     margin-bottom: 12px;
     word-break: break-word;
     white-space: pre-wrap;
+    animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.msg-user {
+    text-align: right;
+}
+.msg-user span {
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    display: inline-block;
+    padding: 8px 16px;
+    border-radius: 20px 20px 4px 20px;
+    color: white;
+    max-width: 80%;
+}
+
+.msg-ai span {
+    background: rgba(255,255,255,0.95);
+    display: inline-block;
+    padding: 8px 16px;
+    border-radius: 20px 20px 20px 4px;
+    color: #333;
+    max-width: 80%;
 }
 
 .micro-btn {
-    width: 100%;
-    margin-top: 12px;
-    background: #f97316;
+    background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
     border: none;
     padding: 12px;
     border-radius: 60px;
     font-weight: bold;
-    color: white;
     font-size: 16px;
+    color: white;
     cursor: pointer;
+    transition: all 0.2s;
+    margin-top: 8px;
 }
 
-/* Fullscreen face mode */
-.fullscreen-mode .chat-panel {
+.micro-btn:active {
+    transform: scale(0.97);
+}
+
+/* Chế độ full màn hình (ẩn chat) */
+.app.fullscreen .chat-area {
     display: none;
 }
-
-.fullscreen-mode .robot-stage {
+.app.fullscreen .robot-area {
     flex: 1;
-    justify-content: center;
+}
+.app.fullscreen .robot-svg {
+    width: 400px;
+    height: 400px;
+}
+
+/* Responsive */
+@media (max-width: 600px) {
+    .robot-svg {
+        width: 220px;
+        height: 220px;
+    }
+    .app.fullscreen .robot-svg {
+        width: 300px;
+        height: 300px;
+    }
+    .robot-name {
+        font-size: 22px;
+    }
 }
