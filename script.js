@@ -7,7 +7,6 @@ const statusText = document.getElementById('statusText');
 const chatBox = document.getElementById('chatBox');
 const manualWake = document.getElementById('manualWake');
 const driveModeBtn = document.getElementById('driveModeBtn');
-const driveHint = document.getElementById('driveHint');
 
 // State variables
 let ws = null;
@@ -18,42 +17,37 @@ let countdownInterval = null;
 let isProcessing = false;
 let currentAudio = null;
 let lastActivityTime = Date.now();
-let driveControlMode = false; // Chế độ điều khiển xe
+let driveControlMode = false;
 
 // Constants
-const INACTIVITY_LIMIT = 120000; // 2 minutes
-const WAKE_WORDS = ['xin chào', 'hello', 'hi', 'chào chiri', 'chiri ơi', 'hey chiri', 'chào bạn', 'alô'];
+const INACTIVITY_LIMIT = 120000;
+const WAKE_WORDS = ['xin chào', 'hello', 'hi', 'chào chiri', 'chiri ơi', 'hey chiri'];
 
-// Hàm cập nhật giao diện nút điều khiển xe
+// Update drive mode UI
 function updateDriveModeUI() {
     if (driveControlMode) {
         driveModeBtn.innerHTML = '🚗 TẮT CHẾ ĐỘ ĐIỀU KHIỂN XE';
         driveModeBtn.classList.add('drive-active');
-        if (driveHint) driveHint.style.background = '#ffcc80';
         if (isAwake) {
             statusText.innerHTML = '🎮 CHẾ ĐỘ LÁI XE: nói tiến, lùi, trái, phải, dừng';
         }
     } else {
         driveModeBtn.innerHTML = '🚗 BẬT CHẾ ĐỘ ĐIỀU KHIỂN XE';
         driveModeBtn.classList.remove('drive-active');
-        if (driveHint) driveHint.style.background = '#fff1df';
         if (isAwake) {
             statusText.innerHTML = '💬 CHẾ ĐỘ TRÒ CHUYỆN: hỏi đáp thông minh';
         }
     }
 }
 
-// ========== BIỂU CẢM KHUÔN MẶT ==========
 function setExpression(expression) {
     robotSvg.classList.remove('listening', 'happy', 'thinking', 'surprised', 'sleepy');
     if (expression === 'listening') robotSvg.classList.add('listening');
     else if (expression === 'happy') robotSvg.classList.add('happy');
     else if (expression === 'thinking') robotSvg.classList.add('thinking');
-    else if (expression === 'surprised') robotSvg.classList.add('surprised');
     else if (expression === 'sleepy') robotSvg.classList.add('sleepy');
 }
 
-// ========== UI UPDATE ==========
 function updateWakeIndicator(state) {
     if (state === 'listening') {
         wakeDot.classList.add('listening');
@@ -69,14 +63,12 @@ function updateWakeIndicator(state) {
     }
 }
 
-// ========== ADD MESSAGE ==========
 function addMessage(type, text) {
     const messageDiv = document.createElement('div');
     messageDiv.className = `message ${type}`;
     messageDiv.innerHTML = `<div class="bubble">${escapeHtml(text)}</div>`;
     chatBox.appendChild(messageDiv);
     chatBox.scrollTop = chatBox.scrollHeight;
-    
     while (chatBox.children.length > 25) {
         chatBox.removeChild(chatBox.firstChild);
     }
@@ -88,7 +80,7 @@ function escapeHtml(text) {
     return div.innerHTML;
 }
 
-// ========== SPEECH SYNTHESIS ==========
+// ========== SPEECH SYNTHESIS với fallback ==========
 async function playAudio(text) {
     try {
         if (currentAudio) {
@@ -99,24 +91,23 @@ async function playAudio(text) {
         const url = `/tts?text=${encodeURIComponent(text)}`;
         const response = await fetch(url);
         
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        
-        const audioBlob = await response.blob();
-        const audioUrl = URL.createObjectURL(audioBlob);
-        currentAudio = new Audio(audioUrl);
-        
-        currentAudio.onplay = () => setExpression('happy');
-        currentAudio.onended = () => {
-            URL.revokeObjectURL(audioUrl);
-            currentAudio = null;
-            if (isAwake) setExpression('listening');
-            isProcessing = false;
-        };
-        
-        currentAudio.onerror = () => fallbackSpeak(text);
-        
-        await currentAudio.play();
-        
+        if (response.ok) {
+            const audioBlob = await response.blob();
+            const audioUrl = URL.createObjectURL(audioBlob);
+            currentAudio = new Audio(audioUrl);
+            
+            currentAudio.onplay = () => setExpression('happy');
+            currentAudio.onended = () => {
+                URL.revokeObjectURL(audioUrl);
+                currentAudio = null;
+                if (isAwake) setExpression('listening');
+                isProcessing = false;
+            };
+            
+            await currentAudio.play();
+        } else {
+            fallbackSpeak(text);
+        }
     } catch (error) {
         fallbackSpeak(text);
     }
@@ -127,13 +118,11 @@ function fallbackSpeak(text) {
         const utterance = new SpeechSynthesisUtterance(text);
         utterance.lang = 'vi-VN';
         utterance.rate = 0.9;
-        
         utterance.onstart = () => setExpression('happy');
         utterance.onend = () => {
             if (isAwake) setExpression('listening');
             isProcessing = false;
         };
-        
         window.speechSynthesis.cancel();
         window.speechSynthesis.speak(utterance);
     } else {
@@ -141,7 +130,6 @@ function fallbackSpeak(text) {
     }
 }
 
-// ========== WAKE / SLEEP ==========
 function wakeUp() {
     if (isAwake) return;
     
@@ -153,17 +141,12 @@ function wakeUp() {
     updateWakeIndicator('awake');
     updateDriveModeUI();
     
-    const modeText = driveControlMode ? 
-        "Chiri đang ở chế độ điều khiển xe. Bạn có thể ra lệnh: tiến, lùi, trái, phải, dừng!" :
-        "Chiri đây! Mình sẵn sàng trò chuyện. Bạn muốn hỏi gì nào?";
+    const greeting = driveControlMode ? 
+        "Chiri đã thức! Mình đang ở chế độ điều khiển xe. Bạn có thể ra lệnh: tiến, lùi, trái, phải, dừng!" :
+        "Chiri đã thức! Mình sẵn sàng trò chuyện. Bạn có thể hỏi mình về nhiệt độ Mặt Trăng, Mặt Trời hoặc bất kỳ điều gì nhé!";
     
-    const greeting = `Dạ, Chiri đây ạ! ${modeText}`;
     addMessage('ai', greeting);
     playAudio(greeting);
-    
-    statusText.innerHTML = driveControlMode ? 
-        '🎤 Chế độ xe: Hãy nói lệnh điều khiển' : 
-        '🎤 Chiri đang lắng nghe... Hãy nói!';
     setExpression('listening');
 }
 
@@ -176,7 +159,7 @@ function goToSleep() {
     updateWakeIndicator('sleeping');
     setExpression('sleepy');
     
-    const sleepMsg = "Chiri đi ngủ đây ạ. Khi nào cần hãy gọi Chiri nhé!";
+    const sleepMsg = "Chiri đi ngủ đây. Khi nào cần hãy gọi 'Xin chào' nhé!";
     addMessage('ai', sleepMsg);
     playAudio(sleepMsg);
     
@@ -187,7 +170,6 @@ function goToSleep() {
     sleepTimer.innerHTML = '😴 Đang ngủ';
 }
 
-// ========== TIMER ==========
 function resetInactivityTimer() {
     lastActivityTime = Date.now();
     
@@ -211,7 +193,6 @@ function resetInactivityTimer() {
     }, 1000);
 }
 
-// ========== PROCESS VOICE COMMAND ==========
 async function processCommand(text) {
     if (isProcessing) return;
     
@@ -224,20 +205,14 @@ async function processCommand(text) {
     statusText.innerHTML = '🤔 Chiri đang suy nghĩ...';
     
     if (ws && ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({ 
-            type: 'voice', 
-            text: text,
-            driveMode: driveControlMode 
-        }));
+        ws.send(JSON.stringify({ type: 'voice', text: text, driveMode: driveControlMode }));
     } else {
-        console.log('WebSocket chưa kết nối');
         addMessage('ai', 'Xin lỗi, Chiri đang mất kết nối!');
         setExpression('listening');
         isProcessing = false;
     }
 }
 
-// ========== SPEECH RECOGNITION ==========
 function initSpeechRecognition() {
     if (!('webkitSpeechRecognition' in window || 'SpeechRecognition' in window)) {
         statusText.innerHTML = '❌ Trình duyệt không hỗ trợ! Dùng Chrome/Edge!';
@@ -254,9 +229,6 @@ function initSpeechRecognition() {
         console.log('🎤 Micro đang lắng nghe...');
         if (isAwake) {
             setExpression('listening');
-            statusText.innerHTML = driveControlMode ? 
-                '🎤 Đang nghe lệnh xe... Hãy nói tiến/lùi/trái/phải!' : 
-                '🎤 Đang lắng nghe... Hãy nói!';
         }
     };
     
@@ -265,6 +237,9 @@ function initSpeechRecognition() {
             const transcript = event.results[i][0].transcript.toLowerCase().trim();
             if (event.results[i].isFinal && transcript) {
                 console.log(`🎙️ Nghe: "${transcript}"`);
+                
+                // Lọc bỏ các câu nhận diện sai quá ngắn
+                if (transcript.length < 3) continue;
                 
                 if (!isAwake && !isProcessing) {
                     for (const word of WAKE_WORDS) {
@@ -284,14 +259,14 @@ function initSpeechRecognition() {
     };
     
     recognition.onerror = (event) => {
+        console.error('Lỗi recognition:', event.error);
         if (event.error === 'not-allowed') {
-            statusText.innerHTML = '❌ Cần cấp quyền micro! Nhấn ổ khóa 🔒 trên thanh địa chỉ!';
-            alert('⚠️ Cho phép truy cập micro:\nNhấn biểu tượng ổ khóa → Cho phép quyền Micro → Refresh');
+            statusText.innerHTML = '❌ Cần cấp quyền micro!';
         }
     };
     
     recognition.onend = () => {
-        if (!isProcessing) {
+        if (!isProcessing && isAwake) {
             setTimeout(() => {
                 try { recognition.start(); } catch(e) {}
             }, 500);
@@ -302,7 +277,6 @@ function initSpeechRecognition() {
     console.log('✅ Speech Recognition started');
 }
 
-// ========== WEBSOCKET ==========
 function connectWebSocket() {
     const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
     ws = new WebSocket(`${protocol}//${location.host}`);
@@ -314,6 +288,9 @@ function connectWebSocket() {
         if (data.type === 'ai') {
             addMessage('ai', data.text);
             playAudio(data.text);
+            setExpression('listening');
+            isProcessing = false;
+            statusText.innerHTML = driveControlMode ? '🎤 Đang nghe lệnh xe...' : '🎤 Đang lắng nghe...';
         }
     };
     
@@ -323,43 +300,35 @@ function connectWebSocket() {
     };
 }
 
-// ========== MANUAL WAKE BUTTON ==========
 manualWake.addEventListener('click', () => {
     if (!isAwake) {
         wakeUp();
     } else {
         resetInactivityTimer();
-        const msg = driveControlMode ? 
-            "Dạ, Chiri đang ở chế độ lái xe. Bạn muốn ra lệnh gì ạ?" : 
-            "Dạ, Chiri đây! Bạn cần gì ạ?";
+        const msg = driveControlMode ? "Chiri đây! Bạn muốn ra lệnh gì?" : "Chiri đây! Bạn muốn hỏi gì ạ?";
         addMessage('ai', msg);
         playAudio(msg);
     }
 });
 
-// ========== DRIVE MODE BUTTON ==========
 driveModeBtn.addEventListener('click', () => {
     driveControlMode = !driveControlMode;
     updateDriveModeUI();
     
     const msg = driveControlMode ?
-        "Đã bật chế độ điều khiển xe. Bạn có thể ra lệnh: tiến, lùi, trái, phải, dừng, nhanh, chậm. Chiri sẽ không trả lời câu hỏi thường mà chỉ nhận lệnh lái xe nhé!" :
-        "Đã tắt chế độ xe. Chiri sẽ trò chuyện và trả lời câu hỏi như một AI thông minh. Hãy hỏi mình bất cứ điều gì!";
+        "Đã bật chế độ điều khiển xe. Bạn có thể ra lệnh: tiến, lùi, trái, phải, dừng!" :
+        "Đã tắt chế độ xe. Chiri sẽ trò chuyện thông minh. Hãy hỏi mình bất cứ điều gì!";
     
     if (isAwake) {
         addMessage('ai', msg);
         playAudio(msg);
-        statusText.innerHTML = driveControlMode ?
-            '🎤 Chế độ xe: Hãy nói lệnh điều khiển' :
-            '🎤 Chế độ trò chuyện: Hỏi gì cũng trả lời';
     }
 });
 
-// ========== INITIALIZATION ==========
 function init() {
     console.log('🚀 Chiri AI khởi động...');
     setExpression('sleepy');
-    statusText.innerHTML = '🎤 Nói "Xin chào" hoặc "Hello" để đánh thức';
+    statusText.innerHTML = '🎤 Nói "Xin chào" để đánh thức';
     updateDriveModeUI();
     
     connectWebSocket();
@@ -367,5 +336,4 @@ function init() {
     resetInactivityTimer();
 }
 
-// Start everything when DOM is ready
 document.addEventListener('DOMContentLoaded', init);
