@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
-    <title>🐹 Pika AI - Robot thông minh</title>
+    <title>🐹 Chiri AI - Robot thông minh</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -11,11 +11,11 @@
         <!-- Trạng thái -->
         <div class="wake-badge">
             <div class="wake-dot" id="wakeDot"></div>
-            <span id="wakeText">Đang lắng nghe</span>
+            <span id="wakeText">😴 Đang ngủ</span>
         </div>
         <div class="sleep-timer" id="sleepTimer">😴 Sẽ ngủ sau 2:00</div>
 
-        <!-- Khuôn mặt robot Pika -->
+        <!-- Khuôn mặt robot Chiri -->
         <div class="robot-section">
             <div class="robot-avatar">
                 <svg class="robot-svg" viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg">
@@ -67,38 +67,40 @@
                     <!-- Má hồng phải -->
                     <ellipse cx="295" cy="245" rx="20" ry="14" fill="#FF9999" opacity="0.5"/>
                     
-                    <!-- Tàn nhang (dễ thương) -->
+                    <!-- Tàn nhang -->
                     <circle cx="170" cy="265" r="2" fill="#D2691E" opacity="0.4"/>
                     <circle cx="178" cy="270" r="2" fill="#D2691E" opacity="0.4"/>
                     <circle cx="220" cy="265" r="2" fill="#D2691E" opacity="0.4"/>
                     <circle cx="228" cy="270" r="2" fill="#D2691E" opacity="0.4"/>
                 </svg>
             </div>
-            <div class="robot-name">🐹 PIKA AI</div>
+            <div class="robot-name">🐹 CHIRI AI</div>
             <div class="status-text" id="statusText">🎤 Nói "Xin chào" hoặc "Hello" để đánh thức</div>
+        </div>
+
+        <!-- Nút bật/tắt chế độ điều khiển xe -->
+        <div class="drive-toggle">
+            <button class="drive-btn" id="driveModeBtn">🚗 BẬT CHẾ ĐỘ ĐIỀU KHIỂN XE</button>
         </div>
 
         <!-- Gợi ý câu lệnh -->
         <div class="wake-examples">
             <span class="wake-example">🗣️ "Xin chào"</span>
             <span class="wake-example">🗣️ "Hello"</span>
-            <span class="wake-example">🗣️ "Hi Pika"</span>
-            <span class="wake-example">🚗 "Tiến"</span>
-            <span class="wake-example">🚗 "Lùi"</span>
-            <span class="wake-example">🚗 "Trái"</span>
-            <span class="wake-example">🚗 "Phải"</span>
+            <span class="wake-example">🗣️ "Chào Chiri"</span>
+            <span class="wake-example drive-hint" id="driveHint">🚗 "Tiến, Lùi, Trái, Phải, Dừng"</span>
         </div>
 
         <!-- Khung chat -->
         <div class="chat-section">
             <div class="chat-box" id="chatBox">
                 <div class="message ai">
-                    <div class="bubble">🐹 Chào bạn! Mình là Pika AI. Hãy nói "Xin chào" để bắt đầu trò chuyện hoặc ra lệnh điều khiển xe nhé!</div>
+                    <div class="bubble">🐹 Chào bạn! Mình là Chiri AI. Hãy nói "Xin chào" để đánh thức, hoặc bấm nút bên dưới để bật chế độ điều khiển xe bằng giọng nói nhé!</div>
                 </div>
             </div>
         </div>
         
-        <div class="tip">💡 Mẹo: Nói "Xin chào", "Hello" để đánh thức. Sau 2 phút im lặng, Pika sẽ tự ngủ! 🚗 Lệnh xe: Tiến, Lùi, Trái, Phải, Dừng, Nhanh, Chậm</div>
+        <div class="tip">💡 Mẹo: Nói "Xin chào", "Hello" để đánh thức. Sau 2 phút im lặng, Chiri sẽ tự ngủ. Khi bật chế độ xe, robot sẽ chỉ nhận lệnh điều khiển. Khi tắt chế độ xe, robot sẽ trò chuyện thông minh như AI.</div>
 
         <!-- Nút đánh thức thủ công -->
         <div class="manual-wake" id="manualWake">
