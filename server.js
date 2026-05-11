@@ -8,7 +8,6 @@ const app = express();
 const server = http.createServer(app);
 const wss = new WebSocket.Server({ server });
 
-// Middleware
 app.use(express.static(path.join(__dirname, '/')));
 
 // ========== KHỞI TẠO OPENAI ==========
@@ -73,7 +72,7 @@ function getESP32Command(text) {
     return null;
 }
 
-// ========== CHATGPT FALLBACK (nếu API lỗi) ==========
+// ========== CHATGPT FALLBACK ==========
 function getFallbackReply(userMessage) {
     const lower = userMessage.toLowerCase();
     if (lower.includes('xin chào') || lower.includes('hello')) {
@@ -94,7 +93,7 @@ function getFallbackReply(userMessage) {
 // ========== GỌI CHATGPT ==========
 async function callChatGPT(userMessage) {
     if (!openai || !process.env.OPENAI_API_KEY) {
-        console.log('💬 Dùng fallback reply (không có API Key)');
+        console.log('💬 Dùng fallback reply');
         return getFallbackReply(userMessage);
     }
     
@@ -106,17 +105,15 @@ async function callChatGPT(userMessage) {
             conversationHistory = conversationHistory.slice(-20);
         }
         
-        const systemPrompt = `Bạn là CHIRI, robot trợ lý AI thân thiện. Trả lời ngắn gọn, dễ thương, tiếng Việt.`;
-        
         const completion = await openai.chat.completions.create({
             model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
             messages: [
-                { role: 'system', content: systemPrompt },
+                { role: 'system', content: 'Bạn là CHIRI, robot trợ lý AI thân thiện. Trả lời ngắn gọn, dễ thương, tiếng Việt.' },
                 ...conversationHistory
             ],
             max_tokens: 200,
             temperature: 0.8,
-            timeout: 10000, // 10 giây timeout
+            timeout: 10000,
         });
         
         const reply = completion.choices[0].message.content;
@@ -134,9 +131,7 @@ async function callChatGPT(userMessage) {
 // ========== TTS ==========
 app.get('/tts', async (req, res) => {
     const text = req.query.text;
-    if (!text) {
-        return res.status(400).send('Missing text');
-    }
+    if (!text) return res.status(400).send('Missing text');
     
     if (!openai || !process.env.OPENAI_API_KEY) {
         return res.status(503).send('TTS not available');
@@ -153,14 +148,13 @@ app.get('/tts', async (req, res) => {
         const buffer = Buffer.from(await mp3.arrayBuffer());
         res.setHeader('Content-Type', 'audio/mpeg');
         res.send(buffer);
-        
     } catch (error) {
         console.error('TTS error:', error.message);
         res.status(500).send('TTS error');
     }
 });
 
-// ========== HEALTH CHECK (cho Railway) ==========
+// ========== HEALTH CHECK ==========
 app.get('/health', (req, res) => {
     res.status(200).json({ 
         status: 'ok', 
@@ -177,11 +171,8 @@ wss.on('connection', (ws, req) => {
     
     console.log(`🔌 ${isESP32 ? 'ESP32' : 'WEB'} client ${clientId} kết nối`);
     
-    // Gửi ping giữ kết nối
     const pingInterval = setInterval(() => {
-        if (ws.readyState === WebSocket.OPEN) {
-            ws.ping();
-        }
+        if (ws.readyState === WebSocket.OPEN) ws.ping();
     }, 30000);
     
     if (isESP32) {
@@ -203,9 +194,7 @@ wss.on('connection', (ws, req) => {
                 
                 if (isCommand) {
                     sentCommand = getESP32Command(userText);
-                    if (sentCommand) {
-                        sendToESP32(sentCommand);
-                    }
+                    if (sentCommand) sendToESP32(sentCommand);
                     
                     const commandReplies = {
                         'FORWARD': '🚗 Xe đang tiến về phía trước!',
@@ -221,29 +210,21 @@ wss.on('connection', (ws, req) => {
                     reply = await callChatGPT(userText);
                 }
                 
-                ws.send(JSON.stringify({
-                    type: 'ai',
-                    text: reply,
-                    isCommand: isCommand,
-                    command: sentCommand
-                }));
+                ws.send(JSON.stringify({ type: 'ai', text: reply, isCommand: isCommand, command: sentCommand }));
             }
             
             if (data.type === 'esp32_status') {
                 console.log(`📡 ESP32 báo: ${data.status}`);
             }
-            
         } catch(e) {
-            console.error('Lỗi xử lý message:', e.message);
+            console.error('Lỗi xử lý:', e.message);
         }
     });
     
     ws.on('close', () => {
         console.log(`🔌 Client ${clientId} ngắt kết nối`);
         clearInterval(pingInterval);
-        if (esp32Clients.has(clientId)) {
-            esp32Clients.delete(clientId);
-        }
+        if (esp32Clients.has(clientId)) esp32Clients.delete(clientId);
     });
     
     ws.on('error', (err) => {
@@ -254,26 +235,14 @@ wss.on('connection', (ws, req) => {
 // ========== KHỞI ĐỘNG SERVER ==========
 const PORT = process.env.PORT || 8080;
 
-// Xử lý tín hiệu kill để graceful shutdown
 process.on('SIGTERM', () => {
-    console.log('📡 Nhận SIGTERM, đang đóng kết nối...');
-    server.close(() => {
-        console.log('✅ Server đã đóng');
-        process.exit(0);
-    });
-});
-
-process.on('SIGINT', () => {
-    console.log('📡 Nhận SIGINT, đang đóng kết nối...');
-    server.close(() => {
-        console.log('✅ Server đã đóng');
-        process.exit(0);
-    });
+    console.log('📡 Nhận SIGTERM, đang đóng...');
+    server.close(() => process.exit(0));
 });
 
 server.listen(PORT, '0.0.0.0', () => {
     console.log(`\n🚀 CHIRI AI Robot đang chạy tại cổng ${PORT}`);
     console.log(`🤖 ChatGPT Model: ${process.env.OPENAI_MODEL || 'gpt-4o-mini'}`);
     console.log(`📊 ESP32 clients: ${esp32Clients.size}`);
-    console.log(`✅ Health check: http://localhost:${PORT}/health\n`);
+    console.log(`✅ Health check: https://robot-ai-production-9a07.up.railway.app/health\n`);
 });
