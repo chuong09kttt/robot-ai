@@ -3,10 +3,17 @@ const http = require('http');
 const WebSocket = require('ws');
 const path = require('path');
 const fs = require('fs');
+const NodeCache = require('node-cache');
+
+// ========== CACHE OPTIMIZATION ==========
+const ttsCache = new NodeCache({ stdTTL: 3600, checkperiod: 120 });
+const responseCache = new NodeCache({ stdTTL: 300, maxKeys: 200 });
 
 // ========== KHAI BÁO BIẾN TOÀN CỤC ==========
-const esp32Clients = new Map();  // <-- QUAN TRỌNG: ĐÃ THÊM DÒNG NÀY
-let conversationHistory = {};    // <-- QUAN TRỌNG: ĐÃ THÊM DÒNG NÀY
+const esp32Clients = new Map();
+let conversationHistory = {};
+const processingQueue = new Map();
+const clientHeartbeats = new Map();
 
 // ========== LOAD MODULES WITH FALLBACK ==========
 let OpenAI;
@@ -55,6 +62,7 @@ if (OpenAI && process.env.OPENAI_API_KEY) {
     try {
         openai = new OpenAI({
             apiKey: process.env.OPENAI_API_KEY,
+            timeout: 10000,
         });
         console.log('✅ OpenAI API Key configured - ChatGPT mode ready');
     } catch (err) {
@@ -67,9 +75,22 @@ if (OpenAI && process.env.OPENAI_API_KEY) {
 // ========== RAG KNOWLEDGE BASE ==========
 let customKnowledge = [];
 let knowledgeSource = '';
+let knowledgeIndex = new Map();
 
 // ========== GOOGLE DRIVE CONFIG ==========
 const GOOGLE_DRIVE_FILE_ID = process.env.GOOGLE_DRIVE_FILE_ID || '';
+
+// ========== REBUILD KNOWLEDGE INDEX ==========
+function rebuildKnowledgeIndex() {
+    knowledgeIndex.clear();
+    for (const chunk of customKnowledge) {
+        for (const keyword of chunk.keywords || []) {
+            if (!knowledgeIndex.has(keyword)) knowledgeIndex.set(keyword, []);
+            knowledgeIndex.get(keyword).push(chunk);
+        }
+    }
+    console.log(`📚 Index rebuilt: ${knowledgeIndex.size} keywords indexed`);
+}
 
 // ========== DOWNLOAD FROM GOOGLE DRIVE ==========
 async function downloadFromGoogleDrive(fileId) {
@@ -272,53 +293,45 @@ async function loadCustomKnowledge() {
         }
     }
     
+    rebuildKnowledgeIndex();
     knowledgeSource = `📚 Loaded ${customKnowledge.length} knowledge chunks from ${allContent.length} sources`;
     console.log(`\n✅ ${knowledgeSource}\n`);
 }
 
-// ========== SEARCH IN KNOWLEDGE ==========
-function searchInKnowledge(query) {
+// ========== OPTIMIZED SEARCH IN KNOWLEDGE ==========
+function searchInKnowledge(query, maxResults = 3) {
     if (customKnowledge.length === 0) return [];
     
     const queryLower = query.toLowerCase();
     const queryWords = queryLower.split(/\s+/).filter(w => w.length > 2);
+    const scores = new Map();
     
-    const results = [];
-    
-    for (const chunk of customKnowledge) {
-        let score = 0;
-        const chunkLower = chunk.content.toLowerCase();
-        
-        // Exact phrase match
-        if (chunkLower.includes(queryLower)) {
-            score += 20;
-        }
-        
-        // Word matches
-        for (const word of queryWords) {
-            if (chunkLower.includes(word)) {
-                score += 1;
-            }
-            if (chunk.keywords && chunk.keywords.includes(word)) {
-                score += 3;
-            }
-        }
-        
-        // Length bonus
-        score += Math.min(5, chunk.content.length / 200);
-        
-        if (score > 0) {
-            results.push({
-                score: score,
-                content: chunk.content,
-                source: chunk.source,
-                title: chunk.title
-            });
+    // Fast keyword index search
+    for (const word of queryWords) {
+        const chunks = knowledgeIndex.get(word) || [];
+        for (const chunk of chunks) {
+            const currentScore = scores.get(chunk.id) || 0;
+            scores.set(chunk.id, currentScore + 2);
         }
     }
     
-    results.sort((a, b) => b.score - a.score);
-    return results.slice(0, 5);
+    // Exact phrase match (high weight)
+    for (const chunk of customKnowledge) {
+        if (chunk.content.toLowerCase().includes(queryLower)) {
+            const currentScore = scores.get(chunk.id) || 0;
+            scores.set(chunk.id, currentScore + 10);
+        }
+    }
+    
+    const results = Array.from(scores.entries())
+        .map(([id, score]) => {
+            const chunk = customKnowledge.find(c => c.id === id);
+            return { ...chunk, score };
+        })
+        .sort((a, b) => b.score - a.score)
+        .slice(0, maxResults);
+    
+    return results;
 }
 
 // ========== GENERATE ANSWER FROM KNOWLEDGE ==========
@@ -352,8 +365,13 @@ function generateAnswerFromKnowledge(query, results) {
     return null;
 }
 
-// ========== CALL CHATGPT WITH CONTEXT ==========
+// ========== OPTIMIZED CALL CHATGPT ==========
 async function callChatGPT(userMessage, history = [], customContext = '') {
+    // Check cache
+    const cacheKey = `${userMessage}|${customContext.slice(0, 100)}`;
+    const cached = responseCache.get(cacheKey);
+    if (cached) return cached;
+    
     if (!openai || !process.env.OPENAI_API_KEY) {
         return getSimpleReply(userMessage);
     }
@@ -363,25 +381,29 @@ async function callChatGPT(userMessage, history = [], customContext = '') {
 Nhiệm vụ của bạn:
 - Trả lời MỌI câu hỏi của người dùng một cách chính xác, hữu ích
 - Giọng điệu: thân thiện, nhiệt tình, dùng icon cảm xúc (❤️, 😊, 🚀)
+- Trả lời NGẮN GỌN (tối đa 3-4 câu)
 - Trả lời bằng TIẾNG VIỆT
 - Nếu không biết, hãy thành thật nói "Mình chưa rõ lắm"`;
 
         if (customContext) {
-            systemPrompt += `\n\n**THÔNG TIN THAM KHẢO (ưu tiên sử dụng):**\n${customContext}\n\nHãy dùng thông tin trên để trả lời nếu phù hợp.`;
+            systemPrompt += `\n\n**THÔNG TIN THAM KHẢO (ưu tiên sử dụng):**\n${customContext.slice(0, 400)}\n\nHãy dùng thông tin trên để trả lời nếu phù hợp.`;
         }
 
         const completion = await openai.chat.completions.create({
             model: 'gpt-3.5-turbo',
             messages: [
                 { role: 'system', content: systemPrompt },
-                ...history.slice(-10),
-                { role: 'user', content: userMessage }
+                ...history.slice(-6),
+                { role: 'user', content: userMessage.slice(0, 500) }
             ],
-            max_tokens: 600,
+            max_tokens: 250,
             temperature: 0.7,
+            timeout: 8000,
         });
         
-        return completion.choices[0].message.content;
+        const reply = completion.choices[0].message.content;
+        responseCache.set(cacheKey, reply);
+        return reply;
     } catch (error) {
         console.error('❌ ChatGPT error:', error.message);
         return getSimpleReply(userMessage);
@@ -405,7 +427,7 @@ function getSimpleReply(userMessage) {
         return 'Không có gì đâu ạ! Rất vui khi được giúp bạn! 💖';
     }
     
-    return `🤔 Mình nghe bạn nói: "${userMessage}". Mình đang học hỏi thêm để trả lời tốt hơn. Bạn có thể hỏi mình về tuổi thọ con người nhé!`;
+    return `🤔 Mình nghe bạn nói: "${userMessage.slice(0, 50)}". Mình đang học hỏi thêm để trả lời tốt hơn. Bạn có thể hỏi mình về tuổi thọ con người nhé!`;
 }
 
 function delay(ms) {
@@ -440,70 +462,115 @@ function getESP32Command(text) {
     return null;
 }
 
-// ========== PROCESS USER MESSAGE WITH RAG ==========
-async function processUserMessage(userText, driveMode, sessionId) {
-    console.log(`🔍 [${sessionId}] Process: "${userText}" | driveMode: ${driveMode}`);
+// ========== PROCESS USER MESSAGE WITH QUEUE ==========
+async function processUserMessage(userText, driveMode, sessionId, ws) {
+    // Queue system to prevent race conditions
+    if (!processingQueue.has(sessionId)) {
+        processingQueue.set(sessionId, Promise.resolve());
+    }
     
-    // Drive mode
-    if (driveMode === true) {
-        if (isControlCommand(userText)) {
-            const command = getESP32Command(userText);
-            if (command) {
-                sendToESP32(command);
-                const replies = {
-                    'FORWARD': '🚗 Xe đang tiến về phía trước!',
-                    'BACKWARD': '🚗 Xe đang lùi lại!',
-                    'LEFT': '🚗 Xe đang rẽ trái!',
-                    'RIGHT': '🚗 Xe đang rẽ phải!',
-                    'STOP': '🚗 Xe đã dừng lại!'
-                };
-                return replies[command];
+    const queue = processingQueue.get(sessionId);
+    const result = await queue.then(async () => {
+        try {
+            console.log(`🔍 [${sessionId}] Process: "${userText}" | driveMode: ${driveMode}`);
+            
+            // Drive mode
+            if (driveMode === true) {
+                if (isControlCommand(userText)) {
+                    const command = getESP32Command(userText);
+                    if (command) {
+                        sendToESP32(command);
+                        const replies = {
+                            'FORWARD': '🚗 Xe đang tiến về phía trước!',
+                            'BACKWARD': '🚗 Xe đang lùi lại!',
+                            'LEFT': '🚗 Xe đang rẽ trái!',
+                            'RIGHT': '🚗 Xe đang rẽ phải!',
+                            'STOP': '🚗 Xe đã dừng lại!'
+                        };
+                        return replies[command];
+                    }
+                }
+                return '🚫 Đang ở chế độ xe. Vui lòng nói: TIẾN, LÙI, TRÁI, PHẢI, DỪNG. Hoặc tắt chế độ xe để trò chuyện!';
             }
+            
+            // RAG: Search in custom knowledge
+            console.log('🔍 Searching in custom knowledge...');
+            const searchResults = searchInKnowledge(userText, 3);
+            
+            let customAnswer = null;
+            let customContext = '';
+            
+            if (searchResults.length > 0) {
+                customAnswer = generateAnswerFromKnowledge(userText, searchResults);
+                if (customAnswer && customAnswer.confidence === 'high') {
+                    console.log('✅ Found HIGH confidence answer in knowledge base');
+                    return customAnswer.answer;
+                }
+                if (searchResults.length > 0) {
+                    customContext = searchResults.map(r => `[${r.source}]: ${r.content.slice(0, 300)}`).join('\n\n');
+                    console.log(`📖 Found ${searchResults.length} relevant results, using as context`);
+                }
+            }
+            
+            // Chat mode with ChatGPT
+            if (!conversationHistory[sessionId]) {
+                conversationHistory[sessionId] = [];
+            }
+            
+            conversationHistory[sessionId].push({ role: 'user', content: userText });
+            
+            let reply;
+            if (customContext) {
+                reply = await callChatGPT(userText, conversationHistory[sessionId], customContext);
+                reply += `\n\n📌 *Thông tin có tham khảo từ dữ liệu của tôi.*`;
+            } else {
+                reply = await callChatGPT(userText, conversationHistory[sessionId]);
+            }
+            
+            conversationHistory[sessionId].push({ role: 'assistant', content: reply });
+            
+            // Limit history
+            if (conversationHistory[sessionId].length > 16) {
+                conversationHistory[sessionId] = conversationHistory[sessionId].slice(-16);
+            }
+            
+            return reply;
+        } catch (error) {
+            console.error('Process error:', error);
+            return 'Chiri hơi mệt, bạn thử lại nhé! 😊';
         }
-        return '🚫 Đang ở chế độ xe. Vui lòng nói: TIẾN, LÙI, TRÁI, PHẢI, DỪNG. Hoặc tắt chế độ xe để trò chuyện!';
+    });
+    
+    // Reset queue
+    processingQueue.set(sessionId, Promise.resolve());
+    return result;
+}
+
+// ========== TTS WITH CACHE ==========
+const ttsQueue = [];
+let isProcessingTTS = false;
+
+async function generateTTS(text) {
+    const cacheKey = text.slice(0, 200);
+    const cached = ttsCache.get(cacheKey);
+    if (cached) return cached;
+    
+    if (!openai || !process.env.OPENAI_API_KEY) return null;
+    
+    try {
+        const mp3 = await openai.audio.speech.create({
+            model: 'tts-1',
+            voice: 'nova',
+            input: text.slice(0, 500),
+            speed: 1.0,
+        });
+        const buffer = Buffer.from(await mp3.arrayBuffer());
+        ttsCache.set(cacheKey, buffer);
+        return buffer;
+    } catch (error) {
+        console.error('TTS error:', error.message);
+        return null;
     }
-    
-    // RAG: Search in custom knowledge
-    console.log('🔍 Searching in custom knowledge...');
-    const searchResults = searchInKnowledge(userText);
-    
-    let customAnswer = null;
-    let customContext = '';
-    
-    if (searchResults.length > 0) {
-        customAnswer = generateAnswerFromKnowledge(userText, searchResults);
-        if (customAnswer && customAnswer.confidence === 'high') {
-            console.log('✅ Found HIGH confidence answer in knowledge base');
-            return customAnswer.answer;
-        }
-        if (searchResults.length > 0) {
-            customContext = searchResults.map(r => `[${r.source}]: ${r.content}`).join('\n\n');
-            console.log(`📖 Found ${searchResults.length} relevant results, using as context`);
-        }
-    }
-    
-    // Chat mode with ChatGPT
-    if (!conversationHistory[sessionId]) {
-        conversationHistory[sessionId] = [];
-    }
-    
-    conversationHistory[sessionId].push({ role: 'user', content: userText });
-    
-    let reply;
-    if (customContext) {
-        reply = await callChatGPT(userText, conversationHistory[sessionId], customContext);
-        reply += `\n\n📌 *Thông tin có tham khảo từ dữ liệu của tôi.*`;
-    } else {
-        reply = await callChatGPT(userText, conversationHistory[sessionId]);
-    }
-    
-    conversationHistory[sessionId].push({ role: 'assistant', content: reply });
-    
-    if (conversationHistory[sessionId].length > 20) {
-        conversationHistory[sessionId] = conversationHistory[sessionId].slice(-20);
-    }
-    
-    return reply;
 }
 
 // ========== API ENDPOINTS ==========
@@ -537,6 +604,7 @@ app.post('/api/upload-pdf', async (req, res) => {
                 keywords: extractKeywords(chunk)
             });
         }
+        rebuildKnowledgeIndex();
         
         res.json({ success: true, message: `Đã thêm ${chunks.length} đoạn kiến thức từ PDF!` });
     } catch (error) {
@@ -565,6 +633,7 @@ app.post('/api/add-website', async (req, res) => {
                     keywords: extractKeywords(chunk)
                 });
             }
+            rebuildKnowledgeIndex();
             res.json({ success: true, message: `Đã crawl và thêm ${chunks.length} đoạn từ website!` });
         } else {
             res.json({ success: false, message: 'Không thể crawl website' });
@@ -595,6 +664,7 @@ app.post('/api/add-drive', async (req, res) => {
                     keywords: extractKeywords(chunk)
                 });
             }
+            rebuildKnowledgeIndex();
             res.json({ success: true, message: `Đã thêm ${chunks.length} đoạn từ Google Drive!` });
         } else {
             res.json({ success: false, message: 'Không thể tải file từ Google Drive' });
@@ -618,6 +688,7 @@ app.get('/api/knowledge-stats', (req, res) => {
         totalChunks: customKnowledge.length,
         sources: sources,
         knowledgeSource: knowledgeSource,
+        indexedKeywords: knowledgeIndex.size,
         modulesAvailable: {
             openai: !!openai,
             pdfParse: !!pdfParse,
@@ -630,31 +701,23 @@ app.get('/api/knowledge-stats', (req, res) => {
 // Clear knowledge
 app.post('/api/clear-knowledge', (req, res) => {
     customKnowledge = [];
+    knowledgeIndex.clear();
     res.json({ success: true, message: 'Đã xóa toàn bộ dữ liệu đã học!' });
 });
 
-// TTS endpoint
+// TTS endpoint with cache
 app.get('/tts', async (req, res) => {
     const text = req.query.text;
     if (!text) return res.status(400).send('Missing text');
     
-    if (openai && process.env.OPENAI_API_KEY) {
-        try {
-            const mp3 = await openai.audio.speech.create({
-                model: 'tts-1',
-                voice: 'nova',
-                input: text,
-                speed: 1.0,
-            });
-            const buffer = Buffer.from(await mp3.arrayBuffer());
-            res.setHeader('Content-Type', 'audio/mpeg');
-            res.send(buffer);
-            return;
-        } catch (error) {
-            console.error('TTS error:', error.message);
-        }
+    const audioBuffer = await generateTTS(text);
+    if (audioBuffer) {
+        res.setHeader('Content-Type', 'audio/mpeg');
+        res.setHeader('Cache-Control', 'public, max-age=3600');
+        res.send(audioBuffer);
+    } else {
+        res.status(404).send('TTS not available');
     }
-    res.status(404).send('TTS not available');
 });
 
 // Health check
@@ -667,11 +730,12 @@ app.get('/health', (req, res) => {
         esp32Count: esp32Clients.size,
         chatGPTReady: !!(openai && process.env.OPENAI_API_KEY),
         pdfReady: !!pdfParse,
-        crawlerReady: !!(axios && cheerio)
+        crawlerReady: !!(axios && cheerio),
+        cacheSize: ttsCache.keys().length
     });
 });
 
-// ========== WEBSOCKET ==========
+// ========== WEBSOCKET WITH HEARTBEAT ==========
 wss.on('connection', (ws, req) => {
     const isESP32 = req.headers['user-agent']?.includes('ESP32') || false;
     const clientId = Date.now() + '-' + Math.random().toString(36).substr(2, 6);
@@ -681,24 +745,31 @@ wss.on('connection', (ws, req) => {
     
     const pingInterval = setInterval(() => {
         if (ws.readyState === WebSocket.OPEN) ws.ping();
-    }, 30000);
+    }, 25000);
     
     if (isESP32) {
         esp32Clients.set(clientId, ws);
+        clientHeartbeats.set(clientId, Date.now());
         ws.send(JSON.stringify({ type: 'system', message: 'Connected to CHIRI server' }));
     }
+    
+    ws.on('pong', () => {
+        if (isESP32) clientHeartbeats.set(clientId, Date.now());
+    });
     
     ws.on('message', async (message) => {
         try {
             const data = JSON.parse(message);
             
             if (data.type === 'voice') {
-                const reply = await processUserMessage(data.text, data.driveMode === true, sessionId);
-                ws.send(JSON.stringify({ type: 'ai', text: reply }));
+                const reply = await processUserMessage(data.text, data.driveMode === true, sessionId, ws);
+                if (ws.readyState === WebSocket.OPEN) {
+                    ws.send(JSON.stringify({ type: 'ai', text: reply }));
+                }
             }
             
             if (data.type === 'ping') {
-                ws.send(JSON.stringify({ type: 'pong' }));
+                ws.send(JSON.stringify({ type: 'pong', time: Date.now() }));
             }
         } catch(e) {
             console.error('WebSocket error:', e.message);
@@ -710,12 +781,28 @@ wss.on('connection', (ws, req) => {
         clearInterval(pingInterval);
         if (esp32Clients.has(clientId)) {
             esp32Clients.delete(clientId);
+            clientHeartbeats.delete(clientId);
         }
         setTimeout(() => {
             delete conversationHistory[sessionId];
+            processingQueue.delete(sessionId);
         }, 300000);
     });
 });
+
+// ========== ESP32 HEARTBEAT MONITOR ==========
+setInterval(() => {
+    const now = Date.now();
+    for (const [id, lastHeartbeat] of clientHeartbeats) {
+        if (now - lastHeartbeat > 60000) {
+            const client = esp32Clients.get(id);
+            if (client) client.terminate();
+            esp32Clients.delete(id);
+            clientHeartbeats.delete(id);
+            console.log(`🔌 ESP32 ${id} timed out`);
+        }
+    }
+}, 30000);
 
 // ========== START SERVER ==========
 const PORT = process.env.PORT || 8080;
@@ -724,14 +811,16 @@ async function startServer() {
     await loadCustomKnowledge();
     
     server.listen(PORT, '0.0.0.0', () => {
-        console.log(`\n🚀 CHIRI AI - FULL FEATURE MODE`);
+        console.log(`\n🚀 CHIRI AI - FULL FEATURE MODE v4.0`);
         console.log(`📍 http://localhost:${PORT}`);
         console.log(`📚 Knowledge chunks: ${customKnowledge.length}`);
+        console.log(`🔍 Indexed keywords: ${knowledgeIndex.size}`);
         console.log(`🤖 ChatGPT: ${openai && process.env.OPENAI_API_KEY ? 'READY ✅' : 'NOT AVAILABLE ⚠️'}`);
         console.log(`📄 PDF Reader: ${pdfParse ? 'READY ✅' : 'NOT AVAILABLE ⚠️'}`);
         console.log(`🕷️ Web Crawler: ${axios && cheerio ? 'READY ✅' : 'NOT AVAILABLE ⚠️'}`);
         console.log(`🎤 Voice Control: READY ✅`);
         console.log(`🚗 ESP32 Clients: ${esp32Clients.size}`);
+        console.log(`💾 Cache: TTS + Response caching ENABLED ✅`);
         console.log(`\n📡 WebSocket: ws://localhost:${PORT}`);
         console.log(`\n💡 API Endpoints:`);
         console.log(`   POST /api/upload-pdf - Upload PDF file`);
