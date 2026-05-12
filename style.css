@@ -91,13 +91,149 @@ body {
     transition: transform 0.2s ease;
 }
 
-.robot-svg.listening .pupil {
-    animation: blink 0.3s ease;
+/* ========== ANIMATION CHO MIỆNG, MẮT, LÔNG MÀY ========== */
+
+/* Miệng robot - cử động khi nói */
+@keyframes mouthMove {
+    0% { transform: scaleY(0.5); }
+    50% { transform: scaleY(1.2); }
+    100% { transform: scaleY(0.5); }
 }
 
+@keyframes mouthTalk {
+    0% { transform: scaleY(0.4); }
+    25% { transform: scaleY(1); }
+    50% { transform: scaleY(0.4); }
+    75% { transform: scaleY(1); }
+    100% { transform: scaleY(0.4); }
+}
+
+.robot-mouth {
+    transition: all 0.05s ease;
+    transform-origin: center;
+}
+
+/* Khi đang nói - miệng nhấp nháy nhanh */
+.robot-svg.talking .robot-mouth {
+    animation: mouthTalk 0.15s infinite ease-in-out;
+    transform-origin: center;
+}
+
+/* Khi lắng nghe - miệng hơi mở */
+.robot-svg.listening .robot-mouth {
+    transform: scaleY(0.7);
+}
+
+/* Khi vui - miệng cười to */
+.robot-svg.happy .robot-mouth {
+    transform: scaleY(1.1) scaleX(1.1);
+}
+
+/* Khi suy nghĩ - miệng mím */
+.robot-svg.thinking .robot-mouth {
+    transform: scaleY(0.2);
+}
+
+/* Khi ngủ - miệng hơi mở nhẹ */
+.robot-svg.sleepy .robot-mouth {
+    transform: scaleY(0.3);
+}
+
+/* Khi ngạc nhiên */
+.robot-svg.surprised .robot-mouth {
+    transform: scaleY(1.3) scaleX(1.2);
+}
+
+/* ====== MẮT ROBOT ====== */
 @keyframes blink {
-    0%, 100% { transform: scaleY(1); }
-    50% { transform: scaleY(0.1); }
+    0%, 90%, 100% { transform: scaleY(1); }
+    95% { transform: scaleY(0.05); }
+}
+
+@keyframes lookAround {
+    0% { transform: translateX(0); }
+    25% { transform: translateX(3px); }
+    75% { transform: translateX(-3px); }
+    100% { transform: translateX(0); }
+}
+
+.robot-eye {
+    transition: all 0.1s ease;
+    transform-origin: center;
+}
+
+/* Nháy mắt định kỳ */
+.robot-eye {
+    animation: blink 4s infinite;
+}
+
+/* Khi lắng nghe - mắt mở to, nhìn xung quanh */
+.robot-svg.listening .robot-eye {
+    animation: blink 4s infinite, lookAround 3s infinite;
+}
+
+/* Khi vui - mắt cười (cong lên) */
+.robot-svg.happy .robot-eye {
+    transform: scaleX(1) scaleY(0.7);
+    animation: none;
+}
+
+/* Khi suy nghĩ - mắt nheo lại */
+.robot-svg.thinking .robot-eye {
+    transform: scaleX(0.8) scaleY(0.5);
+    animation: none;
+}
+
+/* Khi ngủ - mắt nhắm */
+.robot-svg.sleepy .robot-eye {
+    transform: scaleY(0.05);
+    animation: none;
+}
+
+/* Khi ngạc nhiên - mắt mở to */
+.robot-svg.surprised .robot-eye {
+    transform: scale(1.2);
+    animation: none;
+}
+
+/* ====== LÔNG MÀY ====== */
+.robot-eyebrow {
+    transition: all 0.2s ease;
+    transform-origin: center;
+}
+
+/* Khi vui - lông mày cong lên */
+.robot-svg.happy .robot-eyebrow {
+    transform: translateY(-3px) rotate(-5deg);
+}
+
+/* Khi suy nghĩ - lông mày cau lại */
+.robot-svg.thinking .robot-eyebrow {
+    transform: translateY(2px) rotate(5deg);
+}
+
+/* Khi ngạc nhiên - lông mày nhướn cao */
+.robot-svg.surprised .robot-eyebrow {
+    transform: translateY(-6px) scaleY(1.3);
+}
+
+/* Khi ngủ - lông mày thả lỏng */
+.robot-svg.sleepy .robot-eyebrow {
+    transform: translateY(1px);
+}
+
+/* Khi lắng nghe - lông mày bình thường */
+.robot-svg.listening .robot-eyebrow {
+    transform: translateY(0);
+}
+
+/* ====== HỌC TRÒ ====== */
+.pupil {
+    transition: all 0.1s ease;
+}
+
+.robot-svg.listening .pupil {
+    animation: blink 0.3s ease;
 }
 
 .robot-name {
