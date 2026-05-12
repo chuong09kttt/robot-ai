@@ -4,6 +4,10 @@ const WebSocket = require('ws');
 const path = require('path');
 const fs = require('fs');
 
+// ========== KHAI BÁO BIẾN TOÀN CỤC ==========
+const esp32Clients = new Map();  // <-- QUAN TRỌNG: ĐÃ THÊM DÒNG NÀY
+let conversationHistory = {};    // <-- QUAN TRỌNG: ĐÃ THÊM DÒNG NÀY
+
 // ========== LOAD MODULES WITH FALLBACK ==========
 let OpenAI;
 let pdfParse;
@@ -534,7 +538,7 @@ app.post('/api/upload-pdf', async (req, res) => {
             });
         }
         
-        res.json({ success: true, message: `Đã thêm ${chunks} đoạn kiến thức từ PDF!` });
+        res.json({ success: true, message: `Đã thêm ${chunks.length} đoạn kiến thức từ PDF!` });
     } catch (error) {
         res.json({ success: false, message: error.message });
     }
@@ -660,7 +664,7 @@ app.get('/health', (req, res) => {
         timestamp: new Date().toISOString(),
         uptime: process.uptime(),
         knowledgeChunks: customKnowledge.length,
-        esp32Clients: esp32Clients.size,
+        esp32Count: esp32Clients.size,
         chatGPTReady: !!(openai && process.env.OPENAI_API_KEY),
         pdfReady: !!pdfParse,
         crawlerReady: !!(axios && cheerio)
@@ -704,7 +708,9 @@ wss.on('connection', (ws, req) => {
     ws.on('close', () => {
         console.log(`🔌 Client disconnected: ${clientId}`);
         clearInterval(pingInterval);
-        if (esp32Clients.has(clientId)) esp32Clients.delete(clientId);
+        if (esp32Clients.has(clientId)) {
+            esp32Clients.delete(clientId);
+        }
         setTimeout(() => {
             delete conversationHistory[sessionId];
         }, 300000);
@@ -725,6 +731,7 @@ async function startServer() {
         console.log(`📄 PDF Reader: ${pdfParse ? 'READY ✅' : 'NOT AVAILABLE ⚠️'}`);
         console.log(`🕷️ Web Crawler: ${axios && cheerio ? 'READY ✅' : 'NOT AVAILABLE ⚠️'}`);
         console.log(`🎤 Voice Control: READY ✅`);
+        console.log(`🚗 ESP32 Clients: ${esp32Clients.size}`);
         console.log(`\n📡 WebSocket: ws://localhost:${PORT}`);
         console.log(`\n💡 API Endpoints:`);
         console.log(`   POST /api/upload-pdf - Upload PDF file`);
