@@ -15,7 +15,7 @@
         </div>
         <div class="sleep-timer" id="sleepTimer">😴 Sẽ ngủ sau 2:00</div>
 
-        <!-- Khuôn mặt robot Chiri -->
+        <!-- Khuôn mặt robot Chiri với các bộ phận riêng biệt -->
         <div class="robot-section">
             <div class="robot-avatar">
                 <svg class="robot-svg" viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg">
@@ -32,31 +32,31 @@
                     
                     <!-- Mắt trái -->
                     <g id="leftEye">
-                        <ellipse cx="145" cy="195" rx="32" ry="36" fill="white" stroke="#333" stroke-width="3"/>
-                        <circle class="pupil" cx="152" cy="195" r="16" fill="#2C3E50"/>
-                        <circle class="eye-glow" cx="147" cy="188" r="6" fill="white" opacity="0.9"/>
-                        <circle class="eye-star" cx="158" cy="200" r="3" fill="white" opacity="0.5"/>
+                        <ellipse cx="145" cy="195" rx="32" ry="36" fill="white" stroke="#333" stroke-width="3" class="robot-eye"/>
+                        <circle cx="152" cy="195" r="16" fill="#2C3E50" class="pupil"/>
+                        <circle cx="147" cy="188" r="6" fill="white" opacity="0.9" class="eye-glow"/>
+                        <circle cx="158" cy="200" r="3" fill="white" opacity="0.5" class="eye-star"/>
                     </g>
                     
                     <!-- Mắt phải -->
                     <g id="rightEye">
-                        <ellipse cx="255" cy="195" rx="32" ry="36" fill="white" stroke="#333" stroke-width="3"/>
-                        <circle class="pupil" cx="262" cy="195" r="16" fill="#2C3E50"/>
-                        <circle class="eye-glow" cx="257" cy="188" r="6" fill="white" opacity="0.9"/>
-                        <circle class="eye-star" cx="268" cy="200" r="3" fill="white" opacity="0.5"/>
+                        <ellipse cx="255" cy="195" rx="32" ry="36" fill="white" stroke="#333" stroke-width="3" class="robot-eye"/>
+                        <circle cx="262" cy="195" r="16" fill="#2C3E50" class="pupil"/>
+                        <circle cx="257" cy="188" r="6" fill="white" opacity="0.9" class="eye-glow"/>
+                        <circle cx="268" cy="200" r="3" fill="white" opacity="0.5" class="eye-star"/>
                     </g>
                     
                     <!-- Lông mày trái -->
-                    <path id="leftEyebrow" d="M115 155 Q145 140 175 155" stroke="#5D4037" stroke-width="7" fill="none" stroke-linecap="round"/>
+                    <path id="leftEyebrow" d="M115 155 Q145 140 175 155" stroke="#5D4037" stroke-width="7" fill="none" stroke-linecap="round" class="robot-eyebrow"/>
                     
                     <!-- Lông mày phải -->
-                    <path id="rightEyebrow" d="M225 155 Q255 140 285 155" stroke="#5D4037" stroke-width="7" fill="none" stroke-linecap="round"/>
+                    <path id="rightEyebrow" d="M225 155 Q255 140 285 155" stroke="#5D4037" stroke-width="7" fill="none" stroke-linecap="round" class="robot-eyebrow"/>
                     
                     <!-- Mũi -->
                     <ellipse cx="200" cy="235" rx="14" ry="10" fill="#E67E22" opacity="0.8"/>
                     
-                    <!-- Miệng -->
-                    <path id="mouth" d="M165 275 Q200 315 235 275" stroke="#5D4037" stroke-width="5" fill="none" stroke-linecap="round"/>
+                    <!-- Miệng - đã tách riêng để animation -->
+                    <path id="mouth" d="M165 275 Q200 315 235 275" stroke="#5D4037" stroke-width="5" fill="none" stroke-linecap="round" class="robot-mouth"/>
                     
                     <!-- Lưỡi (khi vui) -->
                     <path id="tongue" d="M190 295 Q200 310 210 295" fill="#FF6B6B" opacity="0"/>
