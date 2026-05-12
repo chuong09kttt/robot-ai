@@ -17,6 +17,8 @@ let currentAudio = null;
 let lastActivityTime = Date.now();
 let driveControlMode = false;
 let mouthAnimationInterval = null;
+let reconnectAttempts = 0;
+let ttsQueue = [];
 
 const INACTIVITY_LIMIT = 120000;
 const WAKE_WORDS = ['xin chào', 'hello', 'hi', 'chào chiri', 'chiri ơi', 'hey chiri'];
@@ -114,7 +116,7 @@ function addMessage(type, text) {
     messageDiv.innerHTML = `<div class="bubble">${escapeHtml(text)}</div>`;
     chatBox.appendChild(messageDiv);
     chatBox.scrollTop = chatBox.scrollHeight;
-    while (chatBox.children.length > 25) chatBox.removeChild(chatBox.firstChild);
+    while (chatBox.children.length > 30) chatBox.removeChild(chatBox.firstChild);
 }
 
 function escapeHtml(text) {
@@ -123,40 +125,58 @@ function escapeHtml(text) {
     return div.innerHTML;
 }
 
+// Optimized audio playback with queue
 async function playAudio(text) {
-    try {
-        if (currentAudio) {
-            currentAudio.pause();
-            currentAudio = null;
-        }
-        if (window.speechSynthesis) window.speechSynthesis.cancel();
-        setExpression('talking');
-        const url = `/tts?text=${encodeURIComponent(text)}`;
-        const response = await fetch(url);
-        if (response.ok && response.headers.get('content-type') === 'audio/mpeg') {
-            const audioBlob = await response.blob();
-            const audioUrl = URL.createObjectURL(audioBlob);
-            currentAudio = new Audio(audioUrl);
-            currentAudio.onended = () => {
-                URL.revokeObjectURL(audioUrl);
+    if (!text) return;
+    
+    ttsQueue.push(text);
+    if (currentAudio) return;
+    
+    while (ttsQueue.length > 0) {
+        const textToPlay = ttsQueue.shift();
+        try {
+            if (currentAudio) {
+                currentAudio.pause();
                 currentAudio = null;
-                stopMouthAnimation();
-                if (isAwake) setExpression('listening');
-                isProcessing = false;
-            };
-            await currentAudio.play();
-        } else {
-            fallbackSpeak(text);
+            }
+            if (window.speechSynthesis) window.speechSynthesis.cancel();
+            setExpression('talking');
+            const url = `/tts?text=${encodeURIComponent(textToPlay.slice(0, 300))}`;
+            const response = await fetch(url);
+            if (response.ok && response.headers.get('content-type') === 'audio/mpeg') {
+                const audioBlob = await response.blob();
+                const audioUrl = URL.createObjectURL(audioBlob);
+                currentAudio = new Audio(audioUrl);
+                await new Promise((resolve) => {
+                    currentAudio.onended = () => {
+                        URL.revokeObjectURL(audioUrl);
+                        currentAudio = null;
+                        resolve();
+                    };
+                    currentAudio.onerror = () => {
+                        URL.revokeObjectURL(audioUrl);
+                        currentAudio = null;
+                        resolve();
+                    };
+                    currentAudio.play().catch(resolve);
+                });
+            } else {
+                fallbackSpeak(textToPlay);
+                await new Promise(resolve => setTimeout(resolve, 100));
+            }
+        } catch (error) {
+            fallbackSpeak(textToPlay);
         }
-    } catch (error) {
-        fallbackSpeak(text);
     }
+    stopMouthAnimation();
+    if (isAwake) setExpression('listening');
+    isProcessing = false;
 }
 
 function fallbackSpeak(text) {
     if ('speechSynthesis' in window) {
         window.speechSynthesis.cancel();
-        const utterance = new SpeechSynthesisUtterance(text);
+        const utterance = new SpeechSynthesisUtterance(text.slice(0, 200));
         utterance.lang = 'vi-VN';
         utterance.rate = 0.9;
         utterance.pitch = 1.1;
@@ -170,18 +190,12 @@ function fallbackSpeak(text) {
         utterance.onend = () => {
             stopMouthAnimation();
             if (isAwake) setExpression('listening');
-            isProcessing = false;
         };
         utterance.onerror = () => {
             stopMouthAnimation();
             if (isAwake) setExpression('listening');
-            isProcessing = false;
         };
         window.speechSynthesis.speak(utterance);
-    } else {
-        stopMouthAnimation();
-        if (isAwake) setExpression('listening');
-        isProcessing = false;
     }
 }
 
@@ -253,6 +267,8 @@ async function processCommand(text) {
     }
 }
 
+let recognitionActive = false;
+
 function initSpeechRecognition() {
     if (!('webkitSpeechRecognition' in window || 'SpeechRecognition' in window)) {
         statusText.innerHTML = '❌ Trình duyệt không hỗ trợ! Dùng Chrome/Edge!';
@@ -262,11 +278,15 @@ function initSpeechRecognition() {
     recognition = new SpeechRecognition();
     recognition.lang = 'vi-VN';
     recognition.continuous = true;
-    recognition.interimResults = true;
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+    
     recognition.onstart = () => {
         console.log('🎤 Micro đang lắng nghe...');
+        recognitionActive = true;
         if (isAwake) setExpression('listening');
     };
+    
     recognition.onresult = (event) => {
         for (let i = event.resultIndex; i < event.results.length; i++) {
             const transcript = event.results[i][0].transcript.toLowerCase().trim();
@@ -284,22 +304,41 @@ function initSpeechRecognition() {
             }
         }
     };
+    
     recognition.onerror = (event) => {
         console.error('Lỗi recognition:', event.error);
         if (event.error === 'not-allowed') statusText.innerHTML = '❌ Cần cấp quyền micro!';
+        if (event.error === 'no-speech') return;
+        recognitionActive = false;
     };
+    
     recognition.onend = () => {
-        if (!isProcessing && isAwake) setTimeout(() => { try { recognition.start(); } catch(e) {} }, 500);
+        recognitionActive = false;
+        if (!isProcessing && isAwake) {
+            setTimeout(() => { 
+                if (!recognitionActive && isAwake) {
+                    try { recognition.start(); } catch(e) {}
+                }
+            }, 500);
+        }
     };
+    
     recognition.start();
     console.log('✅ Speech Recognition started');
 }
 
+// WebSocket with exponential backoff
 function connectWebSocket() {
     const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
     const wsUrl = `${protocol}//${location.host}`;
     ws = new WebSocket(wsUrl);
-    ws.onopen = () => console.log('✅ WebSocket connected');
+    
+    ws.onopen = () => {
+        console.log('✅ WebSocket connected');
+        reconnectAttempts = 0;
+        if (isAwake) statusText.innerHTML = driveControlMode ? '🎤 Đang nghe lệnh xe...' : '🎤 Đang lắng nghe...';
+    };
+    
     ws.onmessage = (event) => {
         const data = JSON.parse(event.data);
         if (data.type === 'ai') {
@@ -308,7 +347,14 @@ function connectWebSocket() {
             statusText.innerHTML = driveControlMode ? '🎤 Đang nghe lệnh xe...' : '🎤 Đang lắng nghe...';
         }
     };
-    ws.onclose = () => { console.log('WebSocket disconnected, reconnecting...'); setTimeout(connectWebSocket, 3000); };
+    
+    ws.onclose = () => {
+        console.log('WebSocket disconnected, reconnecting...');
+        const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 10000);
+        reconnectAttempts++;
+        setTimeout(connectWebSocket, delay);
+    };
+    
     ws.onerror = (error) => console.error('WebSocket error:', error);
 }
 
@@ -337,13 +383,15 @@ driveModeBtn.addEventListener('click', () => {
 });
 
 function init() {
-    console.log('🚀 Chiri AI khởi động...');
+    console.log('🚀 Chiri AI khởi động v4.0...');
     setExpression('sleepy');
     statusText.innerHTML = '🎤 Nói "Xin chào" để đánh thức';
     updateDriveModeUI();
     connectWebSocket();
     initSpeechRecognition();
     resetInactivityTimer();
+    
+    // Blink effect
     setInterval(() => {
         if (isAwake && !isProcessing && !currentAudio) {
             const eyes = document.querySelectorAll('.robot-eye');
