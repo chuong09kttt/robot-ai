@@ -1,7 +1,7 @@
 {
   "name": "chiri-ai-robot",
-  "version": "3.0.0",
-  "description": "CHIRI AI Robot - Full RAG with PDF, Web Crawler, Google Drive",
+  "version": "4.0.0",
+  "description": "CHIRI AI Robot - Optimized RAG with PDF, Web Crawler, Google Drive",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
@@ -13,7 +13,8 @@
     "openai": "^4.20.0",
     "pdf-parse": "^1.1.1",
     "axios": "^1.6.0",
-    "cheerio": "^1.0.0-rc.12"
+    "cheerio": "^1.0.0-rc.12",
+    "node-cache": "^5.1.2"
   },
   "devDependencies": {
     "nodemon": "^3.0.1"
