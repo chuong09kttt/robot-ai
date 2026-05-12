@@ -3,6 +3,10 @@ const http = require('http');
 const WebSocket = require('ws');
 const path = require('path');
 const OpenAI = require('openai');
+const fs = require('fs');
+const pdfParse = require('pdf-parse');
+const axios = require('axios');
+const cheerio = require('cheerio');
 
 const app = express();
 const server = http.createServer(app);
@@ -16,79 +20,283 @@ try {
     openai = new OpenAI({
         apiKey: process.env.OPENAI_API_KEY,
     });
-    if (process.env.OPENAI_API_KEY) {
-        console.log('✅ OpenAI API Key đã được cấu hình - ChatGPT mode sẵn sàng');
-    } else {
-        console.log('⚠️ CHƯA CÓ OPENAI_API_KEY! Chat sẽ hoạt động giới hạn');
-    }
+    console.log('✅ OpenAI API Key đã được cấu hình');
 } catch (err) {
     console.error('❌ Lỗi khởi tạo OpenAI:', err.message);
 }
 
-// ========== LƯU ESP32 CLIENTS ==========
-const esp32Clients = new Map();
-let conversationHistory = {};
+// ========== DỮ LIỆU RIÊNG ==========
+let customKnowledge = []; // Lưu trữ nội dung đã học
+let knowledgeSource = ''; // Nguồn dữ liệu
 
-// ========== HÀM GỬI LỆNH ESP32 ==========
-function sendToESP32(command) {
-    let sent = false;
-    for (const [id, client] of esp32Clients) {
-        if (client.readyState === WebSocket.OPEN) {
-            client.send(JSON.stringify({ type: 'command', command: command }));
-            console.log(`📤 GỬI LỆNH đến ESP32: ${command}`);
-            sent = true;
+// Cấu hình nguồn dữ liệu mặc định
+const DEFAULT_WEBSITES = [
+    'https://www.vard.com/vungtau',
+    'https://vi.wikipedia.org/wiki/L%E1%BB%87_Th%E1%BB%A7y_(ngh%E1%BB%87_s%C4%A9)',
+    'https://vi.wikipedia.org/wiki/Mặt_Trời'
+];
+
+// Google Drive file ID (chia sẻ công khai)
+// Ví dụ: https://drive.google.com/file/d/FILE_ID/view
+const GOOGLE_DRIVE_FILE_ID = process.env.GOOGLE_DRIVE_FILE_ID || '1RXqoUIQgb_UgvbjM8h3412OZdsxPAZPP';
+// ========== TẢI FILE TỪ GOOGLE DRIVE ==========
+async function downloadFromGoogleDrive(fileId) {
+    try {
+        console.log(`📥 Đang tải file từ Google Drive ID: ${fileId}`);
+        
+        // Lấy link tải trực tiếp từ Google Drive
+        const downloadUrl = `https://drive.google.com/uc?export=download&id=${fileId}`;
+        
+        const response = await axios({
+            method: 'get',
+            url: downloadUrl,
+            responseType: 'arraybuffer',
+            timeout: 30000
+        });
+        
+        // Kiểm tra xem có phải PDF không
+        const buffer = Buffer.from(response.data);
+        
+        // Thử parse PDF
+        try {
+            const pdfData = await pdfParse(buffer);
+            console.log(`✅ Đã tải PDF: ${pdfData.numpages} trang, ${pdfData.text.length} ký tự`);
+            return pdfData.text;
+        } catch (e) {
+            console.log('File không phải PDF, lưu dạng text');
+            return buffer.toString('utf-8');
+        }
+    } catch (error) {
+        console.error('❌ Lỗi tải từ Google Drive:', error.message);
+        return null;
+    }
+}
+
+// ========== CRAWL WEBSITE ==========
+async function crawlWebsite(url) {
+    try {
+        console.log(`🕷️ Đang crawl: ${url}`);
+        const response = await axios.get(url, {
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+            },
+            timeout: 15000
+        });
+        
+        const $ = cheerio.load(response.data);
+        
+        // Xóa các element không cần thiết
+        $('script, style, nav, footer, header, .sidebar, .navigation').remove();
+        
+        // Lấy nội dung chính
+        let content = '';
+        
+        // Thử lấy nội dung từ các thẻ phổ biến
+        $('main, article, .content, .main-content, #content, p').each((i, el) => {
+            content += $(el).text().trim() + '\n';
+        });
+        
+        // Nếu không tìm thấy, lấy body
+        if (content.length < 100) {
+            content = $('body').text();
+        }
+        
+        // Làm sạch văn bản
+        content = content.replace(/\s+/g, ' ').trim();
+        
+        console.log(`✅ Crawl thành công: ${content.length} ký tự`);
+        return {
+            url: url,
+            title: $('title').text() || url,
+            content: content
+        };
+    } catch (error) {
+        console.error(`❌ Lỗi crawl ${url}:`, error.message);
+        return null;
+    }
+}
+
+// ========== CHIA NHỎ VĂN BẢN THÀNH CÁC ĐOẠN NHỎ ==========
+function splitTextIntoChunks(text, maxChunkSize = 1000) {
+    const chunks = [];
+    const sentences = text.split(/[.!?]+/);
+    
+    let currentChunk = '';
+    for (const sentence of sentences) {
+        if ((currentChunk + sentence).length < maxChunkSize) {
+            currentChunk += sentence + '. ';
+        } else {
+            if (currentChunk.trim()) chunks.push(currentChunk.trim());
+            currentChunk = sentence + '. ';
         }
     }
-    if (!sent) {
-        console.log('⚠️ Không có ESP32 nào kết nối');
+    if (currentChunk.trim()) chunks.push(currentChunk.trim());
+    
+    return chunks;
+}
+
+// ========== LƯU TRI THỨC ==========
+async function loadCustomKnowledge() {
+    console.log('\n📚 ĐANG TẢI DỮ LIỆU RIÊNG...\n');
+    
+    let allContent = [];
+    
+    // 1. Crawl các website mặc định
+    console.log('🌐 Crawl website mặc định...');
+    for (const url of DEFAULT_WEBSITES) {
+        const data = await crawlWebsite(url);
+        if (data) {
+            allContent.push({
+                source: url,
+                type: 'website',
+                title: data.title,
+                content: data.content
+            });
+        }
+        await delay(1000); // Tránh crawl quá nhanh
     }
-    return sent;
+    
+    // 2. Tải từ Google Drive (nếu có)
+    if (GOOGLE_DRIVE_FILE_ID) {
+        console.log('📁 Tải từ Google Drive...');
+        const pdfContent = await downloadFromGoogleDrive(GOOGLE_DRIVE_FILE_ID);
+        if (pdfContent) {
+            allContent.push({
+                source: `Google Drive (ID: ${GOOGLE_DRIVE_FILE_ID})`,
+                type: 'pdf',
+                title: 'Tài liệu từ Google Drive',
+                content: pdfContent
+            });
+        }
+    }
+    
+    // 3. Chia nhỏ và lưu vào knowledge base
+    for (const item of allContent) {
+        console.log(`📖 Xử lý: ${item.title}`);
+        const chunks = splitTextIntoChunks(item.content);
+        
+        for (const chunk of chunks) {
+            customKnowledge.push({
+                source: item.source,
+                type: item.type,
+                title: item.title,
+                content: chunk,
+                keywords: extractKeywords(chunk)
+            });
+        }
+    }
+    
+    knowledgeSource = `📚 Đã tải ${customKnowledge.length} đoạn kiến thức từ ${allContent.length} nguồn`;
+    console.log(`\n✅ ${knowledgeSource}\n`);
 }
 
-// ========== NHẬN DIỆN LỆNH ĐIỀU KHIỂN XE ==========
-function isControlCommand(text) {
-    const lowerText = text.toLowerCase();
-    const controlWords = [
-        'tiến', 'đi thẳng', 'forward', 'tiến lên', 'tiến tới',
-        'lùi', 'đi lùi', 'back', 'backward', 'lùi lại',
-        'trái', 'quẹo trái', 'rẽ trái', 'left',
-        'phải', 'quẹo phải', 'rẽ phải', 'right',
-        'dừng', 'dừng lại', 'stop', 'dừng xe',
-        'nhanh', 'tăng tốc', 'speed up',
-        'chậm', 'giảm tốc', 'slow down'
-    ];
-    return controlWords.some(word => lowerText.includes(word));
+// ========== TRÍCH XUẤT TỪ KHÓA ==========
+function extractKeywords(text) {
+    // Loại bỏ dấu câu và chuyển về chữ thường
+    const cleanText = text.toLowerCase().replace(/[^\w\s]/g, '');
+    const words = cleanText.split(/\s+/);
+    
+    // Loại bỏ stopwords
+    const stopwords = new Set([
+        'và', 'của', 'có', 'là', 'một', 'với', 'cho', 'khi', 'đã', 'sẽ',
+        'được', 'không', 'các', 'những', 'như', 'này', 'ấy', 'ở', 'tại'
+    ]);
+    
+    const keywords = [];
+    for (const word of words) {
+        if (word.length > 2 && !stopwords.has(word)) {
+            keywords.push(word);
+        }
+    }
+    
+    return [...new Set(keywords)];
 }
 
-function getESP32Command(text) {
-    const lowerText = text.toLowerCase();
-    if (lowerText.includes('tiến') || lowerText.includes('đi thẳng') || lowerText.includes('forward')) return 'FORWARD';
-    if (lowerText.includes('lùi') || lowerText.includes('back')) return 'BACKWARD';
-    if (lowerText.includes('trái') || lowerText.includes('left')) return 'LEFT';
-    if (lowerText.includes('phải') || lowerText.includes('right')) return 'RIGHT';
-    if (lowerText.includes('dừng') || lowerText.includes('stop')) return 'STOP';
-    if (lowerText.includes('nhanh') || lowerText.includes('speed up')) return 'SPEED_UP';
-    if (lowerText.includes('chậm') || lowerText.includes('slow down')) return 'SLOW_DOWN';
+// ========== TÌM KIẾM TRONG TRI THỨC RIÊNG ==========
+function searchInCustomKnowledge(query) {
+    const queryLower = query.toLowerCase();
+    const queryWords = queryLower.split(/\s+/);
+    
+    const results = [];
+    
+    for (const chunk of customKnowledge) {
+        let score = 0;
+        const chunkLower = chunk.content.toLowerCase();
+        
+        // Tìm kiếm chính xác cụm từ
+        if (chunkLower.includes(queryLower)) {
+            score += 10;
+        }
+        
+        // Tìm kiếm từng từ
+        for (const word of queryWords) {
+            if (word.length > 2 && chunkLower.includes(word)) {
+                score += 1;
+            }
+            if (chunk.keywords && chunk.keywords.includes(word)) {
+                score += 2;
+            }
+        }
+        
+        if (score > 0) {
+            results.push({
+                score: score,
+                content: chunk.content,
+                source: chunk.source,
+                title: chunk.title
+            });
+        }
+    }
+    
+    // Sắp xếp theo độ liên quan
+    results.sort((a, b) => b.score - a.score);
+    
+    return results.slice(0, 3); // Lấy 3 kết quả tốt nhất
+}
+
+// ========== TẠO CÂU TRẢ LỜI TỪ DỮ LIỆU RIÊNG ==========
+function generateAnswerFromKnowledge(query, searchResults) {
+    if (searchResults.length === 0) return null;
+    
+    // Nếu có kết quả với điểm cao
+    const bestMatch = searchResults[0];
+    if (bestMatch.score >= 5) {
+        return {
+            answer: `📖 Theo ${bestMatch.source}:\n\n${bestMatch.content.substring(0, 800)}...`,
+            source: bestMatch.source,
+            confidence: 'high'
+        };
+    }
+    
+    // Nếu có nhiều kết quả liên quan
+    if (searchResults.length >= 2) {
+        let combinedAnswer = `📚 Tổng hợp từ các nguồn:\n\n`;
+        for (let i = 0; i < Math.min(2, searchResults.length); i++) {
+            combinedAnswer += `📌 ${searchResults[i].source}:\n${searchResults[i].content.substring(0, 300)}...\n\n`;
+        }
+        return {
+            answer: combinedAnswer,
+            source: 'nhiều nguồn',
+            confidence: 'medium'
+        };
+    }
+    
     return null;
 }
 
-// ========== HÀM GỌI CHATGPT API ==========
-async function callChatGPT(userMessage, history = []) {
+// ========== HÀM GỌI CHATGPT (DÙNG KHI KHÔNG CÓ DỮ LIỆU RIÊNG) ==========
+async function callChatGPT(userMessage, history = [], customContext = '') {
     if (!openai || !process.env.OPENAI_API_KEY) {
-        console.log('⚠️ Không có ChatGPT API, dùng chế độ offline');
         return getOfflineReply(userMessage);
     }
     
     try {
-        console.log(`🤖 Gọi ChatGPT cho câu hỏi: "${userMessage.substring(0, 50)}..."`);
-        
-        const systemPrompt = `Bạn là Chiri - một trợ lý AI thông minh, thân thiện, dễ thương. 
-Nhiệm vụ của bạn:
-- Trả lời MỌI câu hỏi của người dùng một cách chính xác, hữu ích và vui vẻ
-- Giọng điệu: thân thiện, nhiệt tình, dùng cả icon cảm xúc (❤️, 😊, 🚀, v.v.)
-- Nếu không biết câu trả lời, hãy thành thật nói "Mình chưa rõ lắm" và hướng dẫn người dùng tìm kiếm
-- Trả lời bằng TIẾNG VIỆT
-- Luôn giữ thái độ tích cực, sẵn sàng giúp đỡ`;
+        let systemPrompt = `Bạn là Chiri - một trợ lý AI thông minh, thân thiện.
+Trả lời bằng TIẾNG VIỆT, giọng điệu vui vẻ, dùng icon cảm xúc.`;
+
+        if (customContext) {
+            systemPrompt += `\n\nTHÔNG TIN THAM KHẢO (từ dữ liệu riêng):\n${customContext}\n\nHãy dùng thông tin trên nếu phù hợp để trả lời.`;
+        }
 
         const completion = await openai.chat.completions.create({
             model: 'gpt-3.5-turbo',
@@ -101,38 +309,63 @@ Nhiệm vụ của bạn:
             temperature: 0.7,
         });
         
-        const reply = completion.choices[0].message.content;
-        console.log(`💬 ChatGPT trả lời: "${reply.substring(0, 80)}..."`);
-        return reply;
-        
+        return completion.choices[0].message.content;
     } catch (error) {
         console.error('❌ Lỗi gọi ChatGPT:', error.message);
-        return `😅 Mình xin lỗi, hiện tại mình đang gặp chút vấn đề kết nối. ${getOfflineReply(userMessage)}`;
+        return getOfflineReply(userMessage);
     }
 }
 
 function getOfflineReply(userMessage) {
     const lower = userMessage.toLowerCase();
     
-    if (lower.includes('tuổi thọ') || lower.includes('sống bao lâu')) {
-        return '👨‍👩‍👧‍👦 Tuổi thọ trung bình của con người hiện nay khoảng 73-85 tuổi. Ở Việt Nam là khoảng 73-75 tuổi. Người Nhật sống thọ nhất thế giới với 84-87 tuổi. Yếu tố ảnh hưởng: chế độ ăn, tập thể dục, gen di truyền và môi trường sống bạn nhé! 💚';
+    if (lower.includes('tuổi thọ')) {
+        return '👨‍👩‍👧‍👦 Tuổi thọ trung bình của con người khoảng 73-85 tuổi. Ở Việt Nam là 73-75 tuổi.';
     }
     
-    if (lower.includes('khỏe') || lower.includes('khoẻ')) {
-        return 'Cảm ơn bạn đã quan tâm! Mình là trợ lý AI nên không có sức khỏe để lo, nhưng mình luôn sẵn sàng giúp đỡ bạn. Bạn có khỏe không? 😊';
-    }
-    
-    if (lower.includes('xin chào') || lower.includes('hello')) {
-        return 'Xin chào bạn! Mình là Chiri, rất vui được trò chuyện với bạn. Bạn có thể hỏi mình bất cứ điều gì nhé! 💕';
-    }
-    
-    return `🤔 Mình hiểu bạn hỏi về "${userMessage}". Bạn có thể kết nối ChatGPT API để mình trả lời thông minh hơn nhé! Hiện tại mình đang ở chế độ cơ bản.`;
+    return `🤔 Mình chưa có thông tin về "${userMessage}". Bạn có thể cập nhật dữ liệu bằng PDF hoặc website cho mình học nhé!`;
 }
 
-// ========== XỬ LÝ CHAT CHÍNH ==========
+function delay(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+// ========== ESP32 FUNCTIONS ==========
+const esp32Clients = new Map();
+let conversationHistory = {};
+
+function sendToESP32(command) {
+    let sent = false;
+    for (const [id, client] of esp32Clients) {
+        if (client.readyState === WebSocket.OPEN) {
+            client.send(JSON.stringify({ type: 'command', command: command }));
+            console.log(`📤 GỬI LỆNH đến ESP32: ${command}`);
+            sent = true;
+        }
+    }
+    return sent;
+}
+
+function isControlCommand(text) {
+    const controlWords = ['tiến', 'lùi', 'trái', 'phải', 'dừng', 'forward', 'back', 'left', 'right', 'stop'];
+    return controlWords.some(word => text.toLowerCase().includes(word));
+}
+
+function getESP32Command(text) {
+    const lower = text.toLowerCase();
+    if (lower.includes('tiến')) return 'FORWARD';
+    if (lower.includes('lùi')) return 'BACKWARD';
+    if (lower.includes('trái')) return 'LEFT';
+    if (lower.includes('phải')) return 'RIGHT';
+    if (lower.includes('dừng')) return 'STOP';
+    return null;
+}
+
+// ========== XỬ LÝ CHAT CHÍNH (ƯU TIÊN DỮ LIỆU RIÊNG) ==========
 async function processUserMessage(userText, driveMode, sessionId) {
     console.log(`🔍 [${sessionId}] Xử lý: "${userText}" | driveMode = ${driveMode}`);
     
+    // Chế độ điều khiển xe
     if (driveMode === true) {
         if (isControlCommand(userText)) {
             const command = getESP32Command(userText);
@@ -143,37 +376,125 @@ async function processUserMessage(userText, driveMode, sessionId) {
                     'BACKWARD': '🚗 Xe đang lùi lại!',
                     'LEFT': '🚗 Xe đang rẽ trái!',
                     'RIGHT': '🚗 Xe đang rẽ phải!',
-                    'STOP': '🚗 Xe đã dừng lại!',
-                    'SPEED_UP': '🚗 Đang tăng tốc độ!',
-                    'SLOW_DOWN': '🚗 Đang giảm tốc độ!'
+                    'STOP': '🚗 Xe đã dừng lại!'
                 };
-                return replies[command] || '🚗 Đã nhận lệnh điều khiển xe!';
+                return replies[command] || '🚗 Đã nhận lệnh!';
             }
         }
-        return `🚫 Mình đang ở chế độ điều khiển xe. Vui lòng nói: TIẾN, LÙI, TRÁI, PHẢI, DỪNG. Hoặc nhấn "TẮT CHẾ ĐỘ XE" để trò chuyện tự do nhé!`;
+        return `🚫 Đang ở chế độ xe. Vui lòng nói: TIẾN, LÙI, TRÁI, PHẢI, DỪNG.`;
     }
+    
+    // ====== CHẾ ĐỘ TRÒ CHUYỆN - ƯU TIÊN DỮ LIỆU RIÊNG ======
+    
+    // 1. Tìm kiếm trong dữ liệu riêng
+    console.log('🔍 Tìm kiếm trong dữ liệu riêng...');
+    const searchResults = searchInCustomKnowledge(userText);
+    
+    let customAnswer = null;
+    let customContext = '';
+    
+    if (searchResults.length > 0) {
+        customAnswer = generateAnswerFromKnowledge(userText, searchResults);
+        if (customAnswer && customAnswer.confidence === 'high') {
+            console.log('✅ TÌM THẤY trong dữ liệu riêng (độ tin cậy cao)');
+            return customAnswer.answer;
+        }
+        if (customAnswer) {
+            customContext = searchResults.map(r => r.content).join('\n\n');
+            console.log(`📖 Tìm thấy ${searchResults.length} kết quả liên quan, sẽ dùng làm context cho ChatGPT`);
+        }
+    }
+    
+    // 2. Nếu không có hoặc độ tin cậy thấp, gọi ChatGPT kèm context
+    console.log('🤖 Gọi ChatGPT với context từ dữ liệu riêng...');
     
     if (!conversationHistory[sessionId]) {
         conversationHistory[sessionId] = [];
     }
     
     conversationHistory[sessionId].push({ role: 'user', content: userText });
-    let aiReply = await callChatGPT(userText, conversationHistory[sessionId]);
+    
+    let aiReply = await callChatGPT(userText, conversationHistory[sessionId], customContext);
+    
     conversationHistory[sessionId].push({ role: 'assistant', content: aiReply });
     
     if (conversationHistory[sessionId].length > 20) {
         conversationHistory[sessionId] = conversationHistory[sessionId].slice(-20);
     }
     
+    // Thêm ghi chú nếu có dùng dữ liệu riêng
+    if (customContext) {
+        aiReply += `\n\n📌 *Thông tin trên có tham khảo từ dữ liệu của tôi.*`;
+    }
+    
     return aiReply;
 }
+
+// ========== API: CẬP NHẬT DỮ LIỆU MỚI ==========
+app.post('/update-knowledge', express.json(), async (req, res) => {
+    const { pdfUrl, websiteUrl } = req.body;
+    
+    try {
+        if (pdfUrl) {
+            // Parse Google Drive URL để lấy ID
+            let fileId = pdfUrl;
+            const match = pdfUrl.match(/\/d\/(.+?)\//);
+            if (match) fileId = match[1];
+            
+            const content = await downloadFromGoogleDrive(fileId);
+            if (content) {
+                const chunks = splitTextIntoChunks(content);
+                for (const chunk of chunks) {
+                    customKnowledge.push({
+                        source: `PDF: ${pdfUrl}`,
+                        type: 'pdf',
+                        title: 'Tài liệu mới',
+                        content: chunk,
+                        keywords: extractKeywords(chunk)
+                    });
+                }
+                res.json({ success: true, message: `Đã thêm ${chunks.length} đoạn kiến thức mới!` });
+            } else {
+                res.json({ success: false, message: 'Không thể tải PDF' });
+            }
+        } else if (websiteUrl) {
+            const data = await crawlWebsite(websiteUrl);
+            if (data) {
+                const chunks = splitTextIntoChunks(data.content);
+                for (const chunk of chunks) {
+                    customKnowledge.push({
+                        source: websiteUrl,
+                        type: 'website',
+                        title: data.title,
+                        content: chunk,
+                        keywords: extractKeywords(chunk)
+                    });
+                }
+                res.json({ success: true, message: `Đã crawl và thêm ${chunks.length} đoạn từ website!` });
+            } else {
+                res.json({ success: false, message: 'Không thể crawl website' });
+            }
+        } else {
+            res.json({ success: false, message: 'Vui lòng cung cấp pdfUrl hoặc websiteUrl' });
+        }
+    } catch (error) {
+        res.json({ success: false, message: error.message });
+    }
+});
+
+// ========== API: XEM DỮ LIỆU ĐÃ HỌC ==========
+app.get('/knowledge-stats', (req, res) => {
+    res.json({
+        totalChunks: customKnowledge.length,
+        sources: [...new Set(customKnowledge.map(k => k.source))],
+        knowledgeSource: knowledgeSource
+    });
+});
 
 // ========== TTS ENDPOINT ==========
 app.get('/tts', async (req, res) => {
     const text = req.query.text;
-    if (!text) {
-        return res.status(400).send('Missing text');
-    }
+    if (!text) return res.status(400).send('Missing text');
     
     if (openai && process.env.OPENAI_API_KEY) {
         try {
@@ -183,24 +504,21 @@ app.get('/tts', async (req, res) => {
                 input: text,
                 speed: 1.0,
             });
-            
             const buffer = Buffer.from(await mp3.arrayBuffer());
             res.setHeader('Content-Type', 'audio/mpeg');
             res.send(buffer);
             return;
         } catch (error) {
-            console.error('OpenAI TTS error:', error.message);
+            console.error('TTS error:', error.message);
         }
     }
-    
     res.status(404).send('TTS not available');
 });
 
 app.get('/health', (req, res) => {
-    res.status(200).json({ 
+    res.json({ 
         status: 'ok', 
-        timestamp: new Date().toISOString(),
-        esp32Clients: esp32Clients.size,
+        customKnowledgeCount: customKnowledge.length,
         chatGPTReady: !!(openai && process.env.OPENAI_API_KEY)
     });
 });
@@ -211,7 +529,7 @@ wss.on('connection', (ws, req) => {
     const clientId = Date.now() + '-' + Math.random().toString(36).substr(2, 6);
     let sessionId = clientId;
     
-    console.log(`🔌 ${isESP32 ? 'ESP32' : 'WEB'} client ${clientId} kết nối`);
+    console.log(`🔌 ${isESP32 ? 'ESP32' : 'WEB'} client kết nối`);
     
     const pingInterval = setInterval(() => {
         if (ws.readyState === WebSocket.OPEN) ws.ping();
@@ -227,23 +545,8 @@ wss.on('connection', (ws, req) => {
             const data = JSON.parse(message);
             
             if (data.type === 'voice') {
-                const userText = data.text;
-                const driveMode = data.driveMode === true;
-                console.log(`🎤 [${sessionId.substring(0,8)}] Nhận: "${userText}" | driveMode=${driveMode}`);
-                
-                const reply = await processUserMessage(userText, driveMode, sessionId);
-                console.log(`💬 [${sessionId.substring(0,8)}] Trả lời: "${reply.substring(0, 80)}..."`);
-                
+                const reply = await processUserMessage(data.text, data.driveMode === true, sessionId);
                 ws.send(JSON.stringify({ type: 'ai', text: reply }));
-            }
-            
-            if (data.type === 'clear_history') {
-                delete conversationHistory[sessionId];
-                ws.send(JSON.stringify({ type: 'system', message: '🗑️ Đã xóa lịch sử hội thoại!' }));
-            }
-            
-            if (data.type === 'esp32_status') {
-                console.log(`📡 ESP32: ${data.status}`);
             }
         } catch(e) {
             console.error('Lỗi xử lý:', e.message);
@@ -251,20 +554,24 @@ wss.on('connection', (ws, req) => {
     });
     
     ws.on('close', () => {
-        console.log(`🔌 Client ${clientId} ngắt`);
         clearInterval(pingInterval);
         if (esp32Clients.has(clientId)) esp32Clients.delete(clientId);
-        setTimeout(() => {
-            delete conversationHistory[sessionId];
-        }, 300000);
     });
 });
 
+// ========== KHỞI ĐỘNG ==========
 const PORT = process.env.PORT || 8080;
-server.listen(PORT, '0.0.0.0', () => {
-    console.log(`\n🚀 CHIRI AI 2.0 - SMART MODE`);
-    console.log(`📍 http://localhost:${PORT}`);
-    console.log(`🔌 WebSocket: ws://localhost:${PORT}`);
-    console.log(`🎤 Chế độ trò chuyện: ${openai && process.env.OPENAI_API_KEY ? 'CHATGPT THÔNG MINH ✅' : 'OFFLINE CƠ BẢN ⚠️'}`);
-    console.log(`🚗 Chế độ điều khiển xe: sẵn sàng\n`);
-});
+
+// Tải dữ liệu riêng trước khi khởi động server
+async function startServer() {
+    await loadCustomKnowledge();
+    
+    server.listen(PORT, '0.0.0.0', () => {
+        console.log(`\n🚀 CHIRI AI - RAG Mode`);
+        console.log(`📍 http://localhost:${PORT}`);
+        console.log(`📚 Dữ liệu riêng: ${customKnowledge.length} đoạn kiến thức`);
+        console.log(`🤖 ChatGPT: ${openai && process.env.OPENAI_API_KEY ? 'Sẵn sàng' : 'Không có API key'}\n`);
+    });
+}
+
+startServer();
