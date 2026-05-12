@@ -8,29 +8,21 @@
 </head>
 <body>
     <div class="container">
-        <!-- Trạng thái -->
         <div class="wake-badge">
             <div class="wake-dot" id="wakeDot"></div>
             <span id="wakeText">😴 Đang ngủ</span>
         </div>
         <div class="sleep-timer" id="sleepTimer">😴 Sẽ ngủ sau 2:00</div>
 
-        <!-- Khuôn mặt robot Chiri với các bộ phận riêng biệt -->
         <div class="robot-section">
             <div class="robot-avatar">
                 <svg class="robot-svg" viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg">
-                    <!-- Tai trái -->
                     <circle cx="90" cy="100" r="40" fill="#FFB347" stroke="#E67E22" stroke-width="3"/>
                     <circle cx="90" cy="100" r="20" fill="#FF8C42" opacity="0.5"/>
-                    
-                    <!-- Tai phải -->
                     <circle cx="310" cy="100" r="40" fill="#FFB347" stroke="#E67E22" stroke-width="3"/>
                     <circle cx="310" cy="100" r="20" fill="#FF8C42" opacity="0.5"/>
-                    
-                    <!-- Đầu chính -->
                     <ellipse cx="200" cy="210" rx="125" ry="135" fill="#FFD699" stroke="#E67E22" stroke-width="4"/>
                     
-                    <!-- Mắt trái -->
                     <g id="leftEye">
                         <ellipse cx="145" cy="195" rx="32" ry="36" fill="white" stroke="#333" stroke-width="3" class="robot-eye"/>
                         <circle cx="152" cy="195" r="16" fill="#2C3E50" class="pupil"/>
@@ -38,7 +30,6 @@
                         <circle cx="158" cy="200" r="3" fill="white" opacity="0.5" class="eye-star"/>
                     </g>
                     
-                    <!-- Mắt phải -->
                     <g id="rightEye">
                         <ellipse cx="255" cy="195" rx="32" ry="36" fill="white" stroke="#333" stroke-width="3" class="robot-eye"/>
                         <circle cx="262" cy="195" r="16" fill="#2C3E50" class="pupil"/>
@@ -46,28 +37,16 @@
                         <circle cx="268" cy="200" r="3" fill="white" opacity="0.5" class="eye-star"/>
                     </g>
                     
-                    <!-- Lông mày trái -->
                     <path id="leftEyebrow" d="M115 155 Q145 140 175 155" stroke="#5D4037" stroke-width="7" fill="none" stroke-linecap="round" class="robot-eyebrow"/>
-                    
-                    <!-- Lông mày phải -->
                     <path id="rightEyebrow" d="M225 155 Q255 140 285 155" stroke="#5D4037" stroke-width="7" fill="none" stroke-linecap="round" class="robot-eyebrow"/>
                     
-                    <!-- Mũi -->
                     <ellipse cx="200" cy="235" rx="14" ry="10" fill="#E67E22" opacity="0.8"/>
-                    
-                    <!-- Miệng - đã tách riêng để animation -->
                     <path id="mouth" d="M165 275 Q200 315 235 275" stroke="#5D4037" stroke-width="5" fill="none" stroke-linecap="round" class="robot-mouth"/>
-                    
-                    <!-- Lưỡi (khi vui) -->
                     <path id="tongue" d="M190 295 Q200 310 210 295" fill="#FF6B6B" opacity="0"/>
                     
-                    <!-- Má hồng trái -->
                     <ellipse cx="105" cy="245" rx="20" ry="14" fill="#FF9999" opacity="0.5"/>
-                    
-                    <!-- Má hồng phải -->
                     <ellipse cx="295" cy="245" rx="20" ry="14" fill="#FF9999" opacity="0.5"/>
                     
-                    <!-- Tàn nhang -->
                     <circle cx="170" cy="265" r="2" fill="#D2691E" opacity="0.4"/>
                     <circle cx="178" cy="270" r="2" fill="#D2691E" opacity="0.4"/>
                     <circle cx="220" cy="265" r="2" fill="#D2691E" opacity="0.4"/>
@@ -78,12 +57,10 @@
             <div class="status-text" id="statusText">🎤 Nói "Xin chào" hoặc "Hello" để đánh thức</div>
         </div>
 
-        <!-- Nút bật/tắt chế độ điều khiển xe -->
         <div class="drive-toggle">
             <button class="drive-btn" id="driveModeBtn">🚗 BẬT CHẾ ĐỘ ĐIỀU KHIỂN XE</button>
         </div>
 
-        <!-- Gợi ý câu lệnh -->
         <div class="wake-examples">
             <span class="wake-example">🗣️ "Xin chào"</span>
             <span class="wake-example">🗣️ "Hello"</span>
@@ -91,7 +68,6 @@
             <span class="wake-example drive-hint" id="driveHint">🚗 "Tiến, Lùi, Trái, Phải, Dừng"</span>
         </div>
 
-        <!-- Khung chat -->
         <div class="chat-section">
             <div class="chat-box" id="chatBox">
                 <div class="message ai">
@@ -102,14 +78,12 @@
         
         <div class="tip">💡 Mẹo: Nói "Xin chào", "Hello" để đánh thức. Sau 2 phút im lặng, Chiri sẽ tự ngủ. Khi bật chế độ xe, robot sẽ chỉ nhận lệnh điều khiển. Khi tắt chế độ xe, robot sẽ trò chuyện thông minh như AI.</div>
 
-        <!-- Nút đánh thức thủ công -->
         <div class="manual-wake" id="manualWake">
             <svg viewBox="0 0 24 24">
                 <path d="M12 16c-2.21 0-4-1.79-4-4V6c0-2.21 1.79-4 4-4s4 1.79 4 4v6c0 2.21-1.79 4-4 4zm-6-4c0 .66.54 1.2 1.2 1.2h.6c.66 0 1.2-.54 1.2-1.2V6c0-.66-.54-1.2-1.2-1.2h-.6c-.66 0-1.2.54-1.2 1.2v6zm12 0c0 .66.54 1.2 1.2 1.2h.6c.66 0 1.2-.54 1.2-1.2V6c0-.66-.54-1.2-1.2-1.2h-.6c-.66 0-1.2.54-1.2 1.2v6z"/>
             </svg>
         </div>
     </div>
-
     <script src="script.js"></script>
 </body>
 </html>
