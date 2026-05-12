@@ -17,9 +17,9 @@ try {
         apiKey: process.env.OPENAI_API_KEY,
     });
     if (process.env.OPENAI_API_KEY) {
-        console.log('✅ OpenAI API Key đã được cấu hình');
+        console.log('✅ OpenAI API Key đã được cấu hình - ChatGPT mode sẵn sàng');
     } else {
-        console.log('⚠️ Chưa có OPENAI_API_KEY');
+        console.log('⚠️ CHƯA CÓ OPENAI_API_KEY! Chat sẽ hoạt động giới hạn');
     }
 } catch (err) {
     console.error('❌ Lỗi khởi tạo OpenAI:', err.message);
@@ -27,7 +27,7 @@ try {
 
 // ========== LƯU ESP32 CLIENTS ==========
 const esp32Clients = new Map();
-let conversationHistory = [];
+let conversationHistory = []; // Lịch sử hội thoại cho context
 
 // ========== HÀM GỬI LỆNH ESP32 ==========
 function sendToESP32(command) {
@@ -45,7 +45,7 @@ function sendToESP32(command) {
     return sent;
 }
 
-// ========== NHẬN DIỆN LỆNH ==========
+// ========== NHẬN DIỆN LỆNH ĐIỀU KHIỂN XE ==========
 function isControlCommand(text) {
     const lowerText = text.toLowerCase();
     const controlWords = [
@@ -72,102 +72,80 @@ function getESP32Command(text) {
     return null;
 }
 
-// ========== HÀM TRẢ LỜI THÔNG MINH ==========
-function getSmartReply(userMessage) {
-    const lower = userMessage.toLowerCase().trim();
-    
-    // Loại bỏ các câu nhận diện sai (quá ngắn hoặc vô nghĩa)
-    if (lower.length < 3) {
-        return "Mình chưa nghe rõ bạn nói gì. Bạn có thể nói to và rõ hơn được không ạ? 🎤";
+// ========== HÀM GỌI CHATGPT API (CHO MỌI CÂU HỎI) ==========
+async function callChatGPT(userMessage, history = []) {
+    if (!openai || !process.env.OPENAI_API_KEY) {
+        console.log('⚠️ Không có ChatGPT API, dùng chế độ offline');
+        return getOfflineReply(userMessage);
     }
     
-    // Từ khóa vô nghĩa thường gặp do nhận diện sai
-    const invalidPhrases = ['đại chi', 'chi đi đây', 'ạ chi', 'đi đây ạ', 'ấy ạ', 'e ơi'];
-    for (const phrase of invalidPhrases) {
-        if (lower.includes(phrase)) {
-            return "Mình xin lỗi, mình chưa nghe rõ câu hỏi của bạn. Bạn có thể nói chậm và rõ hơn được không ạ? Ví dụ: 'nhiệt độ mặt trăng bao nhiêu' hoặc 'tiến' để điều khiển xe nhé! 🎯";
-        }
+    try {
+        console.log(`🤖 Gọi ChatGPT cho câu hỏi: "${userMessage.substring(0, 50)}..."`);
+        
+        // Xây dựng system prompt - tạo personality cho robot
+        const systemPrompt = `Bạn là Chiri - một trợ lý AI thông minh, thân thiện, dễ thương. 
+Nhiệm vụ của bạn:
+- Trả lời MỌI câu hỏi của người dùng một cách chính xác, hữu ích và vui vẻ
+- Giọng điệu: thân thiện, nhiệt tình, dùng cả icon cảm xúc (❤️, 😊, 🚀, v.v.)
+- Nếu không biết câu trả lời, hãy thành thật nói "Mình chưa rõ lắm" và hướng dẫn người dùng tìm kiếm
+- Trả lời bằng TIẾNG VIỆT
+- Luôn giữ thái độ tích cực, sẵn sàng giúp đỡ
+
+Lưu ý: Bạn không cần nhắc về chế độ điều khiển xe trừ khi người dùng hỏi về nó.`;
+
+        // Gọi ChatGPT API
+        const completion = await openai.chat.completions.create({
+            model: 'gpt-3.5-turbo', // hoặc 'gpt-4' nếu có
+            messages: [
+                { role: 'system', content: systemPrompt },
+                ...history.slice(-10), // Giữ 10 tin nhắn gần nhất làm context
+                { role: 'user', content: userMessage }
+            ],
+            max_tokens: 500,          // Độ dài câu trả lời tối đa
+            temperature: 0.7,         // Sáng tạo vừa phải
+        });
+        
+        const reply = completion.choices[0].message.content;
+        console.log(`💬 ChatGPT trả lời: "${reply.substring(0, 80)}..."`);
+        return reply;
+        
+    } catch (error) {
+        console.error('❌ Lỗi gọi ChatGPT:', error.message);
+        return `😅 Mình xin lỗi, hiện tại mình đang gặp chút vấn đề kết nối. ${getOfflineReply(userMessage)}`;
     }
-    
-    // ====== CÂU HỎI VỀ MẶT TRĂNG ======
-    if (lower.includes('mặt trăng') || lower.includes('mặt trăng')) {
-        if (lower.includes('nhiệt độ') || lower.includes('bao nhiêu độ') || lower.includes('nóng') || lower.includes('lạnh')) {
-            return '🌙 Nhiệt độ trên Mặt Trăng rất khắc nghiệt! Ban ngày (kéo dài 14 ngày Trái Đất) nhiệt độ lên tới 127°C, còn ban đêm (14 ngày) nhiệt độ giảm xuống -173°C. Chênh lệch lên đến 300°C bạn ạ!';
-        }
-        if (lower.includes('xa') || lower.includes('khoảng cách')) {
-            return '🌙 Khoảng cách từ Trái Đất đến Mặt Trăng trung bình là 384.400 km. Ánh sáng từ Mặt Trăng mất khoảng 1,28 giây để đến được mắt chúng ta!';
-        }
-        if (lower.includes('nặng') || lower.includes('khối lượng')) {
-            return '🌙 Khối lượng của Mặt Trăng là 7.35 × 10^22 kg, bằng khoảng 1/81 khối lượng Trái Đất!';
-        }
-        return '🌙 Mặt Trăng là vệ tinh tự nhiên duy nhất của Trái Đất. Bạn muốn hỏi về nhiệt độ, khoảng cách hay khối lượng của Mặt Trăng ạ?';
-    }
-    
-    // ====== CÂU HỎI VỀ MẶT TRỜI ======
-    if (lower.includes('mặt trời') || lower.includes('mặt trời')) {
-        if (lower.includes('nhiệt độ') || lower.includes('bao nhiêu độ')) {
-            return '☀️ Nhiệt độ bề mặt Mặt Trời khoảng 5.500°C, còn lõi Mặt Trời lên tới 15 triệu độ C! Nóng đến mức có thể làm tan chảy mọi thứ bạn ạ!';
-        }
-        if (lower.includes('lớn') || lower.includes('đường kính')) {
-            return '☀️ Mặt Trời có đường kính khoảng 1.39 triệu km, gấp 109 lần Trái Đất và có thể chứa được 1.3 triệu Trái Đất bên trong!';
-        }
-        return '☀️ Mặt Trời là ngôi sao ở trung tâm Hệ Mặt Trời. Bạn muốn hỏi về nhiệt độ hay kích thước của Mặt Trời ạ?';
-    }
-    
-    // ====== CÂU HỎI VỀ TRÁI ĐẤT ======
-    if (lower.includes('trái đất') || lower.includes('trái đất')) {
-        if (lower.includes('nặng') || lower.includes('khối lượng')) {
-            return '🌍 Trái Đất có khối lượng khoảng 5,97 × 10^24 kg, tương đương gần 6 triệu tỉ tỉ kilogam đó bạn!';
-        }
-        if (lower.includes('tuổi')) {
-            return '🌍 Trái Đất khoảng 4.54 tỷ năm tuổi, được hình thành cùng với Hệ Mặt Trời!';
-        }
-        if (lower.includes('nước')) {
-            return '💧 Khoảng 71% bề mặt Trái Đất được bao phủ bởi nước, nhưng chỉ có 2.5% là nước ngọt bạn nhé!';
-        }
-        return '🌍 Trái Đất là hành tinh thứ ba từ Mặt Trời, là nơi duy nhất có sự sống. Bạn muốn hỏi gì về Trái Đất?';
-    }
-    
-    // ====== CÁC HÀNH TINH KHÁC ======
-    if (lower.includes('sao hỏa') || lower.includes('sao hoả')) {
-        return '🔴 Sao Hỏa còn gọi là "Hành tinh Đỏ". Nhiệt độ trung bình khoảng -63°C, có thể xuống tới -140°C vào mùa đông ở hai cực!';
-    }
-    if (lower.includes('sao kim')) {
-        return '🟡 Sao Kim có nhiệt độ bề mặt lên tới 470°C, nóng hơn cả Sao Thủy dù ở xa Mặt Trời hơn! Do hiệu ứng nhà kính cực mạnh.';
-    }
-    if (lower.includes('sao mộc')) {
-        return '🪐 Sao Mộc là hành tinh lớn nhất Hệ Mặt Trời. Nhiệt độ đỉnh mây khoảng -145°C, nhưng lõi có thể lên tới 24.000°C!';
-    }
-    
-    // ====== CHÀO HỎI ======
-    if (lower.includes('xin chào') || lower.includes('hello') || lower.includes('chào chiri')) {
-        return 'Xin chào bạn! Mình là Chiri, rất vui được trò chuyện với bạn. Bạn có thể hỏi mình về nhiệt độ Mặt Trăng, Mặt Trời, hoặc bật chế độ xe để điều khiển xe bằng giọng nói nhé! 💕';
-    }
-    
-    if (lower.includes('cảm ơn')) {
-        return 'Không có gì đâu ạ! Rất vui khi được giúp bạn. Có gì cần hỏi thêm không ạ? 💖';
-    }
-    
-    if (lower.includes('tạm biệt') || lower.includes('bye')) {
-        return 'Tạm biệt bạn nhé! Hẹn gặp lại. Hãy gọi "Xin chào" khi cần mình nhé! 👋';
-    }
-    
-    // ====== HỎI VỀ KHẢ NĂNG ======
-    if (lower.includes('làm được gì') || lower.includes('có thể làm')) {
-        return 'Mình có thể:\n📚 Trả lời câu hỏi về Mặt Trăng, Mặt Trời, Trái Đất\n🚗 Điều khiển xe (tiến, lùi, trái, phải, dừng)\n💬 Trò chuyện thông minh\n🌡️ Cho biết nhiệt độ, kích thước các hành tinh\nBạn muốn thử gì nào?';
-    }
-    
-    // ====== MẶC ĐỊNH - GỢI Ý ======
-    return `🤔 Mình chưa rõ câu hỏi "${userMessage}" lắm. Bạn có thể hỏi mình về:\n\n• Nhiệt độ Mặt Trăng bao nhiêu?\n• Mặt Trời nóng bao nhiêu độ?\n• Trái Đất nặng bao nhiêu?\n• Khối lượng Mặt Trăng?\n\nHoặc bật chế độ xe để ra lệnh: tiến, lùi, trái, phải, dừng nhé! 🚀`;
 }
 
-// ========== XỬ LÝ CHAT ==========
-async function processUserMessage(userText, driveMode) {
-    console.log(`🔍 Xử lý: "${userText}" | driveMode = ${driveMode}`);
+// ========== HÀM DỰ PHÒNG KHI MẤT INTERNET HOẶC API KEY ==========
+function getOfflineReply(userMessage) {
+    const lower = userMessage.toLowerCase();
     
+    // Câu hỏi về tuổi thọ
+    if (lower.includes('tuổi thọ') || lower.includes('sống bao lâu')) {
+        return '👨‍👩‍👧‍👦 Tuổi thọ trung bình của con người hiện nay khoảng 73-85 tuổi. Ở Việt Nam là khoảng 73-75 tuổi. Người Nhật sống thọ nhất thế giới với 84-87 tuổi. Yếu tố ảnh hưởng: chế độ ăn, tập thể dục, gen di truyền và môi trường sống bạn nhé! 💚';
+    }
+    
+    // Câu hỏi về nhiệt độ
+    if (lower.includes('nhiệt độ') && lower.includes('mặt trăng')) {
+        return '🌙 Nhiệt độ Mặt Trăng ban ngày lên tới 127°C, ban đêm xuống -173°C!';
+    }
+    
+    // Chào hỏi
+    if (lower.includes('xin chào') || lower.includes('hello')) {
+        return 'Xin chào bạn! Mình là Chiri, rất vui được trò chuyện với bạn. Bạn có thể hỏi mình bất cứ điều gì nhé! 💕';
+    }
+    
+    // Mặc định
+    return `🤔 Mình hiểu bạn hỏi về "${userMessage}". Bạn có thể kết nối ChatGPT API để mình trả lời thông minh hơn nhé! Hiện tại mình đang ở chế độ cơ bản.`;
+}
+
+// ========== XỬ LÝ CHAT CHÍNH ==========
+async function processUserMessage(userText, driveMode, sessionId) {
+    console.log(`🔍 [${sessionId}] Xử lý: "${userText}" | driveMode = ${driveMode}`);
+    
+    // ====== CHẾ ĐỘ ĐIỀU KHIỂN XE ======
     if (driveMode === true) {
-        const isCommand = isControlCommand(userText);
-        if (isCommand) {
+        // Ưu tiên nhận diện lệnh xe
+        if (isControlCommand(userText)) {
             const command = getESP32Command(userText);
             if (command) {
                 sendToESP32(command);
@@ -183,20 +161,41 @@ async function processUserMessage(userText, driveMode) {
                 return replies[command] || '🚗 Đã nhận lệnh điều khiển xe!';
             }
         }
-        return `🚫 Chiri đang ở chế độ điều khiển xe. Vui lòng nói: tiến, lùi, trái, phải, dừng. Hoặc nhấn nút "TẮT CHẾ ĐỘ XE" để trò chuyện nhé!`;
+        // Không phải lệnh xe - vẫn ở chế độ xe
+        return `🚫 Mình đang ở chế độ điều khiển xe. Vui lòng nói: TIẾN, LÙI, TRÁI, PHẢI, DỪNG. Hoặc nhấn "TẮT CHẾ ĐỘ XE" để trò chuyện tự do nhé!`;
     }
     
-    return getSmartReply(userText);
+    // ====== CHẾ ĐỘ TRÒ CHUYỆN TỰ DO ======
+    // Lưu lịch sử hội thoại cho từng session
+    if (!conversationHistory[sessionId]) {
+        conversationHistory[sessionId] = [];
+    }
+    
+    // Thêm tin nhắn người dùng vào lịch sử
+    conversationHistory[sessionId].push({ role: 'user', content: userText });
+    
+    // Gọi ChatGPT (hoặc offline nếu lỗi)
+    let aiReply = await callChatGPT(userText, conversationHistory[sessionId]);
+    
+    // Thêm phản hồi của AI vào lịch sử
+    conversationHistory[sessionId].push({ role: 'assistant', content: aiReply });
+    
+    // Giới hạn lịch sử để tránh quá dài (giữ 20 tin nhắn = 10 lượt)
+    if (conversationHistory[sessionId].length > 20) {
+        conversationHistory[sessionId] = conversationHistory[sessionId].slice(-20);
+    }
+    
+    return aiReply;
 }
 
-// ========== TTS - QUAN TRỌNG: PHẢI CÓ API NÀY ==========
+// ========== TTS - TEXT TO SPEECH ==========
 app.get('/tts', async (req, res) => {
     const text = req.query.text;
     if (!text) {
         return res.status(400).send('Missing text');
     }
     
-    // Nếu có OpenAI và API key, dùng TTS chất lượng cao
+    // Dùng OpenAI TTS nếu có API key
     if (openai && process.env.OPENAI_API_KEY) {
         try {
             const mp3 = await openai.audio.speech.create({
@@ -215,9 +214,8 @@ app.get('/tts', async (req, res) => {
         }
     }
     
-    // Fallback: Tạo file âm thanh giả lập bằng Web Speech (client sẽ xử lý)
-    res.setHeader('Content-Type', 'audio/mpeg');
-    res.status(503).send('TTS not available, using browser speech');
+    // Fallback: trả về JSON để client dùng Web Speech API
+    res.json({ fallback: true, text: text });
 });
 
 // ========== HEALTH CHECK ==========
@@ -225,7 +223,8 @@ app.get('/health', (req, res) => {
     res.status(200).json({ 
         status: 'ok', 
         timestamp: new Date().toISOString(),
-        esp32Clients: esp32Clients.size
+        esp32Clients: esp32Clients.size,
+        chatGPTReady: !!(openai && process.env.OPENAI_API_KEY)
     });
 });
 
@@ -233,6 +232,7 @@ app.get('/health', (req, res) => {
 wss.on('connection', (ws, req) => {
     const isESP32 = req.headers['user-agent']?.includes('ESP32') || false;
     const clientId = Date.now() + '-' + Math.random().toString(36).substr(2, 6);
+    let sessionId = clientId; // Mỗi client có lịch sử chat riêng
     
     console.log(`🔌 ${isESP32 ? 'ESP32' : 'WEB'} client ${clientId} kết nối`);
     
@@ -252,12 +252,17 @@ wss.on('connection', (ws, req) => {
             if (data.type === 'voice') {
                 const userText = data.text;
                 const driveMode = data.driveMode === true;
-                console.log(`🎤 Nhận: "${userText}" | driveMode=${driveMode}`);
+                console.log(`🎤 [${sessionId.substring(0,8)}] Nhận: "${userText}" | driveMode=${driveMode}`);
                 
-                const reply = await processUserMessage(userText, driveMode);
-                console.log(`💬 Trả lời: "${reply.substring(0, 80)}"`);
+                const reply = await processUserMessage(userText, driveMode, sessionId);
+                console.log(`💬 [${sessionId.substring(0,8)}] Trả lời: "${reply.substring(0, 80)}..."`);
                 
                 ws.send(JSON.stringify({ type: 'ai', text: reply }));
+            }
+            
+            if (data.type === 'clear_history') {
+                delete conversationHistory[sessionId];
+                ws.send(JSON.stringify({ type: 'system', message: '🗑️ Đã xóa lịch sử hội thoại!' }));
             }
             
             if (data.type === 'esp32_status') {
@@ -272,6 +277,10 @@ wss.on('connection', (ws, req) => {
         console.log(`🔌 Client ${clientId} ngắt`);
         clearInterval(pingInterval);
         if (esp32Clients.has(clientId)) esp32Clients.delete(clientId);
+        // Xóa lịch sử sau 5 phút (có thể giữ lại)
+        setTimeout(() => {
+            delete conversationHistory[sessionId];
+        }, 300000);
     });
 });
 
@@ -279,7 +288,9 @@ wss.on('connection', (ws, req) => {
 const PORT = process.env.PORT || 8080;
 
 server.listen(PORT, '0.0.0.0', () => {
-    console.log(`\n🚀 CHIRI AI chạy tại http://localhost:${PORT}`);
-    console.log(`✅ WebSocket: ws://localhost:${PORT}`);
-    console.log(`🎤 Voice control sẵn sàng!\n`);
+    console.log(`\n🚀 CHIRI AI 2.0 - SMART MODE`);
+    console.log(`📍 http://localhost:${PORT}`);
+    console.log(`🔌 WebSocket: ws://localhost:${PORT}`);
+    console.log(`🎤 Chế độ trò chuyện: ${openai && process.env.OPENAI_API_KEY ? 'CHATGPT THÔNG MINH ✅' : 'OFFLINE CƠ BẢN ⚠️'}`);
+    console.log(`🚗 Chế độ điều khiển xe: sẵn sàng\n`);
 });
