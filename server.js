@@ -2,49 +2,80 @@ const express = require('express');
 const http = require('http');
 const WebSocket = require('ws');
 const path = require('path');
-const OpenAI = require('openai');
 const fs = require('fs');
-const pdfParse = require('pdf-parse');
-const axios = require('axios');
-const cheerio = require('cheerio');
+
+// ========== LOAD MODULES WITH FALLBACK ==========
+let OpenAI;
+let pdfParse;
+let axios;
+let cheerio;
+
+try {
+    OpenAI = require('openai');
+    console.log('✅ OpenAI module loaded');
+} catch (e) {
+    console.log('⚠️ OpenAI module not available');
+}
+
+try {
+    pdfParse = require('pdf-parse');
+    console.log('✅ pdf-parse loaded');
+} catch (e) {
+    console.log('⚠️ pdf-parse not available, PDF features disabled');
+}
+
+try {
+    axios = require('axios');
+    console.log('✅ axios loaded');
+} catch (e) {
+    console.log('⚠️ axios not available, web crawling disabled');
+}
+
+try {
+    cheerio = require('cheerio');
+    console.log('✅ cheerio loaded');
+} catch (e) {
+    console.log('⚠️ cheerio not available, HTML parsing disabled');
+}
 
 const app = express();
 const server = http.createServer(app);
 const wss = new WebSocket.Server({ server });
 
 app.use(express.static(path.join(__dirname, '/')));
+app.use(express.json({ limit: '50mb' }));
 
 // ========== KHỞI TẠO OPENAI ==========
 let openai = null;
-try {
-    openai = new OpenAI({
-        apiKey: process.env.OPENAI_API_KEY,
-    });
-    console.log('✅ OpenAI API Key đã được cấu hình');
-} catch (err) {
-    console.error('❌ Lỗi khởi tạo OpenAI:', err.message);
+if (OpenAI && process.env.OPENAI_API_KEY) {
+    try {
+        openai = new OpenAI({
+            apiKey: process.env.OPENAI_API_KEY,
+        });
+        console.log('✅ OpenAI API Key configured - ChatGPT mode ready');
+    } catch (err) {
+        console.error('❌ OpenAI init error:', err.message);
+    }
+} else {
+    console.log('⚠️ No OPENAI_API_KEY, using simple reply mode');
 }
 
-// ========== DỮ LIỆU RIÊNG ==========
-let customKnowledge = []; // Lưu trữ nội dung đã học
-let knowledgeSource = ''; // Nguồn dữ liệu
+// ========== RAG KNOWLEDGE BASE ==========
+let customKnowledge = [];
+let knowledgeSource = '';
 
-// Cấu hình nguồn dữ liệu mặc định
-const DEFAULT_WEBSITES = [
-    'https://www.vard.com/vungtau',
-    'https://vi.wikipedia.org/wiki/L%E1%BB%87_Th%E1%BB%A7y_(ngh%E1%BB%87_s%C4%A9)',
-    'https://vi.wikipedia.org/wiki/Mặt_Trời'
-];
+// ========== GOOGLE DRIVE CONFIG ==========
+const GOOGLE_DRIVE_FILE_ID = process.env.GOOGLE_DRIVE_FILE_ID || '';
 
-// Google Drive file ID (chia sẻ công khai)
-// Ví dụ: https://drive.google.com/file/d/FILE_ID/view
-const GOOGLE_DRIVE_FILE_ID = process.env.GOOGLE_DRIVE_FILE_ID || '1RXqoUIQgb_UgvbjM8h3412OZdsxPAZPP';
-// ========== TẢI FILE TỪ GOOGLE DRIVE ==========
+// ========== DOWNLOAD FROM GOOGLE DRIVE ==========
 async function downloadFromGoogleDrive(fileId) {
+    if (!axios) {
+        console.log('⚠️ Axios not available, cannot download from Google Drive');
+        return null;
+    }
+    
     try {
-        console.log(`📥 Đang tải file từ Google Drive ID: ${fileId}`);
-        
-        // Lấy link tải trực tiếp từ Google Drive
+        console.log(`📥 Downloading from Google Drive ID: ${fileId}`);
         const downloadUrl = `https://drive.google.com/uc?export=download&id=${fileId}`;
         
         const response = await axios({
@@ -54,28 +85,35 @@ async function downloadFromGoogleDrive(fileId) {
             timeout: 30000
         });
         
-        // Kiểm tra xem có phải PDF không
         const buffer = Buffer.from(response.data);
         
-        // Thử parse PDF
-        try {
-            const pdfData = await pdfParse(buffer);
-            console.log(`✅ Đã tải PDF: ${pdfData.numpages} trang, ${pdfData.text.length} ký tự`);
-            return pdfData.text;
-        } catch (e) {
-            console.log('File không phải PDF, lưu dạng text');
+        if (pdfParse) {
+            try {
+                const pdfData = await pdfParse(buffer);
+                console.log(`✅ PDF loaded: ${pdfData.numpages} pages, ${pdfData.text.length} chars`);
+                return pdfData.text;
+            } catch (e) {
+                console.log('File is not PDF, treating as text');
+                return buffer.toString('utf-8');
+            }
+        } else {
             return buffer.toString('utf-8');
         }
     } catch (error) {
-        console.error('❌ Lỗi tải từ Google Drive:', error.message);
+        console.error('❌ Google Drive download error:', error.message);
         return null;
     }
 }
 
 // ========== CRAWL WEBSITE ==========
 async function crawlWebsite(url) {
+    if (!axios || !cheerio) {
+        console.log('⚠️ Axios or cheerio not available, cannot crawl website');
+        return null;
+    }
+    
     try {
-        console.log(`🕷️ Đang crawl: ${url}`);
+        console.log(`🕷️ Crawling: ${url}`);
         const response = await axios.get(url, {
             headers: {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
@@ -85,121 +123,77 @@ async function crawlWebsite(url) {
         
         const $ = cheerio.load(response.data);
         
-        // Xóa các element không cần thiết
-        $('script, style, nav, footer, header, .sidebar, .navigation').remove();
+        // Remove unnecessary elements
+        $('script, style, nav, footer, header, .sidebar, .navigation, iframe, .advertisement').remove();
         
-        // Lấy nội dung chính
+        // Get main content
         let content = '';
         
-        // Thử lấy nội dung từ các thẻ phổ biến
-        $('main, article, .content, .main-content, #content, p').each((i, el) => {
-            content += $(el).text().trim() + '\n';
-        });
+        // Try common content selectors
+        const selectors = ['main', 'article', '.content', '.main-content', '#content', '.post-content', '.entry-content'];
         
-        // Nếu không tìm thấy, lấy body
+        for (const selector of selectors) {
+            const elements = $(selector);
+            if (elements.length > 0) {
+                content = elements.text().trim();
+                break;
+            }
+        }
+        
+        // Fallback to body
         if (content.length < 100) {
             content = $('body').text();
         }
         
-        // Làm sạch văn bản
+        // Clean text
         content = content.replace(/\s+/g, ' ').trim();
         
-        console.log(`✅ Crawl thành công: ${content.length} ký tự`);
+        console.log(`✅ Crawled: ${content.length} chars from ${url}`);
+        
         return {
             url: url,
             title: $('title').text() || url,
             content: content
         };
     } catch (error) {
-        console.error(`❌ Lỗi crawl ${url}:`, error.message);
+        console.error(`❌ Crawl error ${url}:`, error.message);
         return null;
     }
 }
 
-// ========== CHIA NHỎ VĂN BẢN THÀNH CÁC ĐOẠN NHỎ ==========
-function splitTextIntoChunks(text, maxChunkSize = 1000) {
+// ========== SPLIT TEXT INTO CHUNKS ==========
+function splitTextIntoChunks(text, maxChunkSize = 800) {
+    if (!text) return [];
+    
     const chunks = [];
     const sentences = text.split(/[.!?]+/);
     
     let currentChunk = '';
     for (const sentence of sentences) {
-        if ((currentChunk + sentence).length < maxChunkSize) {
-            currentChunk += sentence + '. ';
+        const trimmed = sentence.trim();
+        if (trimmed.length === 0) continue;
+        
+        if ((currentChunk + ' ' + trimmed).length < maxChunkSize) {
+            currentChunk += (currentChunk ? ' ' : '') + trimmed + '.';
         } else {
-            if (currentChunk.trim()) chunks.push(currentChunk.trim());
-            currentChunk = sentence + '. ';
+            if (currentChunk) chunks.push(currentChunk.trim());
+            currentChunk = trimmed + '.';
         }
     }
-    if (currentChunk.trim()) chunks.push(currentChunk.trim());
+    if (currentChunk) chunks.push(currentChunk.trim());
     
     return chunks;
 }
 
-// ========== LƯU TRI THỨC ==========
-async function loadCustomKnowledge() {
-    console.log('\n📚 ĐANG TẢI DỮ LIỆU RIÊNG...\n');
-    
-    let allContent = [];
-    
-    // 1. Crawl các website mặc định
-    console.log('🌐 Crawl website mặc định...');
-    for (const url of DEFAULT_WEBSITES) {
-        const data = await crawlWebsite(url);
-        if (data) {
-            allContent.push({
-                source: url,
-                type: 'website',
-                title: data.title,
-                content: data.content
-            });
-        }
-        await delay(1000); // Tránh crawl quá nhanh
-    }
-    
-    // 2. Tải từ Google Drive (nếu có)
-    if (GOOGLE_DRIVE_FILE_ID) {
-        console.log('📁 Tải từ Google Drive...');
-        const pdfContent = await downloadFromGoogleDrive(GOOGLE_DRIVE_FILE_ID);
-        if (pdfContent) {
-            allContent.push({
-                source: `Google Drive (ID: ${GOOGLE_DRIVE_FILE_ID})`,
-                type: 'pdf',
-                title: 'Tài liệu từ Google Drive',
-                content: pdfContent
-            });
-        }
-    }
-    
-    // 3. Chia nhỏ và lưu vào knowledge base
-    for (const item of allContent) {
-        console.log(`📖 Xử lý: ${item.title}`);
-        const chunks = splitTextIntoChunks(item.content);
-        
-        for (const chunk of chunks) {
-            customKnowledge.push({
-                source: item.source,
-                type: item.type,
-                title: item.title,
-                content: chunk,
-                keywords: extractKeywords(chunk)
-            });
-        }
-    }
-    
-    knowledgeSource = `📚 Đã tải ${customKnowledge.length} đoạn kiến thức từ ${allContent.length} nguồn`;
-    console.log(`\n✅ ${knowledgeSource}\n`);
-}
-
-// ========== TRÍCH XUẤT TỪ KHÓA ==========
+// ========== EXTRACT KEYWORDS ==========
 function extractKeywords(text) {
-    // Loại bỏ dấu câu và chuyển về chữ thường
-    const cleanText = text.toLowerCase().replace(/[^\w\s]/g, '');
+    const cleanText = text.toLowerCase().replace(/[^\w\sàáảãạăâầấẩẫậêềếểễệôồốổỗộơờớởỡợưừứửữựđ]/g, '');
     const words = cleanText.split(/\s+/);
     
-    // Loại bỏ stopwords
     const stopwords = new Set([
         'và', 'của', 'có', 'là', 'một', 'với', 'cho', 'khi', 'đã', 'sẽ',
-        'được', 'không', 'các', 'những', 'như', 'này', 'ấy', 'ở', 'tại'
+        'được', 'không', 'các', 'những', 'như', 'này', 'ấy', 'ở', 'tại',
+        'the', 'and', 'for', 'with', 'this', 'that', 'from', 'are', 'was'
     ]);
     
     const keywords = [];
@@ -209,13 +203,81 @@ function extractKeywords(text) {
         }
     }
     
-    return [...new Set(keywords)];
+    return [...new Set(keywords.slice(0, 20))];
 }
 
-// ========== TÌM KIẾM TRONG TRI THỨC RIÊNG ==========
-function searchInCustomKnowledge(query) {
+// ========== LOAD CUSTOM KNOWLEDGE ==========
+async function loadCustomKnowledge() {
+    console.log('\n📚 LOADING CUSTOM KNOWLEDGE...\n');
+    
+    const allContent = [];
+    
+    // Default websites to crawl
+    const defaultWebsites = process.env.DEFAULT_WEBSITES 
+        ? process.env.DEFAULT_WEBSITES.split(',')
+        : [
+            'https://vi.wikipedia.org/wiki/Tuổi_thọ',
+            'https://vi.wikipedia.org/wiki/Sức_khỏe'
+          ];
+    
+    // Crawl websites
+    if (axios && cheerio) {
+        console.log('🌐 Crawling websites...');
+        for (const url of defaultWebsites) {
+            const data = await crawlWebsite(url);
+            if (data) {
+                allContent.push({
+                    source: url,
+                    type: 'website',
+                    title: data.title,
+                    content: data.content
+                });
+            }
+            await delay(1000);
+        }
+    }
+    
+    // Download from Google Drive
+    if (GOOGLE_DRIVE_FILE_ID && axios) {
+        console.log('📁 Downloading from Google Drive...');
+        const pdfContent = await downloadFromGoogleDrive(GOOGLE_DRIVE_FILE_ID);
+        if (pdfContent) {
+            allContent.push({
+                source: `Google Drive (${GOOGLE_DRIVE_FILE_ID})`,
+                type: 'pdf',
+                title: 'Tài liệu từ Google Drive',
+                content: pdfContent
+            });
+        }
+    }
+    
+    // Process and store knowledge
+    for (const item of allContent) {
+        console.log(`📖 Processing: ${item.title}`);
+        const chunks = splitTextIntoChunks(item.content);
+        
+        for (const chunk of chunks) {
+            customKnowledge.push({
+                id: Date.now() + '-' + Math.random().toString(36).substr(2, 6),
+                source: item.source,
+                type: item.type,
+                title: item.title,
+                content: chunk,
+                keywords: extractKeywords(chunk)
+            });
+        }
+    }
+    
+    knowledgeSource = `📚 Loaded ${customKnowledge.length} knowledge chunks from ${allContent.length} sources`;
+    console.log(`\n✅ ${knowledgeSource}\n`);
+}
+
+// ========== SEARCH IN KNOWLEDGE ==========
+function searchInKnowledge(query) {
+    if (customKnowledge.length === 0) return [];
+    
     const queryLower = query.toLowerCase();
-    const queryWords = queryLower.split(/\s+/);
+    const queryWords = queryLower.split(/\s+/).filter(w => w.length > 2);
     
     const results = [];
     
@@ -223,20 +285,23 @@ function searchInCustomKnowledge(query) {
         let score = 0;
         const chunkLower = chunk.content.toLowerCase();
         
-        // Tìm kiếm chính xác cụm từ
+        // Exact phrase match
         if (chunkLower.includes(queryLower)) {
-            score += 10;
+            score += 20;
         }
         
-        // Tìm kiếm từng từ
+        // Word matches
         for (const word of queryWords) {
-            if (word.length > 2 && chunkLower.includes(word)) {
+            if (chunkLower.includes(word)) {
                 score += 1;
             }
             if (chunk.keywords && chunk.keywords.includes(word)) {
-                score += 2;
+                score += 3;
             }
         }
+        
+        // Length bonus
+        score += Math.min(5, chunk.content.length / 200);
         
         if (score > 0) {
             results.push({
@@ -248,54 +313,57 @@ function searchInCustomKnowledge(query) {
         }
     }
     
-    // Sắp xếp theo độ liên quan
     results.sort((a, b) => b.score - a.score);
-    
-    return results.slice(0, 3); // Lấy 3 kết quả tốt nhất
+    return results.slice(0, 5);
 }
 
-// ========== TẠO CÂU TRẢ LỜI TỪ DỮ LIỆU RIÊNG ==========
-function generateAnswerFromKnowledge(query, searchResults) {
-    if (searchResults.length === 0) return null;
+// ========== GENERATE ANSWER FROM KNOWLEDGE ==========
+function generateAnswerFromKnowledge(query, results) {
+    if (results.length === 0) return null;
     
-    // Nếu có kết quả với điểm cao
-    const bestMatch = searchResults[0];
-    if (bestMatch.score >= 5) {
+    const bestMatch = results[0];
+    
+    if (bestMatch.score >= 15) {
         return {
-            answer: `📖 Theo ${bestMatch.source}:\n\n${bestMatch.content.substring(0, 800)}...`,
+            answer: `📖 **Theo ${bestMatch.source}:**\n\n${bestMatch.content.substring(0, 600)}${bestMatch.content.length > 600 ? '...' : ''}`,
             source: bestMatch.source,
-            confidence: 'high'
+            confidence: 'high',
+            hasMore: bestMatch.content.length > 600
         };
     }
     
-    // Nếu có nhiều kết quả liên quan
-    if (searchResults.length >= 2) {
-        let combinedAnswer = `📚 Tổng hợp từ các nguồn:\n\n`;
-        for (let i = 0; i < Math.min(2, searchResults.length); i++) {
-            combinedAnswer += `📌 ${searchResults[i].source}:\n${searchResults[i].content.substring(0, 300)}...\n\n`;
+    if (results.length >= 2 && results[0].score >= 8) {
+        let combined = `📚 **Tổng hợp từ các nguồn:**\n\n`;
+        for (let i = 0; i < Math.min(2, results.length); i++) {
+            combined += `📌 **${results[i].source}:**\n${results[i].content.substring(0, 300)}...\n\n`;
         }
         return {
-            answer: combinedAnswer,
-            source: 'nhiều nguồn',
-            confidence: 'medium'
+            answer: combined,
+            source: 'multiple sources',
+            confidence: 'medium',
+            hasMore: true
         };
     }
     
     return null;
 }
 
-// ========== HÀM GỌI CHATGPT (DÙNG KHI KHÔNG CÓ DỮ LIỆU RIÊNG) ==========
+// ========== CALL CHATGPT WITH CONTEXT ==========
 async function callChatGPT(userMessage, history = [], customContext = '') {
     if (!openai || !process.env.OPENAI_API_KEY) {
-        return getOfflineReply(userMessage);
+        return getSimpleReply(userMessage);
     }
     
     try {
-        let systemPrompt = `Bạn là Chiri - một trợ lý AI thông minh, thân thiện.
-Trả lời bằng TIẾNG VIỆT, giọng điệu vui vẻ, dùng icon cảm xúc.`;
+        let systemPrompt = `Bạn là Chiri - một trợ lý AI thông minh, thân thiện, dễ thương.
+Nhiệm vụ của bạn:
+- Trả lời MỌI câu hỏi của người dùng một cách chính xác, hữu ích
+- Giọng điệu: thân thiện, nhiệt tình, dùng icon cảm xúc (❤️, 😊, 🚀)
+- Trả lời bằng TIẾNG VIỆT
+- Nếu không biết, hãy thành thật nói "Mình chưa rõ lắm"`;
 
         if (customContext) {
-            systemPrompt += `\n\nTHÔNG TIN THAM KHẢO (từ dữ liệu riêng):\n${customContext}\n\nHãy dùng thông tin trên nếu phù hợp để trả lời.`;
+            systemPrompt += `\n\n**THÔNG TIN THAM KHẢO (ưu tiên sử dụng):**\n${customContext}\n\nHãy dùng thông tin trên để trả lời nếu phù hợp.`;
         }
 
         const completion = await openai.chat.completions.create({
@@ -305,25 +373,35 @@ Trả lời bằng TIẾNG VIỆT, giọng điệu vui vẻ, dùng icon cảm x�
                 ...history.slice(-10),
                 { role: 'user', content: userMessage }
             ],
-            max_tokens: 500,
+            max_tokens: 600,
             temperature: 0.7,
         });
         
         return completion.choices[0].message.content;
     } catch (error) {
-        console.error('❌ Lỗi gọi ChatGPT:', error.message);
-        return getOfflineReply(userMessage);
+        console.error('❌ ChatGPT error:', error.message);
+        return getSimpleReply(userMessage);
     }
 }
 
-function getOfflineReply(userMessage) {
+// ========== SIMPLE REPLY FALLBACK ==========
+function getSimpleReply(userMessage) {
     const lower = userMessage.toLowerCase();
     
+    if (lower.includes('xin chào') || lower.includes('hello')) {
+        return 'Xin chào bạn! Mình là Chiri AI, rất vui được gặp bạn! 💕';
+    }
+    if (lower.includes('khỏe')) {
+        return 'Cảm ơn bạn! Mình là AI nên không có sức khỏe, nhưng mình luôn sẵn sàng giúp đỡ bạn! 😊';
+    }
     if (lower.includes('tuổi thọ')) {
-        return '👨‍👩‍👧‍👦 Tuổi thọ trung bình của con người khoảng 73-85 tuổi. Ở Việt Nam là 73-75 tuổi.';
+        return '👨‍👩‍👧‍👦 Tuổi thọ trung bình của con người khoảng 73-85 tuổi. Ở Việt Nam là 73-75 tuổi. Người Nhật sống thọ nhất với 84-87 tuổi!';
+    }
+    if (lower.includes('cảm ơn')) {
+        return 'Không có gì đâu ạ! Rất vui khi được giúp bạn! 💖';
     }
     
-    return `🤔 Mình chưa có thông tin về "${userMessage}". Bạn có thể cập nhật dữ liệu bằng PDF hoặc website cho mình học nhé!`;
+    return `🤔 Mình nghe bạn nói: "${userMessage}". Mình đang học hỏi thêm để trả lời tốt hơn. Bạn có thể hỏi mình về tuổi thọ con người nhé!`;
 }
 
 function delay(ms) {
@@ -331,15 +409,12 @@ function delay(ms) {
 }
 
 // ========== ESP32 FUNCTIONS ==========
-const esp32Clients = new Map();
-let conversationHistory = {};
-
 function sendToESP32(command) {
     let sent = false;
     for (const [id, client] of esp32Clients) {
         if (client.readyState === WebSocket.OPEN) {
             client.send(JSON.stringify({ type: 'command', command: command }));
-            console.log(`📤 GỬI LỆNH đến ESP32: ${command}`);
+            console.log(`📤 Send to ESP32: ${command}`);
             sent = true;
         }
     }
@@ -361,11 +436,11 @@ function getESP32Command(text) {
     return null;
 }
 
-// ========== XỬ LÝ CHAT CHÍNH (ƯU TIÊN DỮ LIỆU RIÊNG) ==========
+// ========== PROCESS USER MESSAGE WITH RAG ==========
 async function processUserMessage(userText, driveMode, sessionId) {
-    console.log(`🔍 [${sessionId}] Xử lý: "${userText}" | driveMode = ${driveMode}`);
+    console.log(`🔍 [${sessionId}] Process: "${userText}" | driveMode: ${driveMode}`);
     
-    // Chế độ điều khiển xe
+    // Drive mode
     if (driveMode === true) {
         if (isControlCommand(userText)) {
             const command = getESP32Command(userText);
@@ -378,17 +453,15 @@ async function processUserMessage(userText, driveMode, sessionId) {
                     'RIGHT': '🚗 Xe đang rẽ phải!',
                     'STOP': '🚗 Xe đã dừng lại!'
                 };
-                return replies[command] || '🚗 Đã nhận lệnh!';
+                return replies[command];
             }
         }
-        return `🚫 Đang ở chế độ xe. Vui lòng nói: TIẾN, LÙI, TRÁI, PHẢI, DỪNG.`;
+        return '🚫 Đang ở chế độ xe. Vui lòng nói: TIẾN, LÙI, TRÁI, PHẢI, DỪNG. Hoặc tắt chế độ xe để trò chuyện!';
     }
     
-    // ====== CHẾ ĐỘ TRÒ CHUYỆN - ƯU TIÊN DỮ LIỆU RIÊNG ======
-    
-    // 1. Tìm kiếm trong dữ liệu riêng
-    console.log('🔍 Tìm kiếm trong dữ liệu riêng...');
-    const searchResults = searchInCustomKnowledge(userText);
+    // RAG: Search in custom knowledge
+    console.log('🔍 Searching in custom knowledge...');
+    const searchResults = searchInKnowledge(userText);
     
     let customAnswer = null;
     let customContext = '';
@@ -396,102 +469,167 @@ async function processUserMessage(userText, driveMode, sessionId) {
     if (searchResults.length > 0) {
         customAnswer = generateAnswerFromKnowledge(userText, searchResults);
         if (customAnswer && customAnswer.confidence === 'high') {
-            console.log('✅ TÌM THẤY trong dữ liệu riêng (độ tin cậy cao)');
+            console.log('✅ Found HIGH confidence answer in knowledge base');
             return customAnswer.answer;
         }
-        if (customAnswer) {
-            customContext = searchResults.map(r => r.content).join('\n\n');
-            console.log(`📖 Tìm thấy ${searchResults.length} kết quả liên quan, sẽ dùng làm context cho ChatGPT`);
+        if (searchResults.length > 0) {
+            customContext = searchResults.map(r => `[${r.source}]: ${r.content}`).join('\n\n');
+            console.log(`📖 Found ${searchResults.length} relevant results, using as context`);
         }
     }
     
-    // 2. Nếu không có hoặc độ tin cậy thấp, gọi ChatGPT kèm context
-    console.log('🤖 Gọi ChatGPT với context từ dữ liệu riêng...');
-    
+    // Chat mode with ChatGPT
     if (!conversationHistory[sessionId]) {
         conversationHistory[sessionId] = [];
     }
     
     conversationHistory[sessionId].push({ role: 'user', content: userText });
     
-    let aiReply = await callChatGPT(userText, conversationHistory[sessionId], customContext);
+    let reply;
+    if (customContext) {
+        reply = await callChatGPT(userText, conversationHistory[sessionId], customContext);
+        reply += `\n\n📌 *Thông tin có tham khảo từ dữ liệu của tôi.*`;
+    } else {
+        reply = await callChatGPT(userText, conversationHistory[sessionId]);
+    }
     
-    conversationHistory[sessionId].push({ role: 'assistant', content: aiReply });
+    conversationHistory[sessionId].push({ role: 'assistant', content: reply });
     
     if (conversationHistory[sessionId].length > 20) {
         conversationHistory[sessionId] = conversationHistory[sessionId].slice(-20);
     }
     
-    // Thêm ghi chú nếu có dùng dữ liệu riêng
-    if (customContext) {
-        aiReply += `\n\n📌 *Thông tin trên có tham khảo từ dữ liệu của tôi.*`;
-    }
-    
-    return aiReply;
+    return reply;
 }
 
-// ========== API: CẬP NHẬT DỮ LIỆU MỚI ==========
-app.post('/update-knowledge', express.json(), async (req, res) => {
-    const { pdfUrl, websiteUrl } = req.body;
-    
+// ========== API ENDPOINTS ==========
+
+// Upload PDF file
+app.post('/api/upload-pdf', async (req, res) => {
     try {
-        if (pdfUrl) {
-            // Parse Google Drive URL để lấy ID
-            let fileId = pdfUrl;
-            const match = pdfUrl.match(/\/d\/(.+?)\//);
-            if (match) fileId = match[1];
-            
-            const content = await downloadFromGoogleDrive(fileId);
-            if (content) {
-                const chunks = splitTextIntoChunks(content);
-                for (const chunk of chunks) {
-                    customKnowledge.push({
-                        source: `PDF: ${pdfUrl}`,
-                        type: 'pdf',
-                        title: 'Tài liệu mới',
-                        content: chunk,
-                        keywords: extractKeywords(chunk)
-                    });
-                }
-                res.json({ success: true, message: `Đã thêm ${chunks.length} đoạn kiến thức mới!` });
-            } else {
-                res.json({ success: false, message: 'Không thể tải PDF' });
-            }
-        } else if (websiteUrl) {
-            const data = await crawlWebsite(websiteUrl);
-            if (data) {
-                const chunks = splitTextIntoChunks(data.content);
-                for (const chunk of chunks) {
-                    customKnowledge.push({
-                        source: websiteUrl,
-                        type: 'website',
-                        title: data.title,
-                        content: chunk,
-                        keywords: extractKeywords(chunk)
-                    });
-                }
-                res.json({ success: true, message: `Đã crawl và thêm ${chunks.length} đoạn từ website!` });
-            } else {
-                res.json({ success: false, message: 'Không thể crawl website' });
-            }
+        const { fileContent, fileName } = req.body;
+        if (!fileContent) {
+            return res.json({ success: false, message: 'No file content' });
+        }
+        
+        const buffer = Buffer.from(fileContent, 'base64');
+        
+        let text = '';
+        if (pdfParse) {
+            const pdfData = await pdfParse(buffer);
+            text = pdfData.text;
         } else {
-            res.json({ success: false, message: 'Vui lòng cung cấp pdfUrl hoặc websiteUrl' });
+            text = buffer.toString('utf-8');
+        }
+        
+        const chunks = splitTextIntoChunks(text);
+        for (const chunk of chunks) {
+            customKnowledge.push({
+                id: Date.now() + '-' + Math.random().toString(36).substr(2, 6),
+                source: `Uploaded PDF: ${fileName}`,
+                type: 'pdf',
+                title: fileName,
+                content: chunk,
+                keywords: extractKeywords(chunk)
+            });
+        }
+        
+        res.json({ success: true, message: `Đã thêm ${chunks} đoạn kiến thức từ PDF!` });
+    } catch (error) {
+        res.json({ success: false, message: error.message });
+    }
+});
+
+// Add website URL
+app.post('/api/add-website', async (req, res) => {
+    try {
+        const { url } = req.body;
+        if (!url) {
+            return res.json({ success: false, message: 'No URL provided' });
+        }
+        
+        const data = await crawlWebsite(url);
+        if (data) {
+            const chunks = splitTextIntoChunks(data.content);
+            for (const chunk of chunks) {
+                customKnowledge.push({
+                    id: Date.now() + '-' + Math.random().toString(36).substr(2, 6),
+                    source: url,
+                    type: 'website',
+                    title: data.title,
+                    content: chunk,
+                    keywords: extractKeywords(chunk)
+                });
+            }
+            res.json({ success: true, message: `Đã crawl và thêm ${chunks.length} đoạn từ website!` });
+        } else {
+            res.json({ success: false, message: 'Không thể crawl website' });
         }
     } catch (error) {
         res.json({ success: false, message: error.message });
     }
 });
 
-// ========== API: XEM DỮ LIỆU ĐÃ HỌC ==========
-app.get('/knowledge-stats', (req, res) => {
+// Add Google Drive file
+app.post('/api/add-drive', async (req, res) => {
+    try {
+        const { fileId } = req.body;
+        if (!fileId) {
+            return res.json({ success: false, message: 'No file ID provided' });
+        }
+        
+        const content = await downloadFromGoogleDrive(fileId);
+        if (content) {
+            const chunks = splitTextIntoChunks(content);
+            for (const chunk of chunks) {
+                customKnowledge.push({
+                    id: Date.now() + '-' + Math.random().toString(36).substr(2, 6),
+                    source: `Google Drive: ${fileId}`,
+                    type: 'drive',
+                    title: 'Tài liệu từ Google Drive',
+                    content: chunk,
+                    keywords: extractKeywords(chunk)
+                });
+            }
+            res.json({ success: true, message: `Đã thêm ${chunks.length} đoạn từ Google Drive!` });
+        } else {
+            res.json({ success: false, message: 'Không thể tải file từ Google Drive' });
+        }
+    } catch (error) {
+        res.json({ success: false, message: error.message });
+    }
+});
+
+// Get knowledge stats
+app.get('/api/knowledge-stats', (req, res) => {
+    const sources = {};
+    for (const item of customKnowledge) {
+        if (!sources[item.source]) {
+            sources[item.source] = 0;
+        }
+        sources[item.source]++;
+    }
+    
     res.json({
         totalChunks: customKnowledge.length,
-        sources: [...new Set(customKnowledge.map(k => k.source))],
-        knowledgeSource: knowledgeSource
+        sources: sources,
+        knowledgeSource: knowledgeSource,
+        modulesAvailable: {
+            openai: !!openai,
+            pdfParse: !!pdfParse,
+            axios: !!axios,
+            cheerio: !!cheerio
+        }
     });
 });
 
-// ========== TTS ENDPOINT ==========
+// Clear knowledge
+app.post('/api/clear-knowledge', (req, res) => {
+    customKnowledge = [];
+    res.json({ success: true, message: 'Đã xóa toàn bộ dữ liệu đã học!' });
+});
+
+// TTS endpoint
 app.get('/tts', async (req, res) => {
     const text = req.query.text;
     if (!text) return res.status(400).send('Missing text');
@@ -515,11 +653,17 @@ app.get('/tts', async (req, res) => {
     res.status(404).send('TTS not available');
 });
 
+// Health check
 app.get('/health', (req, res) => {
-    res.json({ 
-        status: 'ok', 
-        customKnowledgeCount: customKnowledge.length,
-        chatGPTReady: !!(openai && process.env.OPENAI_API_KEY)
+    res.json({
+        status: 'ok',
+        timestamp: new Date().toISOString(),
+        uptime: process.uptime(),
+        knowledgeChunks: customKnowledge.length,
+        esp32Clients: esp32Clients.size,
+        chatGPTReady: !!(openai && process.env.OPENAI_API_KEY),
+        pdfReady: !!pdfParse,
+        crawlerReady: !!(axios && cheerio)
     });
 });
 
@@ -529,7 +673,7 @@ wss.on('connection', (ws, req) => {
     const clientId = Date.now() + '-' + Math.random().toString(36).substr(2, 6);
     let sessionId = clientId;
     
-    console.log(`🔌 ${isESP32 ? 'ESP32' : 'WEB'} client kết nối`);
+    console.log(`🔌 ${isESP32 ? 'ESP32' : 'WEB'} connected: ${clientId}`);
     
     const pingInterval = setInterval(() => {
         if (ws.readyState === WebSocket.OPEN) ws.ping();
@@ -548,30 +692,56 @@ wss.on('connection', (ws, req) => {
                 const reply = await processUserMessage(data.text, data.driveMode === true, sessionId);
                 ws.send(JSON.stringify({ type: 'ai', text: reply }));
             }
+            
+            if (data.type === 'ping') {
+                ws.send(JSON.stringify({ type: 'pong' }));
+            }
         } catch(e) {
-            console.error('Lỗi xử lý:', e.message);
+            console.error('WebSocket error:', e.message);
         }
     });
     
     ws.on('close', () => {
+        console.log(`🔌 Client disconnected: ${clientId}`);
         clearInterval(pingInterval);
         if (esp32Clients.has(clientId)) esp32Clients.delete(clientId);
+        setTimeout(() => {
+            delete conversationHistory[sessionId];
+        }, 300000);
     });
 });
 
-// ========== KHỞI ĐỘNG ==========
+// ========== START SERVER ==========
 const PORT = process.env.PORT || 8080;
 
-// Tải dữ liệu riêng trước khi khởi động server
 async function startServer() {
     await loadCustomKnowledge();
     
     server.listen(PORT, '0.0.0.0', () => {
-        console.log(`\n🚀 CHIRI AI - RAG Mode`);
+        console.log(`\n🚀 CHIRI AI - FULL FEATURE MODE`);
         console.log(`📍 http://localhost:${PORT}`);
-        console.log(`📚 Dữ liệu riêng: ${customKnowledge.length} đoạn kiến thức`);
-        console.log(`🤖 ChatGPT: ${openai && process.env.OPENAI_API_KEY ? 'Sẵn sàng' : 'Không có API key'}\n`);
+        console.log(`📚 Knowledge chunks: ${customKnowledge.length}`);
+        console.log(`🤖 ChatGPT: ${openai && process.env.OPENAI_API_KEY ? 'READY ✅' : 'NOT AVAILABLE ⚠️'}`);
+        console.log(`📄 PDF Reader: ${pdfParse ? 'READY ✅' : 'NOT AVAILABLE ⚠️'}`);
+        console.log(`🕷️ Web Crawler: ${axios && cheerio ? 'READY ✅' : 'NOT AVAILABLE ⚠️'}`);
+        console.log(`🎤 Voice Control: READY ✅`);
+        console.log(`\n📡 WebSocket: ws://localhost:${PORT}`);
+        console.log(`\n💡 API Endpoints:`);
+        console.log(`   POST /api/upload-pdf - Upload PDF file`);
+        console.log(`   POST /api/add-website - Add website URL`);
+        console.log(`   POST /api/add-drive - Add Google Drive file ID`);
+        console.log(`   GET  /api/knowledge-stats - View knowledge stats`);
+        console.log(`   POST /api/clear-knowledge - Clear all knowledge\n`);
     });
 }
+
+// Handle graceful shutdown
+process.on('SIGTERM', () => {
+    console.log('SIGTERM received, shutting down gracefully...');
+    server.close(() => {
+        console.log('Server closed');
+        process.exit(0);
+    });
+});
 
 startServer();
