@@ -18,10 +18,52 @@ let isProcessing = false;
 let currentAudio = null;
 let lastActivityTime = Date.now();
 let driveControlMode = false;
+let mouthAnimationInterval = null; // Thêm interval cho animation miệng
 
 // Constants
 const INACTIVITY_LIMIT = 120000;
 const WAKE_WORDS = ['xin chào', 'hello', 'hi', 'chào chiri', 'chiri ơi', 'hey chiri'];
+
+// ========== THÊM: ANIMATION MIỆNG KHI NÓI ==========
+function startMouthAnimation() {
+    if (mouthAnimationInterval) clearInterval(mouthAnimationInterval);
+    
+    let frame = 0;
+    const mouth = document.querySelector('.robot-mouth');
+    if (!mouth) return;
+    
+    // Lưu trạng thái ban đầu
+    const originalTransform = mouth.style.transform;
+    
+    mouthAnimationInterval = setInterval(() => {
+        if (!isProcessing && !currentAudio && !window.speechSynthesis?.speaking) {
+            // Không còn nói nữa, dừng animation
+            if (mouthAnimationInterval) {
+                clearInterval(mouthAnimationInterval);
+                mouthAnimationInterval = null;
+                // Reset miệng về trạng thái bình thường
+                mouth.style.transform = originalTransform;
+            }
+            return;
+        }
+        
+        // Tạo hiệu ứng miệng nhấp nháy
+        frame++;
+        const scale = 0.4 + Math.sin(frame * 0.8) * 0.4;
+        mouth.style.transform = `scaleY(${scale})`;
+    }, 80);
+}
+
+function stopMouthAnimation() {
+    if (mouthAnimationInterval) {
+        clearInterval(mouthAnimationInterval);
+        mouthAnimationInterval = null;
+    }
+    const mouth = document.querySelector('.robot-mouth');
+    if (mouth) {
+        mouth.style.transform = '';
+    }
+}
 
 // Update drive mode UI
 function updateDriveModeUI() {
@@ -40,12 +82,46 @@ function updateDriveModeUI() {
     }
 }
 
+// ========== CẢI TIẾN: setExpression với animation miệng ==========
 function setExpression(expression) {
-    robotSvg.classList.remove('listening', 'happy', 'thinking', 'surprised', 'sleepy');
-    if (expression === 'listening') robotSvg.classList.add('listening');
-    else if (expression === 'happy') robotSvg.classList.add('happy');
-    else if (expression === 'thinking') robotSvg.classList.add('thinking');
-    else if (expression === 'sleepy') robotSvg.classList.add('sleepy');
+    // Xóa tất cả class cũ
+    robotSvg.classList.remove('listening', 'happy', 'thinking', 'surprised', 'sleepy', 'talking');
+    
+    // Thêm class mới
+    robotSvg.classList.add(expression);
+    
+    // Điều chỉnh lông mày và mắt dựa trên biểu cảm
+    const eyebrows = document.querySelectorAll('.robot-eyebrow');
+    const eyes = document.querySelectorAll('.robot-eye');
+    const mouth = document.querySelector('.robot-mouth');
+    
+    switch(expression) {
+        case 'talking':
+            // Bật animation miệng
+            if (!mouthAnimationInterval) {
+                startMouthAnimation();
+            }
+            break;
+        case 'listening':
+            stopMouthAnimation();
+            if (mouth) mouth.style.transform = 'scaleY(0.7)';
+            break;
+        case 'happy':
+            stopMouthAnimation();
+            if (mouth) mouth.style.transform = 'scaleY(1.1) scaleX(1.1)';
+            break;
+        case 'thinking':
+            stopMouthAnimation();
+            if (mouth) mouth.style.transform = 'scaleY(0.2)';
+            break;
+        case 'sleepy':
+            stopMouthAnimation();
+            if (mouth) mouth.style.transform = 'scaleY(0.3)';
+            break;
+        default:
+            stopMouthAnimation();
+            if (mouth) mouth.style.transform = '';
+    }
 }
 
 function updateWakeIndicator(state) {
@@ -80,13 +156,16 @@ function escapeHtml(text) {
     return div.innerHTML;
 }
 
-// ========== SPEECH SYNTHESIS với fallback ==========
+// ========== SPEECH SYNTHESIS với animation khi nói ==========
 async function playAudio(text) {
     try {
         if (currentAudio) {
             currentAudio.pause();
             currentAudio = null;
         }
+        
+        // Kích hoạt animation miệng
+        setExpression('talking');
         
         const url = `/tts?text=${encodeURIComponent(text)}`;
         const response = await fetch(url);
@@ -96,10 +175,15 @@ async function playAudio(text) {
             const audioUrl = URL.createObjectURL(audioBlob);
             currentAudio = new Audio(audioUrl);
             
-            currentAudio.onplay = () => setExpression('happy');
+            currentAudio.onplay = () => {
+                setExpression('talking');
+                startMouthAnimation();
+            };
+            
             currentAudio.onended = () => {
                 URL.revokeObjectURL(audioUrl);
                 currentAudio = null;
+                stopMouthAnimation();
                 if (isAwake) setExpression('listening');
                 isProcessing = false;
             };
@@ -118,14 +202,22 @@ function fallbackSpeak(text) {
         const utterance = new SpeechSynthesisUtterance(text);
         utterance.lang = 'vi-VN';
         utterance.rate = 0.9;
-        utterance.onstart = () => setExpression('happy');
+        
+        utterance.onstart = () => {
+            setExpression('talking');
+            startMouthAnimation();
+        };
+        
         utterance.onend = () => {
+            stopMouthAnimation();
             if (isAwake) setExpression('listening');
             isProcessing = false;
         };
+        
         window.speechSynthesis.cancel();
         window.speechSynthesis.speak(utterance);
     } else {
+        stopMouthAnimation();
         isProcessing = false;
     }
 }
@@ -143,11 +235,11 @@ function wakeUp() {
     
     const greeting = driveControlMode ? 
         "Chiri đã thức! Mình đang ở chế độ điều khiển xe. Bạn có thể ra lệnh: tiến, lùi, trái, phải, dừng!" :
-        "Chiri đã thức! Mình sẵn sàng trò chuyện. Bạn có thể hỏi mình về nhiệt độ Mặt Trăng, Mặt Trời hoặc bất kỳ điều gì nhé!";
+        "Chiri đã thức! Mình sẵn sàng trò chuyện. Bạn có thể hỏi mình bất cứ điều gì nhé!";
     
     addMessage('ai', greeting);
+    setExpression('happy');
     playAudio(greeting);
-    setExpression('listening');
 }
 
 function goToSleep() {
@@ -155,6 +247,7 @@ function goToSleep() {
     
     console.log('😴 Chiri đi ngủ');
     isAwake = false;
+    stopMouthAnimation();
     
     updateWakeIndicator('sleeping');
     setExpression('sleepy');
@@ -238,7 +331,6 @@ function initSpeechRecognition() {
             if (event.results[i].isFinal && transcript) {
                 console.log(`🎙️ Nghe: "${transcript}"`);
                 
-                // Lọc bỏ các câu nhận diện sai quá ngắn
                 if (transcript.length < 3) continue;
                 
                 if (!isAwake && !isProcessing) {
@@ -288,8 +380,6 @@ function connectWebSocket() {
         if (data.type === 'ai') {
             addMessage('ai', data.text);
             playAudio(data.text);
-            setExpression('listening');
-            isProcessing = false;
             statusText.innerHTML = driveControlMode ? '🎤 Đang nghe lệnh xe...' : '🎤 Đang lắng nghe...';
         }
     };
@@ -307,6 +397,7 @@ manualWake.addEventListener('click', () => {
         resetInactivityTimer();
         const msg = driveControlMode ? "Chiri đây! Bạn muốn ra lệnh gì?" : "Chiri đây! Bạn muốn hỏi gì ạ?";
         addMessage('ai', msg);
+        setExpression('happy');
         playAudio(msg);
     }
 });
@@ -321,6 +412,7 @@ driveModeBtn.addEventListener('click', () => {
     
     if (isAwake) {
         addMessage('ai', msg);
+        setExpression('happy');
         playAudio(msg);
     }
 });
@@ -334,6 +426,19 @@ function init() {
     connectWebSocket();
     initSpeechRecognition();
     resetInactivityTimer();
+    
+    // Thêm animation nháy mắt định kỳ
+    setInterval(() => {
+        if (isAwake && !isProcessing && !currentAudio) {
+            const eyes = document.querySelectorAll('.robot-eye');
+            eyes.forEach(eye => {
+                eye.style.transform = 'scaleY(0.05)';
+                setTimeout(() => {
+                    eye.style.transform = '';
+                }, 100);
+            });
+        }
+    }, 4000);
 }
 
 document.addEventListener('DOMContentLoaded', init);
