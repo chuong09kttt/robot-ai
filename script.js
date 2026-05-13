@@ -5,159 +5,92 @@ const statusText = document.getElementById('statusText');
 const chatBox = document.getElementById('chatBox');
 const manualWake = document.getElementById('manualWake');
 const driveModeBtn = document.getElementById('driveModeBtn');
-const sleepTimer = document.getElementById('sleepTimer');
 
 let ws = null;
 let recognition = null;
-
 let isAwake = false;
 let isListening = false;
 let isSpeaking = false;
 let isAIProcessing = false;
-
 let inactivityTimer = null;
-let currentAudio = null;
-let restartTimeout = null;
-
 let driveControlMode = false;
 let mouthAnimationInterval = null;
 let reconnectAttempts = 0;
-
-// Countdown variables
 let countdownInterval = null;
-let currentCountdown = 0;
-let countdownEndTime = null;
 
 const INACTIVITY_LIMIT = 120000;
+const WAKE_WORDS = ['xin chào', 'hello', 'hi', 'chào chiri', 'chiri ơi', 'hey chiri', 'alô'];
 
-const WAKE_WORDS = [
-    'xin chào',
-    'hello',
-    'hi',
-    'chào chiri',
-    'chiri ơi',
-    'hey chiri'
-];
-
-// Update sleep timer display
-function updateSleepTimerDisplay() {
-    if (!sleepTimer) return;
+// ========== COUNTDOWN FUNCTION ==========
+function startCountdown(seconds, onComplete) {
+    if (countdownInterval) clearInterval(countdownInterval);
     
-    if (!isAwake) {
-        sleepTimer.innerHTML = '😴 Đang ngủ';
-        sleepTimer.style.opacity = '0.6';
-        return;
-    }
-    
-    if (inactivityTimer) {
-        // Calculate remaining time        const remaining = Math.max(0, INACTIVITY_LIMIT - (Date.now() - inactivityTimer._idleStart));
-        const seconds = Math.ceil(remaining / 1000);
-        const minutes = Math.floor(seconds / 60);
-        const secs = seconds % 60;
-        
-        if (minutes > 0) {
-            sleepTimer.innerHTML = `⏰ Sẽ ngủ sau ${minutes}:${secs.toString().padStart(2, '0')}`;
-        } else {
-            sleepTimer.innerHTML = `⏰ Sẽ ngủ sau ${seconds} giây`;
-        }
-        sleepTimer.style.opacity = '1';
-    }
-}
-
-// Update sleep timer every second
-setInterval(updateSleepTimerDisplay, 1000);
-
-// ================= COUNTDOWN FUNCTIONS =================
-
-function startCountdown(seconds, onTick, onComplete) {
-    stopCountdown();
-    
-    currentCountdown = seconds;
-    countdownEndTime = Date.now() + (seconds * 1000);
-    
-    // Add countdown display
     let countdownDiv = document.getElementById('countdownDisplay');
     if (!countdownDiv) {
         countdownDiv = document.createElement('div');
         countdownDiv.id = 'countdownDisplay';
         countdownDiv.style.cssText = `
             position: fixed;
-            top: 50%;
+            top: 20%;
             left: 50%;
             transform: translate(-50%, -50%);
-            background: rgba(0,0,0,0.9);
+            background: linear-gradient(135deg, #1a2a3a, #0f1a24);
             color: #ff6a2e;
-            padding: 20px 40px;
-            border-radius: 60px;
-            font-size: 48px;
+            padding: 25px 50px;
+            border-radius: 80px;
+            font-size: 56px;
             font-weight: bold;
             font-family: monospace;
             z-index: 1000;
             text-align: center;
-            box-shadow: 0 0 30px rgba(255,106,46,0.5);
+            box-shadow: 0 0 50px rgba(255,106,46,0.6);
             border: 2px solid #ff6a2e;
             backdrop-filter: blur(10px);
+            white-space: nowrap;
         `;
         document.body.appendChild(countdownDiv);
     }
     
     countdownDiv.style.display = 'block';
     
-    if (onTick) onTick(seconds);
+    let remaining = seconds;
     
-    countdownInterval = setInterval(() => {
-        currentCountdown--;
-        
-        // Update display
-        const mins = Math.floor(currentCountdown / 60);
-        const secs = currentCountdown % 60;
-        let displayText = '';
-        
+    const updateDisplay = () => {
+        const mins = Math.floor(remaining / 60);
+        const secs = remaining % 60;
         if (mins > 0) {
-            displayText = `${mins}:${secs.toString().padStart(2, '0')}`;
+            countdownDiv.innerHTML = `⏰ ${mins}:${secs.toString().padStart(2, '0')}`;
         } else {
-            displayText = `${currentCountdown} giây`;
+            countdownDiv.innerHTML = `⏰ ${remaining} giây`;
         }
         
-        countdownDiv.innerHTML = `⏰ ${displayText}`;
-        
-        // Shake effect when 10 seconds left
-        if (currentCountdown <= 10 && currentCountdown > 0) {
+        // Warning effect
+        if (remaining <= 10 && remaining > 0) {
             countdownDiv.style.transform = 'translate(-50%, -50%) scale(1.1)';
+            countdownDiv.style.color = '#ff4444';
             setTimeout(() => {
                 if (countdownDiv) countdownDiv.style.transform = 'translate(-50%, -50%) scale(1)';
             }, 200);
+        } else {
+            countdownDiv.style.color = '#ff6a2e';
         }
+    };
+    
+    updateDisplay();
+    
+    countdownInterval = setInterval(() => {
+        remaining--;
+        updateDisplay();
         
-        // Announce at key moments
-        if (currentCountdown === 10) {
-            fallbackSpeak('Còn 10 giây');
-        } else if (currentCountdown === 5) {
-            fallbackSpeak('Còn 5 giây');
-        } else if (currentCountdown === 3) {
-            fallbackSpeak('Ba');
-        } else if (currentCountdown === 2) {
-            fallbackSpeak('Hai');
-        } else if (currentCountdown === 1) {
-            fallbackSpeak('Một');
-        }
-        
-        if (onTick) onTick(currentCountdown);
-        
-        if (currentCountdown <= 0) {
+        if (remaining <= 0) {
             clearInterval(countdownInterval);
             countdownInterval = null;
-            
-            if (countdownDiv) {
-                countdownDiv.innerHTML = '🔔 HẾT GIỜ! 🔔';
-                countdownDiv.style.background = 'rgba(255,0,0,0.9)';
-                countdownDiv.style.color = 'white';
-                setTimeout(() => {
-                    if (countdownDiv) countdownDiv.style.display = 'none';
-                }, 2000);
-            }
-            
-            fallbackSpeak('Hết giờ!');
+            countdownDiv.innerHTML = '🔔 HẾT GIỜ! 🔔';
+            countdownDiv.style.background = 'linear-gradient(135deg, #ff4444, #cc0000)';
+            countdownDiv.style.color = 'white';
+            setTimeout(() => {
+                if (countdownDiv) countdownDiv.style.display = 'none';
+            }, 2000);
             if (onComplete) onComplete();
         }
     }, 1000);
@@ -168,30 +101,96 @@ function stopCountdown() {
         clearInterval(countdownInterval);
         countdownInterval = null;
     }
-    currentCountdown = 0;
-    countdownEndTime = null;
-    
     const countdownDiv = document.getElementById('countdownDisplay');
-    if (countdownDiv) {
-        countdownDiv.style.display = 'none';
+    if (countdownDiv) countdownDiv.style.display = 'none';
+}
+
+// ========== HIGH QUALITY TTS ==========
+async function speak(text) {
+    if (!text) return;
+    
+    // Stop any ongoing speech
+    window.speechSynthesis.cancel();
+    
+    isSpeaking = true;
+    setExpression('talking');
+    
+    // Auto-detect language
+    const isVietnamese = /[àáảãạăâầấẩẫậêềếểễệôồốổỗộơờớởỡợưừứửữựđ]/i.test(text);
+    const lang = isVietnamese ? 'vi' : 'en';
+    
+    try {
+        // Try server TTS first (Google TTS - high quality)
+        const response = await fetch(`/tts?text=${encodeURIComponent(text.slice(0, 500))}`);
+        
+        if (response.ok) {
+            const blob = await response.blob();
+            const audio = new Audio(URL.createObjectURL(blob));
+            
+            audio.onended = () => {
+                URL.revokeObjectURL(audio.src);
+                finishSpeaking();
+            };
+            audio.onerror = () => {
+                URL.revokeObjectURL(audio.src);
+                fallbackSpeak(text, lang);
+            };
+            
+            await audio.play();
+        } else {
+            await fallbackSpeak(text, lang);
+        }
+    } catch (error) {
+        console.log('Server TTS failed, using fallback');
+        await fallbackSpeak(text, lang);
     }
 }
 
-// ================= ROBOT FACE =================
+function fallbackSpeak(text, lang = 'vi') {
+    return new Promise((resolve) => {
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.lang = lang === 'vi' ? 'vi-VN' : 'en-US';
+        utterance.rate = 0.9;
+        utterance.pitch = 1.1;
+        utterance.volume = 1;
+        
+        utterance.onend = () => {
+            resolve();
+            finishSpeaking();
+        };
+        utterance.onerror = () => {
+            resolve();
+            finishSpeaking();
+        };
+        
+        // Ensure voices are loaded
+        if (window.speechSynthesis.getVoices().length === 0) {
+            window.speechSynthesis.onvoiceschanged = () => {
+                window.speechSynthesis.speak(utterance);
+            };
+        } else {
+            window.speechSynthesis.speak(utterance);
+        }
+    });
+}
 
+function finishSpeaking() {
+    isSpeaking = false;
+    stopMouthAnimation();
+    if (isAwake) {
+        setExpression('listening');
+        setTimeout(() => startListening(), 300);
+    }
+}
+
+// ========== ROBOT FACE ==========
 function setExpression(expression) {
-    robotSvg.classList.remove(
-        'listening',
-        'happy',
-        'thinking',
-        'sleepy',
-        'talking'
-    );
-    
+    robotSvg.classList.remove('listening', 'happy', 'thinking', 'sleepy', 'talking');
     robotSvg.classList.add(expression);
     
     const mouth = document.querySelector('.robot-mouth');
-    const tongue = document.getElementById('tongue');
+    const leftEyebrow = document.getElementById('leftEyebrow');
+    const rightEyebrow = document.getElementById('rightEyebrow');
     
     if (!mouth) return;
     
@@ -200,32 +199,34 @@ function setExpression(expression) {
     switch(expression) {
         case 'talking':
             startMouthAnimation();
-            if (tongue) tongue.style.opacity = '0.3';
+            if (leftEyebrow) leftEyebrow.style.transform = '';
+            if (rightEyebrow) rightEyebrow.style.transform = '';
             break;
         case 'listening':
             mouth.style.transform = 'scaleY(0.7)';
-            if (tongue) tongue.style.opacity = '0';
+            if (leftEyebrow) leftEyebrow.style.transform = '';
+            if (rightEyebrow) rightEyebrow.style.transform = '';
             break;
         case 'happy':
             mouth.style.transform = 'scaleY(1.1)';
-            if (tongue) tongue.style.opacity = '0.5';
+            if (leftEyebrow) leftEyebrow.style.transform = 'translateY(-3px) rotate(-5deg)';
+            if (rightEyebrow) rightEyebrow.style.transform = 'translateY(-3px) rotate(5deg)';
             break;
         case 'thinking':
             mouth.style.transform = 'scaleY(0.2)';
-            if (tongue) tongue.style.opacity = '0';
+            if (leftEyebrow) leftEyebrow.style.transform = 'translateY(2px) rotate(5deg)';
+            if (rightEyebrow) rightEyebrow.style.transform = 'translateY(2px) rotate(-5deg)';
             break;
         case 'sleepy':
             mouth.style.transform = 'scaleY(0.3)';
-            if (tongue) tongue.style.opacity = '0';
+            if (leftEyebrow) leftEyebrow.style.transform = 'translateY(1px)';
+            if (rightEyebrow) rightEyebrow.style.transform = 'translateY(1px)';
             break;
     }
 }
 
 function startMouthAnimation() {
-    if (mouthAnimationInterval) {
-        clearInterval(mouthAnimationInterval);
-    }
-    
+    if (mouthAnimationInterval) clearInterval(mouthAnimationInterval);
     const mouth = document.querySelector('.robot-mouth');
     let frame = 0;
     
@@ -245,11 +246,9 @@ function stopMouthAnimation() {
     if (mouth) mouth.style.transform = '';
 }
 
-// ================= UI =================
-
+// ========== UI ==========
 function updateWakeIndicator(state) {
     wakeDot.classList.remove('listening');
-    
     if (state === 'listening') {
         wakeDot.classList.add('listening');
         wakeText.innerHTML = '🎤 Đang lắng nghe...';
@@ -266,13 +265,9 @@ function updateDriveModeUI() {
     if (driveControlMode) {
         driveModeBtn.innerHTML = '🚗 TẮT CHẾ ĐỘ ĐIỀU KHIỂN XE';
         driveModeBtn.classList.add('drive-active');
-        const driveHint = document.getElementById('driveHint');
-        if (driveHint) driveHint.style.background = '#ffcc88';
     } else {
         driveModeBtn.innerHTML = '🚗 BẬT CHẾ ĐỘ ĐIỀU KHIỂN XE';
         driveModeBtn.classList.remove('drive-active');
-        const driveHint = document.getElementById('driveHint');
-        if (driveHint) driveHint.style.background = '';
     }
 }
 
@@ -283,7 +278,7 @@ function addMessage(type, text) {
     chatBox.appendChild(messageDiv);
     chatBox.scrollTop = chatBox.scrollHeight;
     
-    while (chatBox.children.length > 30) {
+    while (chatBox.children.length > 40) {
         chatBox.removeChild(chatBox.firstChild);
     }
 }
@@ -294,87 +289,21 @@ function escapeHtml(text) {
     return div.innerHTML;
 }
 
-// ================= AUDIO =================
-
-async function playAudio(text) {
-    if (!text) return;
-    
-    isSpeaking = true;
-    setExpression('talking');
-    
-    try {
-        const response = await fetch(`/tts?text=${encodeURIComponent(text.slice(0, 300))}`);
-        if (response.ok) {
-            const blob = await response.blob();
-            await playBlobAudio(blob);
-        } else {
-            await fallbackSpeak(text);
-        }
-    } catch(e) {
-        console.log('TTS error, using fallback');
-        await fallbackSpeak(text);
-    }
-    
-    finishSpeaking();
-}
-
-function playBlobAudio(blob) {
-    return new Promise(resolve => {
-        const url = URL.createObjectURL(blob);
-        currentAudio = new Audio(url);
-        currentAudio.onended = () => {
-            URL.revokeObjectURL(url);
-            currentAudio = null;
-            resolve();
-        };
-        currentAudio.onerror = () => {
-            URL.revokeObjectURL(url);
-            currentAudio = null;
-            resolve();
-        };
-        currentAudio.play().catch(resolve);
-    });
-}
-
-function fallbackSpeak(text) {
-    return new Promise(resolve => {
-        const utterance = new SpeechSynthesisUtterance(text);
-        utterance.lang = 'vi-VN';
-        utterance.rate = 0.95;
-        utterance.pitch = 1;
-        utterance.onend = resolve;
-        utterance.onerror = resolve;
-        speechSynthesis.speak(utterance);
-    });
-}
-
-function finishSpeaking() {
-    isSpeaking = false;
-    stopMouthAnimation();
-    if (isAwake) {
-        setExpression('listening');
-        setTimeout(() => startListening(), 500);
-    }
-}
-
-// ================= WAKE =================
-
+// ========== WAKE/SLEEP ==========
 function wakeUp() {
     if (isAwake) return;
-    
     isAwake = true;
     updateWakeIndicator('awake');
     resetInactivityTimer();
     setExpression('happy');
     
-    const greeting = driveControlMode
-        ? 'Chiri đã thức. Chế độ lái xe đang bật.'
-        : 'Chiri đã thức dậy!';
+    const greeting = driveControlMode 
+        ? 'Chào bạn! Chiri đã thức. Chế độ lái xe đang bật. Hãy nói Tiến, Lùi, Trái, Phải, hoặc Dừng để điều khiển xe nhé!'
+        : 'Chào bạn! Chiri đã thức dậy. Bạn có thể hỏi mình về mọi thứ, từ khoa học, vũ trụ, đến lịch sử nhé!';
     
     addMessage('ai', greeting);
-    playAudio(greeting);
-    
-    setTimeout(() => startListening(), 1000);
+    speak(greeting);
+    setTimeout(() => startListening(), 1500);
 }
 
 function goToSleep() {
@@ -388,16 +317,21 @@ function goToSleep() {
     
     updateWakeIndicator('sleeping');
     setExpression('sleepy');
-    addMessage('ai', 'Chiri đi ngủ đây.');
+    addMessage('ai', 'Chiri đi ngủ đây. Nói "Xin chào" để đánh thức mình nhé! 😴');
 }
 
-// ================= SPEECH =================
+function resetInactivityTimer() {
+    if (inactivityTimer) clearTimeout(inactivityTimer);
+    inactivityTimer = setTimeout(() => {
+        if (isAwake) goToSleep();
+    }, INACTIVITY_LIMIT);
+}
 
+// ========== SPEECH RECOGNITION ==========
 function initSpeechRecognition() {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    
     if (!SpeechRecognition) {
-        alert('Trình duyệt không hỗ trợ voice');
+        alert('Trình duyệt của bạn không hỗ trợ nhận diện giọng nói. Hãy thử dùng Chrome hoặc Edge!');
         return;
     }
     
@@ -419,11 +353,11 @@ function initSpeechRecognition() {
         console.log('🎙️ Nghe được:', transcript);
         
         if (!transcript) return;
-        resetInactivityTimer();
         
+        resetInactivityTimer();
         const lower = transcript.toLowerCase();
         
-        // WAKE
+        // Wake word detection
         if (!isAwake) {
             if (WAKE_WORDS.some(word => lower.includes(word))) {
                 wakeUp();
@@ -431,45 +365,46 @@ function initSpeechRecognition() {
             return;
         }
         
-        if (isSpeaking || isAIProcessing) return;
-        processCommand(transcript);
+        // Command processing
+        if (!isSpeaking && !isAIProcessing) {
+            processCommand(transcript);
+        }
     };
     
     recognition.onerror = (event) => {
         console.log('Recognition error:', event.error);
         isListening = false;
         if (isAwake && !isSpeaking) {
-            clearTimeout(restartTimeout);
-            restartTimeout = setTimeout(() => startListening(), 1000);
+            setTimeout(() => startListening(), 1000);
         }
     };
     
     recognition.onend = () => {
         console.log('🔴 Recognition ended');
         isListening = false;
-        if (isAwake && !isSpeaking) {
-            clearTimeout(restartTimeout);
-            restartTimeout = setTimeout(() => startListening(), 500);
+        if (isAwake && !isSpeaking && !isAIProcessing) {
+            setTimeout(() => startListening(), 500);
         }
     };
 }
 
 function startListening() {
-    if (!recognition || isListening || isSpeaking || isAIProcessing || !isAwake) {
-        return;
-    }
+    if (!recognition || isListening || isSpeaking || isAIProcessing || !isAwake) return;
     
-    try { recognition.stop(); } catch(e) {}
+    try {
+        recognition.stop();
+    } catch(e) {}
     
     setTimeout(() => {
-        try { recognition.start(); } catch(e) {
-            console.log('start fail');
+        try {
+            recognition.start();
+        } catch(e) {
+            console.log('Start listening failed:', e);
         }
     }, 200);
 }
 
-// ================= COMMAND =================
-
+// ========== COMMAND PROCESSING ==========
 async function processCommand(text) {
     if (isAIProcessing || isSpeaking) return;
     
@@ -477,7 +412,6 @@ async function processCommand(text) {
     setExpression('thinking');
     statusText.innerHTML = '🤔 Đang suy nghĩ...';
     addMessage('user', text);
-    console.log('📤 Gửi lên server:', text);
     
     if (ws && ws.readyState === WebSocket.OPEN) {
         ws.send(JSON.stringify({
@@ -486,55 +420,49 @@ async function processCommand(text) {
             driveMode: driveControlMode
         }));
     } else {
-        addMessage('ai', 'Mất kết nối server. Vui lòng tải lại trang.');
+        addMessage('ai', '🔌 Mất kết nối server. Đang thử kết nối lại...');
         isAIProcessing = false;
+        connectWebSocket();
     }
 }
 
-// ================= WEBSOCKET =================
-
+// ========== WEBSOCKET ==========
 function connectWebSocket() {
     const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
-    ws = new WebSocket(`${protocol}//${location.host}`);
+    const wsUrl = `${protocol}//${location.host}`;
+    
+    ws = new WebSocket(wsUrl);
     
     ws.onopen = () => {
         reconnectAttempts = 0;
         console.log('✅ WebSocket connected');
-        statusText.innerHTML = '🎤 Nói "Xin chào" để đánh thức';
+        statusText.innerHTML = '🎤 Nói "Xin chào" hoặc "Hello" để đánh thức Chiri!';
     };
     
     ws.onmessage = async (event) => {
         try {
             const data = JSON.parse(event.data);
-            console.log('📥 Received:', data);
             
             if (data.type === 'ai') {
-                console.log('📥 AI:', data.text);
                 isAIProcessing = false;
                 addMessage('ai', data.text);
-                await playAudio(data.text);
+                await speak(data.text);
                 statusText.innerHTML = '🎤 Đang lắng nghe...';
             }
             
             if (data.type === 'countdown') {
-                console.log('⏰ Countdown:', data.seconds);
                 addMessage('ai', data.message);
-                await playAudio(data.message);
-                
-                startCountdown(data.seconds, 
-                    (remaining) => {
-                        // Optional: update UI on each tick
-                    },
-                    () => {
-                        addMessage('ai', '🔔 Hết giờ!');
-                        playAudio('Hết giờ rồi!');
-                    }
-                );
+                speak(data.message);
+                startCountdown(data.seconds, () => {
+                    addMessage('ai', '🔔 Hết giờ rồi!');
+                    speak('Hết giờ rồi!');
+                });
             }
             
             if (data.type === 'error') {
                 console.error('Server error:', data.message);
                 isAIProcessing = false;
+                addMessage('ai', '⚠️ Có lỗi xảy ra, vui lòng thử lại!');
             }
         } catch(e) {
             console.log('Parse error:', e);
@@ -544,34 +472,20 @@ function connectWebSocket() {
     
     ws.onerror = (error) => {
         console.log('WS error:', error);
-        statusText.innerHTML = '⚠️ Đang mất kết nối...';
+        statusText.innerHTML = '⚠️ Đang mất kết nối server...';
     };
     
     ws.onclose = () => {
-        console.log('WS reconnecting...');
+        console.log('WS disconnected');
         const delay = Math.min(1000 * Math.pow(2, reconnectAttempts++), 8000);
         setTimeout(connectWebSocket, delay);
     };
 }
 
-// ================= TIMER =================
-
-function resetInactivityTimer() {
-    if (inactivityTimer) {
-        clearTimeout(inactivityTimer);
-    }
-    
-    inactivityTimer = setTimeout(() => {
-        if (isAwake) {
-            goToSleep();
-        }
-    }, INACTIVITY_LIMIT);
-}
-
-// ================= INIT =================
-
+// ========== INITIALIZATION ==========
 function init() {
-    console.log('🚀 Chiri AI v4.0 - Full Feature');
+    console.log('🚀 Chiri AI v5.0 - Full Feature Loaded');
+    console.log('📋 Features: ChatGPT, Voice Control, Countdown, Drive Mode, Multi-language TTS');
     
     updateWakeIndicator('sleeping');
     updateDriveModeUI();
@@ -580,27 +494,38 @@ function init() {
     connectWebSocket();
     initSpeechRecognition();
     
-    // Chrome needs user interaction
+    // User interaction for Chrome autoplay policy
     document.addEventListener('click', () => {
         const audio = new Audio();
         audio.play().catch(()=>{});
-        if (!isAwake) wakeUp();
+        if (!isAwake) {
+            wakeUp();
+        }
     }, { once: true });
     
-    manualWake.addEventListener('click', wakeUp);
-    
-    driveModeBtn.addEventListener('click', () => {
-        driveControlMode = !driveControlMode;
-        updateDriveModeUI();
-        const msg = driveControlMode ? 'Đã bật chế độ lái xe' : 'Đã tắt chế độ lái xe';
-        addMessage('ai', msg);
-        playAudio(msg);
-        if (driveControlMode) {
-            stopCountdown();
+    // Manual wake button
+    manualWake.addEventListener('click', () => {
+        if (!isAwake) {
+            wakeUp();
+        } else {
+            resetInactivityTimer();
+            addMessage('ai', 'Chiri vẫn đang thức đây! Bạn cần gì ạ? 😊');
+            speak('Chiri vẫn đang thức đây! Bạn cần gì ạ?');
         }
     });
     
-    // Blink eyes
+    // Drive mode toggle
+    driveModeBtn.addEventListener('click', () => {
+        driveControlMode = !driveControlMode;
+        updateDriveModeUI();
+        const msg = driveControlMode 
+            ? 'Đã bật chế độ lái xe. Bạn có thể nói: Tiến, Lùi, Trái, Phải, Dừng để điều khiển xe! 🚗'
+            : 'Đã tắt chế độ lái xe. Chiri sẽ trò chuyện thông minh như AI! 💬';
+        addMessage('ai', msg);
+        speak(msg);
+    });
+    
+    // Eye blink animation
     setInterval(() => {
         if (isAwake && !isSpeaking) {
             document.querySelectorAll('.robot-eye').forEach(eye => {
@@ -609,6 +534,18 @@ function init() {
             });
         }
     }, 4500);
+    
+    // Floating effect for robot
+    let floatDirection = 1;
+    setInterval(() => {
+        const robotAvatar = document.querySelector('.robot-avatar');
+        if (robotAvatar && isAwake && !isSpeaking) {
+            const currentY = parseFloat(robotAvatar.style.transform?.match(/translateY\(([^)]+)\)/)?.[1] || '0');
+            let newY = currentY + 0.5 * floatDirection;
+            if (Math.abs(newY) > 5) floatDirection *= -1;
+            robotAvatar.style.transform = `translateY(${newY}px)`;
+        }
+    }, 100);
 }
 
 document.addEventListener('DOMContentLoaded', init);
