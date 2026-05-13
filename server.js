@@ -100,12 +100,51 @@ function getCurrentDate() {
     return `Hôm nay là ${weekday}, ngày ${day} tháng ${month} năm ${year}.`;
 }
 
+// ========== FALLBACK KNOWLEDGE (DỰ PHÒNG KHI CRAWL LỖI) ==========
+const fallbackKnowledge = {
+    'vinfast': `Theo bài báo Dân trí ngày 13/5/2026, VinFast đang tái cấu trúc:
+- Công ty Tương Lai (của ông Phạm Nhật Vượng) mua lại 2 nhà máy tại Hải Phòng và Hà Tĩnh với giá 13.309,6 tỷ đồng
+- Đồng thời nhận lại khoảng 182.000 tỷ đồng nợ của VinFast
+- Sau tái cấu trúc, VinFast sẽ không còn mảng sản xuất tại Việt Nam, thay vào đó thuê Công ty Tương Lai sản xuất
+- VinFast vẫn giữ các mảng R&D, thiết kế, kinh doanh, bảo hành, hậu mãi
+- VinFast dự kiến có lãi từ năm 2027
+- Khách hàng không bị ảnh hưởng về chất lượng sản phẩm và chế độ bảo hành`,
+    
+    'vinfast tu bo o to': `VinFast không từ bỏ ngành ô tô. Họ đang tái cấu trúc để tối ưu chi phí và giảm nợ. VinFast vẫn giữ thương hiệu, vẫn bán xe, vẫn bảo hành bình thường. Mục tiêu là có lãi từ năm 2027.`,
+    
+    'son la': 'Tỉnh Sơn La không nằm trong phương án sáp nhập theo tài liệu dự kiến. Sơn La giữ nguyên hiện trạng.',
+    
+    'sap nhap tinh': 'Theo tài liệu dự kiến, có 23 tỉnh thành mới được sáp nhập từ 63 tỉnh thành hiện tại. Các tỉnh như Hà Nội, Huế, Sơn La, Lai Châu, Điện Biên, Lạng Sơn, Quảng Ninh, Thanh Hoá, Nghệ An, Hà Tĩnh, Cao Bằng không sáp nhập.',
+    
+    'vard vung tau': 'VARD Vũng Tàu là công ty đóng tàu chuyên dụng, thành lập năm 2006, có 1100 nhân viên đến từ 63 tỉnh thành. Địa chỉ: Đường số 6, KCN Đông Xuyên, Phường Rạch Dừa, TP. Vũng Tàu. Công ty có kế hoạch tuyển thêm lên 2000 người, đơn hàng đến 2026.'
+};
+
+function searchFallbackKnowledge(query) {
+    const lower = query.toLowerCase();
+    
+    if (lower.includes('vinfast') && (lower.includes('từ bỏ') || lower.includes('bỏ ngành') || lower.includes('rút lui'))) {
+        return fallbackKnowledge['vinfast tu bo o to'];
+    }
+    if (lower.includes('vinfast')) {
+        return fallbackKnowledge['vinfast'];
+    }
+    if (lower.includes('son la') || (lower.includes('sơn') && lower.includes('la'))) {
+        return fallbackKnowledge['son la'];
+    }
+    if (lower.includes('sap nhap') || lower.includes('sáp nhập') || (lower.includes('nhập') && lower.includes('tỉnh'))) {
+        return fallbackKnowledge['sap nhap tinh'];
+    }
+    if (lower.includes('vard') || (lower.includes('vung') && lower.includes('tau'))) {
+        return fallbackKnowledge['vard vung tau'];
+    }
+    return null;
+}
+
 // ========== RAG KNOWLEDGE BASE ==========
 let customKnowledge = [];
 let knowledgeSource = '';
 
 // ========== GOOGLE DRIVE CONFIG ==========
-// File PDF về sáp nhập tỉnh
 const GOOGLE_DRIVE_FILE_ID = process.env.GOOGLE_DRIVE_FILE_ID || '1RXqoUIQgb_UgvbjM8h3412OZdsxPAZPP';
 
 // ========== DOWNLOAD FROM GOOGLE DRIVE ==========
@@ -117,7 +156,6 @@ async function downloadFromGoogleDrive(fileId) {
     
     try {
         console.log(`📥 Downloading from Google Drive ID: ${fileId}`);
-        // Sử dụng export link để tải file trực tiếp
         const downloadUrl = `https://drive.google.com/uc?export=download&id=${fileId}`;
         
         const response = await axios({
@@ -150,7 +188,7 @@ async function downloadFromGoogleDrive(fileId) {
     }
 }
 
-// ========== CRAWL WEBSITE ==========
+// ========== CRAWL WEBSITE (CẢI THIỆN) ==========
 async function crawlWebsite(url) {
     if (!axios || !cheerio) {
         console.log('⚠️ Axios or cheerio not available, cannot crawl website');
@@ -161,7 +199,8 @@ async function crawlWebsite(url) {
         console.log(`🕷️ Crawling: ${url}`);
         const response = await axios.get(url, {
             headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8'
             },
             timeout: 15000
         });
@@ -169,19 +208,17 @@ async function crawlWebsite(url) {
         const $ = cheerio.load(response.data);
         
         // Remove unnecessary elements
-        $('script, style, nav, footer, header, .sidebar, .navigation, iframe, .advertisement').remove();
+        $('script, style, nav, footer, header, .sidebar, .navigation, iframe, .advertisement, .cookie-banner').remove();
         
         // Get main content
         let content = '';
-        
-        // Try common content selectors
         const selectors = ['main', 'article', '.content', '.main-content', '#content', '.post-content', '.entry-content', 'body'];
         
         for (const selector of selectors) {
             const elements = $(selector);
             if (elements.length > 0) {
                 content = elements.text().trim();
-                if (content.length > 200) break;
+                if (content.length > 500) break;
             }
         }
         
@@ -202,47 +239,48 @@ async function crawlWebsite(url) {
 }
 
 // ========== SPLIT TEXT INTO CHUNKS ==========
-function splitTextIntoChunks(text, maxChunkSize = 800) {
+function splitTextIntoChunks(text, maxChunkSize = 1000) {
     if (!text) return [];
     
     const chunks = [];
-    const sentences = text.split(/[.!?]+/);
+    const paragraphs = text.split(/\n\s*\n/);
     
-    let currentChunk = '';
-    for (const sentence of sentences) {
-        const trimmed = sentence.trim();
-        if (trimmed.length === 0) continue;
+    for (const paragraph of paragraphs) {
+        if (paragraph.trim().length === 0) continue;
         
-        if ((currentChunk + ' ' + trimmed).length < maxChunkSize) {
-            currentChunk += (currentChunk ? ' ' : '') + trimmed + '.';
+        if (paragraph.length <= maxChunkSize) {
+            chunks.push(paragraph.trim());
         } else {
+            const sentences = paragraph.split(/[.!?]+/);
+            let currentChunk = '';
+            for (const sentence of sentences) {
+                const trimmed = sentence.trim();
+                if (trimmed.length === 0) continue;
+                if ((currentChunk + ' ' + trimmed).length < maxChunkSize) {
+                    currentChunk += (currentChunk ? ' ' : '') + trimmed + '.';
+                } else {
+                    if (currentChunk) chunks.push(currentChunk.trim());
+                    currentChunk = trimmed + '.';
+                }
+            }
             if (currentChunk) chunks.push(currentChunk.trim());
-            currentChunk = trimmed + '.';
         }
     }
-    if (currentChunk) chunks.push(currentChunk.trim());
     
     return chunks;
 }
 
 // ========== EXTRACT KEYWORDS ==========
 function extractKeywords(text) {
-    const cleanText = text.toLowerCase().replace(/[^\w\sàáảãạăâầấẩẫậêềếểễệôồốổỗộơờớởỡợưừứửữựđ]/g, '');
+    const cleanText = text.toLowerCase().replace(/[^\w\s]/g, '');
     const words = cleanText.split(/\s+/);
-    
-    const stopwords = new Set([
-        'và', 'của', 'có', 'là', 'một', 'với', 'cho', 'khi', 'đã', 'sẽ',
-        'được', 'không', 'các', 'những', 'như', 'này', 'ấy', 'ở', 'tại',
-        'the', 'and', 'for', 'with', 'this', 'that', 'from', 'are', 'was'
-    ]);
-    
+    const stopwords = new Set(['và', 'của', 'có', 'là', 'một', 'với', 'cho', 'khi', 'đã', 'sẽ', 'được', 'không', 'các', 'những']);
     const keywords = [];
     for (const word of words) {
         if (word.length > 2 && !stopwords.has(word)) {
             keywords.push(word);
         }
     }
-    
     return [...new Set(keywords.slice(0, 20))];
 }
 
@@ -252,13 +290,15 @@ async function loadCustomKnowledge() {
     
     const allContent = [];
     
-    // Default websites to crawl (bao gồm website VARD)
+    // Default websites to crawl (THÊM WEBSITE DÂN TRÍ VỀ VINFAST)
     const defaultWebsites = process.env.DEFAULT_WEBSITES 
         ? process.env.DEFAULT_WEBSITES.split(',')
         : [
             'https://vi.wikipedia.org/wiki/Tuổi_thọ',
             'https://vi.wikipedia.org/wiki/Sức_khỏe',
-            'https://www.vard.com/vungtau'  // Website VARD Vũng Tàu
+            'https://www.vard.com/vungtau',
+            'https://khoahoc.tv/nhung-ly-do-khien-con-nguoi-nam-mo-khi-di-ngu-50275',
+            'https://dantri.com.vn/o-to-xe-may/lanh-dao-vinfast-noi-gi-ve-nghi-van-tu-bo-nganh-o-to-20260513203658767.htm'
           ];
     
     // Crawl websites
@@ -273,6 +313,8 @@ async function loadCustomKnowledge() {
                     title: data.title,
                     content: data.content
                 });
+            } else {
+                console.log(`⚠️ Failed to crawl: ${url}`);
             }
             await delay(1000);
         }
@@ -289,6 +331,8 @@ async function loadCustomKnowledge() {
                 title: 'Phương án sáp nhập tỉnh thành Việt Nam',
                 content: pdfContent
             });
+        } else {
+            console.log('⚠️ Failed to download PDF, using fallback knowledge');
         }
     }
     
@@ -325,25 +369,30 @@ function searchInKnowledge(query) {
         let score = 0;
         const chunkLower = chunk.content.toLowerCase();
         
-        // Exact phrase match (cao nhất)
+        // Exact phrase match
         if (chunkLower.includes(queryLower)) {
-            score += 20;
+            score += 30;
         }
         
         // Word matches
         for (const word of queryWords) {
             if (chunkLower.includes(word)) {
-                score += 1;
+                score += 2;
             }
             if (chunk.keywords && chunk.keywords.includes(word)) {
-                score += 3;
+                score += 5;
             }
         }
         
-        // Length bonus
-        score += Math.min(5, chunk.content.length / 200);
+        // Bonus cho nội dung dài và từ khóa quan trọng
+        score += Math.min(10, chunk.content.length / 200);
         
-        if (score > 0) {
+        // Bonus cho nguồn Dân trí (ưu tiên tin tức mới)
+        if (chunk.source && chunk.source.includes('dantri')) {
+            score += 15;
+        }
+        
+        if (score > 5) {
             results.push({
                 score: score,
                 content: chunk.content,
@@ -354,7 +403,7 @@ function searchInKnowledge(query) {
     }
     
     results.sort((a, b) => b.score - a.score);
-    return results.slice(0, 5);
+    return results.slice(0, 3);
 }
 
 // ========== GENERATE ANSWER FROM KNOWLEDGE ==========
@@ -371,7 +420,7 @@ function generateAnswerFromKnowledge(query, results) {
         };
     }
     
-    if (results.length >= 2 && results[0].score >= 8) {
+    if (results.length >= 2 && results[0].score >= 10) {
         let combined = `📚 **Tổng hợp từ các nguồn:**\n\n`;
         for (let i = 0; i < Math.min(2, results.length); i++) {
             combined += `📌 **${results[i].source}:**\n${results[i].content.substring(0, 300)}...\n\n`;
@@ -402,6 +451,7 @@ QUAN TRỌNG:
 - Trả lời MỌI câu hỏi của người dùng một cách chính xác, hữu ích
 - Nếu hỏi về khoảng cách, trả lời khoảng cách
 - Nếu hỏi về thời gian, trả lời thời gian thực
+- Nếu hỏi về VinFast, hãy dùng thông tin từ bài báo Dân trí ngày 13/5/2026
 - Giọng điệu: thân thiện, nhiệt tình, dùng icon cảm xúc (❤️, 😊, 🚀)
 - Trả lời bằng TIẾNG VIỆT
 - Trả lời NGẮN GỌN (2-3 câu)
@@ -418,7 +468,7 @@ QUAN TRỌNG:
                 ...history.slice(-10),
                 { role: 'user', content: userMessage.slice(0, 500) }
             ],
-            max_tokens: 300,
+            max_tokens: 350,
             temperature: 0.7,
         });
         
@@ -453,14 +503,10 @@ function delay(ms) {
 }
 
 // ========== DRIVE FUNCTIONS ==========
-// Chỉ nhận 1 lệnh duy nhất, loại bỏ từ thừa
 function getDriveCommand(text) {
     const lower = text.toLowerCase().trim();
-    
-    // Remove noise words
     const cleanText = lower.replace(/đang|ơi|ạ|mình|hãy|làm ơn|cho|tôi/g, '');
     
-    // Check each command
     if (cleanText.includes('tiến') || cleanText === 'đi' || cleanText.includes('forward')) {
         return 'FORWARD';
     }
@@ -477,10 +523,6 @@ function getDriveCommand(text) {
         return 'STOP';
     }
     return null;
-}
-
-function isControlCommand(text) {
-    return getDriveCommand(text) !== null;
 }
 
 function sendToESP32(command) {
@@ -530,10 +572,9 @@ async function processUserMessage(userText, driveMode, sessionId, ws) {
         try {
             console.log(`🔍 [${sessionId}] Process: "${userText}" | driveMode: ${driveMode}`);
             
-            // DRIVE MODE - Chỉ xử lý lệnh điều khiển xe
+            // DRIVE MODE
             if (driveMode === true) {
                 const command = getDriveCommand(userText);
-                
                 if (command) {
                     sendToESP32(command);
                     const replies = {
@@ -544,12 +585,11 @@ async function processUserMessage(userText, driveMode, sessionId, ws) {
                         'STOP': '🛑 Xe dừng lại!'
                     };
                     return replies[command];
-                } else {
-                    return '🚫 Chế độ điều khiển xe. Vui lòng nói: TIẾN, LÙI, TRÁI, PHẢI, hoặc DỪNG.';
                 }
+                return '🚫 Chế độ điều khiển xe. Vui lòng nói: TIẾN, LÙI, TRÁI, PHẢI, hoặc DỪNG.';
             }
             
-            // COUNTDOWN COMMAND
+            // COUNTDOWN
             const countdown = handleCountdownCommand(userText);
             if (countdown.isCountdown) {
                 if (ws && ws.readyState === WebSocket.OPEN) {
@@ -571,7 +611,14 @@ async function processUserMessage(userText, driveMode, sessionId, ws) {
                 return getCurrentDate();
             }
             
-            // RAG: Search in custom knowledge (từ PDF và website đã crawl)
+            // FALLBACK KNOWLEDGE (dữ liệu dự phòng)
+            const fallbackAnswer = searchFallbackKnowledge(userText);
+            if (fallbackAnswer) {
+                console.log('✅ Found answer in fallback knowledge');
+                return fallbackAnswer;
+            }
+            
+            // RAG: Search in custom knowledge
             console.log('🔍 Searching in custom knowledge...');
             const searchResults = searchInKnowledge(userText);
             
@@ -652,7 +699,6 @@ function detectLanguage(text) {
 
 // ========== API ENDPOINTS ==========
 
-// TTS endpoint - Google TTS chất lượng cao
 app.get('/tts', async (req, res) => {
     const text = req.query.text;
     if (!text) return res.status(400).send('Missing text');
@@ -675,7 +721,6 @@ app.get('/tts', async (req, res) => {
     }
 });
 
-// Upload PDF file
 app.post('/api/upload-pdf', async (req, res) => {
     try {
         const { fileContent, fileName } = req.body;
@@ -711,7 +756,6 @@ app.post('/api/upload-pdf', async (req, res) => {
     }
 });
 
-// Add website URL
 app.post('/api/add-website', async (req, res) => {
     try {
         const { url } = req.body;
@@ -741,7 +785,6 @@ app.post('/api/add-website', async (req, res) => {
     }
 });
 
-// Add Google Drive file
 app.post('/api/add-drive', async (req, res) => {
     try {
         const { fileId } = req.body;
@@ -771,7 +814,6 @@ app.post('/api/add-drive', async (req, res) => {
     }
 });
 
-// Get knowledge stats
 app.get('/api/knowledge-stats', (req, res) => {
     const sources = {};
     for (const item of customKnowledge) {
@@ -794,13 +836,11 @@ app.get('/api/knowledge-stats', (req, res) => {
     });
 });
 
-// Clear knowledge
 app.post('/api/clear-knowledge', (req, res) => {
     customKnowledge = [];
     res.json({ success: true, message: 'Đã xóa toàn bộ dữ liệu đã học!' });
 });
 
-// Health check
 app.get('/health', (req, res) => {
     res.json({
         status: 'ok',
@@ -905,7 +945,9 @@ async function startServer() {
         console.log(`║  🚗 ESP32 Clients: ${esp32Clients.size.toString().padEnd(40)}║`);
         console.log(`║  💤 Auto-sleep: 60 seconds inactivity                              ║`);
         console.log(`║  📄 PDF Source: Google Drive (sáp nhập tỉnh)                        ║`);
-        console.log(`║  🌐 Website Source: vard.com/vungtau                                ║`);
+        console.log(`║  🌐 Website Sources:                                               ║`);
+        console.log(`║     - vard.com/vungtau                                             ║`);
+        console.log(`║     - dantri.com.vn (VinFast)                                      ║`);
         console.log(`╠═══════════════════════════════════════════════════════════════════╣`);
         console.log(`║  📡 WebSocket: ws://localhost:${PORT}                                      ║`);
         console.log(`╠═══════════════════════════════════════════════════════════════════╣`);
@@ -921,7 +963,6 @@ async function startServer() {
     });
 }
 
-// Handle graceful shutdown
 process.on('SIGTERM', () => {
     console.log('SIGTERM received, shutting down gracefully...');
     server.close(() => {
