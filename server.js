@@ -110,37 +110,29 @@ function getCurrentDate(lang = 'vi') {
 }
 
 // ========== LANGUAGE DETECTION ==========
-// Quan trọng: phát hiện chính xác ngôn ngữ câu hỏi
 function detectLanguage(text) {
-    if (!text || text.length === 0) return 'vi'; // Mặc định tiếng Việt
+    if (!text || text.length === 0) return 'vi';
     
-    // Kiểm tra ký tự tiếng Việt có dấu
     const vietnameseChars = /[àáảãạăâầấẩẫậêềếểễệôồốổỗộơờớởỡợưừứửữựđ]/i;
     
-    // Nếu có ký tự tiếng Việt có dấu -> chắc chắn là tiếng Việt
     if (vietnameseChars.test(text)) {
         return 'vi';
     }
     
-    // Các từ khóa tiếng Anh phổ biến (không có trong tiếng Việt)
-    const englishKeywords = /\b(what|where|when|why|how|who|which|is|are|am|was|were|do|does|did|have|has|had|can|could|will|would|should|may|might|please|thank|hello|hi|hey|good|bad|nice|love|like|help|support|please|sorry|yes|no|ok|okay|thanks|welcome)\b/i;
+    const englishKeywords = /\b(what|where|when|why|how|who|which|is|are|am|was|were|do|does|did|have|has|had|can|could|will|would|should|may|might|please|thank|hello|hi|hey|good|bad|nice|love|like|help|support|sorry|yes|no|ok|okay|thanks|welcome|how are you|i am|you are)\b/i;
     
-    // Nếu có từ khóa tiếng Anh và không có dấu tiếng Việt -> tiếng Anh
     if (englishKeywords.test(text)) {
         return 'en';
     }
     
-    // Nếu toàn bộ là ký tự Latin cơ bản (a-z, 0-9, khoảng trắng, dấu câu cơ bản)
     const latinOnly = /^[a-zA-Z0-9\s\.\,\?\!]+$/.test(text);
     if (latinOnly && text.length > 2) {
         return 'en';
     }
     
-    // Mặc định tiếng Việt
     return 'vi';
 }
 
-// Hàm lấy system prompt theo ngôn ngữ
 function getSystemPrompt(lang, customContext = '') {
     if (lang === 'en') {
         let prompt = `You are Chiri - a smart, friendly, cute AI assistant.
@@ -165,7 +157,7 @@ QUAN TRỌNG:
 - Nếu hỏi về thời gian, trả lời thời gian thực
 - Nếu hỏi về VinFast, hãy dùng thông tin từ bài báo Dân trí ngày 13/5/2026
 - Giọng điệu: thân thiện, nhiệt tình, dùng icon cảm xúc (❤️, 😊, 🚀)
-- Trả lời bằng TIẾNG VIỆT (QUAN TRỌNG: phải trả lời bằng tiếng Việt)
+- Trả lời bằng TIẾNG VIỆT
 - Trả lời NGẮN GỌN (2-3 câu)
 - Nếu không biết, hãy thành thật nói "Mình chưa rõ lắm"`;
 
@@ -176,9 +168,8 @@ QUAN TRỌNG:
     }
 }
 
-// ========== FALLBACK KNOWLEDGE (DỰ PHÒNG) ==========
+// ========== FALLBACK KNOWLEDGE ==========
 const fallbackKnowledge = {
-    // Vietnamese
     'vinfast': `Theo bài báo Dân trí ngày 13/5/2026, VinFast đang tái cấu trúc:
 - Công ty Tương Lai (của ông Phạm Nhật Vượng) mua lại 2 nhà máy tại Hải Phòng và Hà Tĩnh với giá 13.309,6 tỷ đồng
 - Đồng thời nhận lại khoảng 182.000 tỷ đồng nợ của VinFast
@@ -199,7 +190,6 @@ const fallbackKnowledge = {
 function searchFallbackKnowledge(query, lang = 'vi') {
     const lower = query.toLowerCase();
     
-    // English queries
     if (lang === 'en') {
         if (lower.includes('vinfast') && (lower.includes('quit') || lower.includes('abandon') || lower.includes('leave'))) {
             return 'VinFast is not quitting the automotive industry. They are restructuring to optimize costs and reduce debt. VinFast still keeps the brand, still sells cars, still provides warranty. Target is to be profitable from 2027.';
@@ -225,7 +215,6 @@ function searchFallbackKnowledge(query, lang = 'vi') {
         return null;
     }
     
-    // Vietnamese queries
     if (lower.includes('vinfast') && (lower.includes('từ bỏ') || lower.includes('bỏ ngành') || lower.includes('rút lui'))) {
         return fallbackKnowledge['vinfast tu bo o to'];
     }
@@ -251,12 +240,8 @@ let knowledgeSource = '';
 // ========== GOOGLE DRIVE CONFIG ==========
 const GOOGLE_DRIVE_FILE_ID = process.env.GOOGLE_DRIVE_FILE_ID || '1RXqoUIQgb_UgvbjM8h3412OZdsxPAZPP';
 
-// ========== DOWNLOAD FROM GOOGLE DRIVE ==========
 async function downloadFromGoogleDrive(fileId) {
-    if (!axios) {
-        console.log('⚠️ Axios not available, cannot download from Google Drive');
-        return null;
-    }
+    if (!axios) return null;
     
     try {
         console.log(`📥 Downloading from Google Drive ID: ${fileId}`);
@@ -267,9 +252,7 @@ async function downloadFromGoogleDrive(fileId) {
             url: downloadUrl,
             responseType: 'arraybuffer',
             timeout: 30000,
-            headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-            }
+            headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' }
         });
         
         const buffer = Buffer.from(response.data);
@@ -280,24 +263,18 @@ async function downloadFromGoogleDrive(fileId) {
                 console.log(`✅ PDF loaded: ${pdfData.numpages} pages, ${pdfData.text.length} chars`);
                 return pdfData.text;
             } catch (e) {
-                console.log('File is not PDF, treating as text');
                 return buffer.toString('utf-8');
             }
-        } else {
-            return buffer.toString('utf-8');
         }
+        return buffer.toString('utf-8');
     } catch (error) {
         console.error('❌ Google Drive download error:', error.message);
         return null;
     }
 }
 
-// ========== CRAWL WEBSITE ==========
 async function crawlWebsite(url) {
-    if (!axios || !cheerio) {
-        console.log('⚠️ Axios or cheerio not available, cannot crawl website');
-        return null;
-    }
+    if (!axios || !cheerio) return null;
     
     try {
         console.log(`🕷️ Crawling: ${url}`);
@@ -310,11 +287,8 @@ async function crawlWebsite(url) {
         });
         
         const $ = cheerio.load(response.data);
-        
-        // Remove unnecessary elements
         $('script, style, nav, footer, header, .sidebar, .navigation, iframe, .advertisement, .cookie-banner').remove();
         
-        // Get main content
         let content = '';
         const selectors = ['main', 'article', '.content', '.main-content', '#content', '.post-content', '.entry-content', 'body'];
         
@@ -326,32 +300,23 @@ async function crawlWebsite(url) {
             }
         }
         
-        // Clean text
         content = content.replace(/\s+/g, ' ').trim();
-        
         console.log(`✅ Crawled: ${content.length} chars from ${url}`);
         
-        return {
-            url: url,
-            title: $('title').text() || url,
-            content: content
-        };
+        return { url, title: $('title').text() || url, content };
     } catch (error) {
         console.error(`❌ Crawl error ${url}:`, error.message);
         return null;
     }
 }
 
-// ========== SPLIT TEXT INTO CHUNKS ==========
 function splitTextIntoChunks(text, maxChunkSize = 1000) {
     if (!text) return [];
-    
     const chunks = [];
     const paragraphs = text.split(/\n\s*\n/);
     
     for (const paragraph of paragraphs) {
         if (paragraph.trim().length === 0) continue;
-        
         if (paragraph.length <= maxChunkSize) {
             chunks.push(paragraph.trim());
         } else {
@@ -370,11 +335,9 @@ function splitTextIntoChunks(text, maxChunkSize = 1000) {
             if (currentChunk) chunks.push(currentChunk.trim());
         }
     }
-    
     return chunks;
 }
 
-// ========== EXTRACT KEYWORDS ==========
 function extractKeywords(text) {
     const cleanText = text.toLowerCase().replace(/[^\w\s]/g, '');
     const words = cleanText.split(/\s+/);
@@ -388,10 +351,8 @@ function extractKeywords(text) {
     return [...new Set(keywords.slice(0, 20))];
 }
 
-// ========== LOAD CUSTOM KNOWLEDGE ==========
 async function loadCustomKnowledge() {
     console.log('\n📚 LOADING CUSTOM KNOWLEDGE...\n');
-    
     const allContent = [];
     
     const defaultWebsites = process.env.DEFAULT_WEBSITES 
@@ -408,14 +369,7 @@ async function loadCustomKnowledge() {
         for (const url of defaultWebsites) {
             const data = await crawlWebsite(url);
             if (data) {
-                allContent.push({
-                    source: url,
-                    type: 'website',
-                    title: data.title,
-                    content: data.content
-                });
-            } else {
-                console.log(`⚠️ Failed to crawl: ${url}`);
+                allContent.push({ source: url, type: 'website', title: data.title, content: data.content });
             }
             await delay(1000);
         }
@@ -431,15 +385,12 @@ async function loadCustomKnowledge() {
                 title: 'Phương án sáp nhập tỉnh thành Việt Nam',
                 content: pdfContent
             });
-        } else {
-            console.log('⚠️ Failed to download PDF, using fallback knowledge');
         }
     }
     
     for (const item of allContent) {
         console.log(`📖 Processing: ${item.title}`);
         const chunks = splitTextIntoChunks(item.content);
-        
         for (const chunk of chunks) {
             customKnowledge.push({
                 id: Date.now() + '-' + Math.random().toString(36).substr(2, 6),
@@ -456,7 +407,6 @@ async function loadCustomKnowledge() {
     console.log(`\n✅ ${knowledgeSource}\n`);
 }
 
-// ========== SEARCH IN KNOWLEDGE ==========
 function searchInKnowledge(query) {
     if (customKnowledge.length === 0) return [];
     
@@ -468,32 +418,16 @@ function searchInKnowledge(query) {
         let score = 0;
         const chunkLower = chunk.content.toLowerCase();
         
-        if (chunkLower.includes(queryLower)) {
-            score += 30;
-        }
-        
+        if (chunkLower.includes(queryLower)) score += 30;
         for (const word of queryWords) {
-            if (chunkLower.includes(word)) {
-                score += 2;
-            }
-            if (chunk.keywords && chunk.keywords.includes(word)) {
-                score += 5;
-            }
+            if (chunkLower.includes(word)) score += 2;
+            if (chunk.keywords && chunk.keywords.includes(word)) score += 5;
         }
-        
         score += Math.min(10, chunk.content.length / 200);
-        
-        if (chunk.source && chunk.source.includes('dantri')) {
-            score += 15;
-        }
+        if (chunk.source && chunk.source.includes('dantri')) score += 15;
         
         if (score > 5) {
-            results.push({
-                score: score,
-                content: chunk.content,
-                source: chunk.source,
-                title: chunk.title
-            });
+            results.push({ score, content: chunk.content, source: chunk.source, title: chunk.title });
         }
     }
     
@@ -501,10 +435,8 @@ function searchInKnowledge(query) {
     return results.slice(0, 3);
 }
 
-// ========== GENERATE ANSWER FROM KNOWLEDGE ==========
 function generateAnswerFromKnowledge(query, results) {
     if (results.length === 0) return null;
-    
     const bestMatch = results[0];
     
     if (bestMatch.score >= 15) {
@@ -520,17 +452,11 @@ function generateAnswerFromKnowledge(query, results) {
         for (let i = 0; i < Math.min(2, results.length); i++) {
             combined += `📌 **${results[i].source}:**\n${results[i].content.substring(0, 300)}...\n\n`;
         }
-        return {
-            answer: combined,
-            source: 'multiple sources',
-            confidence: 'medium'
-        };
+        return { answer: combined, source: 'multiple sources', confidence: 'medium' };
     }
-    
     return null;
 }
 
-// ========== CALL CHATGPT WITH CONTEXT ==========
 async function callChatGPT(userMessage, history = [], customContext = '', lang = 'vi') {
     const cacheKey = userMessage.slice(0, 200) + lang;
     const cached = responseCache.get(cacheKey);
@@ -542,7 +468,6 @@ async function callChatGPT(userMessage, history = [], customContext = '', lang =
     
     try {
         const systemPrompt = getSystemPrompt(lang, customContext);
-
         const completion = await openai.chat.completions.create({
             model: 'gpt-3.5-turbo',
             messages: [
@@ -553,7 +478,6 @@ async function callChatGPT(userMessage, history = [], customContext = '', lang =
             max_tokens: 350,
             temperature: 0.7,
         });
-        
         const reply = completion.choices[0].message.content;
         responseCache.set(cacheKey, reply);
         return reply;
@@ -563,7 +487,6 @@ async function callChatGPT(userMessage, history = [], customContext = '', lang =
     }
 }
 
-// ========== SIMPLE REPLY FALLBACK ==========
 function getSimpleReply(userMessage, lang = 'vi') {
     const lower = userMessage.toLowerCase();
     
@@ -577,10 +500,7 @@ function getSimpleReply(userMessage, lang = 'vi') {
         if (lower.includes('thank')) {
             return 'You\'re welcome! Happy to help you! 💖';
         }
-        if (lower.includes('what is your name')) {
-            return 'My name is Chiri! I am your friendly AI assistant. ❤️';
-        }
-        return `🤔 I heard you say: "${userMessage.slice(0, 50)}". I am still learning to answer better. Could you please ask me about VinFast, province merger, VARD Vung Tau, or current time?`;
+        return `🤔 I heard you say: "${userMessage.slice(0, 50)}". I am still learning to answer better.`;
     } else {
         if (lower.includes('xin chào') || lower.includes('hello')) {
             return 'Xin chào bạn! Mình là Chiri AI, rất vui được gặp bạn! 💕';
@@ -591,10 +511,7 @@ function getSimpleReply(userMessage, lang = 'vi') {
         if (lower.includes('cảm ơn')) {
             return 'Không có gì đâu ạ! Rất vui khi được giúp bạn! 💖';
         }
-        if (lower.includes('tên bạn')) {
-            return 'Tên mình là Chiri! Mình là trợ lý AI thân thiện của bạn. ❤️';
-        }
-        return `🤔 Mình nghe bạn nói: "${userMessage.slice(0, 50)}". Mình đang học hỏi thêm để trả lời tốt hơn. Bạn có thể hỏi mình về VinFast, sáp nhập tỉnh, VARD Vũng Tàu, hoặc thời gian nhé!`;
+        return `🤔 Mình nghe bạn nói: "${userMessage.slice(0, 50)}". Mình đang học hỏi thêm để trả lời tốt hơn.`;
     }
 }
 
@@ -602,26 +519,15 @@ function delay(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-// ========== DRIVE FUNCTIONS ==========
 function getDriveCommand(text) {
     const lower = text.toLowerCase().trim();
     const cleanText = lower.replace(/đang|ơi|ạ|mình|hãy|làm ơn|cho|tôi/g, '');
     
-    if (cleanText.includes('tiến') || cleanText === 'đi' || cleanText.includes('forward')) {
-        return 'FORWARD';
-    }
-    if (cleanText.includes('lùi') || cleanText.includes('back')) {
-        return 'BACKWARD';
-    }
-    if (cleanText.includes('trái') || cleanText.includes('left')) {
-        return 'LEFT';
-    }
-    if (cleanText.includes('phải') || cleanText.includes('right')) {
-        return 'RIGHT';
-    }
-    if (cleanText.includes('dừng') || cleanText.includes('stop')) {
-        return 'STOP';
-    }
+    if (cleanText.includes('tiến') || cleanText === 'đi' || cleanText.includes('forward')) return 'FORWARD';
+    if (cleanText.includes('lùi') || cleanText.includes('back')) return 'BACKWARD';
+    if (cleanText.includes('trái') || cleanText.includes('left')) return 'LEFT';
+    if (cleanText.includes('phải') || cleanText.includes('right')) return 'RIGHT';
+    if (cleanText.includes('dừng') || cleanText.includes('stop')) return 'STOP';
     return null;
 }
 
@@ -637,31 +543,22 @@ function sendToESP32(command) {
     return sent;
 }
 
-// ========== COUNTDOWN HANDLER ==========
 function handleCountdownCommand(text) {
     const lower = text.toLowerCase();
-    
     const secondMatch = lower.match(/(?:đếm ngược|countdown|hẹn giờ)\s*(\d+)\s*(giây|s)/i);
     const minuteMatch = lower.match(/(?:đếm ngược|countdown|hẹn giờ)\s*(\d+)\s*(phút|m)/i);
     
     if (secondMatch) {
         let seconds = parseInt(secondMatch[1]);
-        if (seconds > 0 && seconds <= 3600) {
-            return { isCountdown: true, seconds: seconds };
-        }
+        if (seconds > 0 && seconds <= 3600) return { isCountdown: true, seconds };
     }
-    
     if (minuteMatch) {
         let seconds = parseInt(minuteMatch[1]) * 60;
-        if (seconds > 0 && seconds <= 3600) {
-            return { isCountdown: true, seconds: seconds };
-        }
+        if (seconds > 0 && seconds <= 3600) return { isCountdown: true, seconds };
     }
-    
     return { isCountdown: false };
 }
 
-// ========== PROCESS USER MESSAGE ==========
 async function processUserMessage(userText, driveMode, sessionId, ws) {
     if (!processingQueue.has(sessionId)) {
         processingQueue.set(sessionId, Promise.resolve());
@@ -672,7 +569,6 @@ async function processUserMessage(userText, driveMode, sessionId, ws) {
         try {
             console.log(`🔍 [${sessionId}] Process: "${userText}" | driveMode: ${driveMode}`);
             
-            // PHÁT HIỆN NGÔN NGỮ - QUAN TRỌNG
             const lang = detectLanguage(userText);
             console.log(`🌐 Detected language: ${lang === 'en' ? 'ENGLISH' : 'VIETNAMESE'}`);
             
@@ -695,7 +591,7 @@ async function processUserMessage(userText, driveMode, sessionId, ws) {
                     : '🚫 Chế độ điều khiển xe. Vui lòng nói: TIẾN, LÙI, TRÁI, PHẢI, hoặc DỪNG.';
             }
             
-            // COUNTDOWN COMMAND
+            // COUNTDOWN
             const countdown = handleCountdownCommand(userText);
             if (countdown.isCountdown) {
                 if (ws && ws.readyState === WebSocket.OPEN) {
@@ -712,7 +608,7 @@ async function processUserMessage(userText, driveMode, sessionId, ws) {
                     : `⏰ Đã bắt đầu đếm ngược ${countdown.seconds} giây!`;
             }
             
-            // REAL-TIME QUESTIONS
+            // REAL-TIME
             const lower = userText.toLowerCase();
             if (lower.includes('what time') || lower.includes('current time') || lower.includes('time now') ||
                 lower.includes('mấy giờ') || (lower.includes('giờ') && lower.includes('bao nhiêu'))) {
@@ -725,12 +621,9 @@ async function processUserMessage(userText, driveMode, sessionId, ws) {
             
             // FALLBACK KNOWLEDGE
             const fallbackAnswer = searchFallbackKnowledge(userText, lang);
-            if (fallbackAnswer) {
-                console.log('✅ Found answer in fallback knowledge');
-                return fallbackAnswer;
-            }
+            if (fallbackAnswer) return fallbackAnswer;
             
-            // RAG: Search in custom knowledge
+            // RAG
             console.log('🔍 Searching in custom knowledge...');
             const searchResults = searchInKnowledge(userText);
             
@@ -741,7 +634,6 @@ async function processUserMessage(userText, driveMode, sessionId, ws) {
                 customAnswer = generateAnswerFromKnowledge(userText, searchResults);
                 if (customAnswer && customAnswer.confidence === 'high') {
                     console.log('✅ Found HIGH confidence answer in knowledge base');
-                    // Đảm bảo câu trả lời bằng đúng ngôn ngữ
                     return customAnswer.answer;
                 }
                 if (searchResults.length > 0) {
@@ -750,7 +642,7 @@ async function processUserMessage(userText, driveMode, sessionId, ws) {
                 }
             }
             
-            // CHAT MODE - ChatGPT với ngôn ngữ đã phát hiện
+            // CHAT MODE - KHÔNG CÓ DÒNG CHÚ THÍCH
             if (!conversationHistory[sessionId]) {
                 conversationHistory[sessionId] = [];
             }
@@ -763,7 +655,7 @@ async function processUserMessage(userText, driveMode, sessionId, ws) {
             } else {
                 reply = await callChatGPT(userText, conversationHistory[sessionId], '', lang);
             }
-                        
+            
             conversationHistory[sessionId].push({ role: 'assistant', content: reply });
             
             if (conversationHistory[sessionId].length > 20) {
@@ -784,61 +676,41 @@ async function processUserMessage(userText, driveMode, sessionId, ws) {
     });
 }
 
-// ========== HIGH QUALITY TTS ==========
 async function generateHighQualityTTS(text, lang = 'vi') {
     try {
         const ttsUrl = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodeURIComponent(text.slice(0, 200))}&tl=${lang}&client=tw-ob`;
-        
         const response = await axios({
             method: 'get',
             url: ttsUrl,
             responseType: 'stream',
             timeout: 10000,
-            headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-            }
+            headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' }
         });
-        
         return response.data;
     } catch (error) {
-        console.error('TTS error:', error.message);
         return null;
     }
 }
 
 // ========== API ENDPOINTS ==========
-
 app.get('/tts', async (req, res) => {
     const text = req.query.text;
     if (!text) return res.status(400).send('Missing text');
-    
     const lang = detectLanguage(text);
-    console.log(`🔊 TTS: "${text.slice(0, 50)}..." (${lang})`);
-    
-    try {
-        const audioStream = await generateHighQualityTTS(text, lang);
-        if (audioStream) {
-            res.setHeader('Content-Type', 'audio/mpeg');
-            res.setHeader('Cache-Control', 'public, max-age=3600');
-            audioStream.pipe(res);
-        } else {
-            res.status(404).send('TTS unavailable');
-        }
-    } catch (error) {
-        console.error('TTS endpoint error:', error);
-        res.status(500).send('TTS error');
+    const audioStream = await generateHighQualityTTS(text, lang);
+    if (audioStream) {
+        res.setHeader('Content-Type', 'audio/mpeg');
+        audioStream.pipe(res);
+    } else {
+        res.status(404).send('TTS unavailable');
     }
 });
 
 app.post('/api/upload-pdf', async (req, res) => {
     try {
         const { fileContent, fileName } = req.body;
-        if (!fileContent) {
-            return res.json({ success: false, message: 'No file content' });
-        }
-        
+        if (!fileContent) return res.json({ success: false, message: 'No file content' });
         const buffer = Buffer.from(fileContent, 'base64');
-        
         let text = '';
         if (pdfParse) {
             const pdfData = await pdfParse(buffer);
@@ -846,7 +718,6 @@ app.post('/api/upload-pdf', async (req, res) => {
         } else {
             text = buffer.toString('utf-8');
         }
-        
         const chunks = splitTextIntoChunks(text);
         for (const chunk of chunks) {
             customKnowledge.push({
@@ -858,7 +729,6 @@ app.post('/api/upload-pdf', async (req, res) => {
                 keywords: extractKeywords(chunk)
             });
         }
-        
         res.json({ success: true, message: `Đã thêm ${chunks.length} đoạn kiến thức từ PDF!` });
     } catch (error) {
         res.json({ success: false, message: error.message });
@@ -868,10 +738,7 @@ app.post('/api/upload-pdf', async (req, res) => {
 app.post('/api/add-website', async (req, res) => {
     try {
         const { url } = req.body;
-        if (!url) {
-            return res.json({ success: false, message: 'No URL provided' });
-        }
-        
+        if (!url) return res.json({ success: false, message: 'No URL provided' });
         const data = await crawlWebsite(url);
         if (data) {
             const chunks = splitTextIntoChunks(data.content);
@@ -897,10 +764,7 @@ app.post('/api/add-website', async (req, res) => {
 app.post('/api/add-drive', async (req, res) => {
     try {
         const { fileId } = req.body;
-        if (!fileId) {
-            return res.json({ success: false, message: 'No file ID provided' });
-        }
-        
+        if (!fileId) return res.json({ success: false, message: 'No file ID provided' });
         const content = await downloadFromGoogleDrive(fileId);
         if (content) {
             const chunks = splitTextIntoChunks(content);
@@ -926,22 +790,13 @@ app.post('/api/add-drive', async (req, res) => {
 app.get('/api/knowledge-stats', (req, res) => {
     const sources = {};
     for (const item of customKnowledge) {
-        if (!sources[item.source]) {
-            sources[item.source] = 0;
-        }
-        sources[item.source]++;
+        sources[item.source] = (sources[item.source] || 0) + 1;
     }
-    
     res.json({
         totalChunks: customKnowledge.length,
         sources: sources,
         knowledgeSource: knowledgeSource,
-        modulesAvailable: {
-            openai: !!openai,
-            pdfParse: !!pdfParse,
-            axios: !!axios,
-            cheerio: !!cheerio
-        }
+        modulesAvailable: { openai: !!openai, pdfParse: !!pdfParse, axios: !!axios, cheerio: !!cheerio }
     });
 });
 
@@ -988,14 +843,12 @@ wss.on('connection', (ws, req) => {
     ws.on('message', async (message) => {
         try {
             const data = JSON.parse(message);
-            
             if (data.type === 'voice') {
                 const reply = await processUserMessage(data.text, data.driveMode === true, sessionId, ws);
                 if (ws.readyState === WebSocket.OPEN) {
                     ws.send(JSON.stringify({ type: 'ai', text: reply }));
                 }
             }
-            
             if (data.type === 'ping') {
                 ws.send(JSON.stringify({ type: 'pong', time: Date.now() }));
             }
@@ -1057,8 +910,8 @@ async function startServer() {
         console.log(`║  📄 PDF Source: Google Drive (sáp nhập tỉnh)                        ║`);
         console.log(`║  🌐 Website Sources: vard.com/vungtau, dantri.com.vn (VinFast)     ║`);
         console.log(`╠═══════════════════════════════════════════════════════════════════╣`);
-        console.log(`║  💡 RULE: VIETNAMESE question → VIETNAMESE answer                  ║`);
-        console.log(`║         ENGLISH question → ENGLISH answer                         ║`);
+        console.log(`║  💡 RULE: Vietnamese question → Vietnamese answer                  ║`);
+        console.log(`║         English question → English answer                         ║`);
         console.log(`╚═══════════════════════════════════════════════════════════════════╝`);
         console.log(``);
     });
