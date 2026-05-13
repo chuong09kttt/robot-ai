@@ -1,7 +1,7 @@
 {
   "name": "chiri-ai-robot",
-  "version": "4.0.0",
-  "description": "CHIRI AI Robot - Optimized RAG with PDF, Web Crawler, Google Drive",
+  "version": "5.0.0",
+  "description": "CHIRI AI Robot - Full features with ChatGPT, TTS, Voice Control, Countdown",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
@@ -11,9 +11,7 @@
     "express": "^4.18.2",
     "ws": "^8.14.2",
     "openai": "^4.20.0",
-    "pdf-parse": "^1.1.1",
     "axios": "^1.6.0",
-    "cheerio": "^1.0.0-rc.12",
     "node-cache": "^5.1.2"
   },
   "devDependencies": {
