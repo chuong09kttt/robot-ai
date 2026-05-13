@@ -17,12 +17,13 @@ let driveControlMode = false;
 let mouthAnimationInterval = null;
 let reconnectAttempts = 0;
 let countdownInterval = null;
+let currentLang = 'vi-VN'; // Mặc định tiếng Việt
 
 const INACTIVITY_LIMIT = 60000; // 60 seconds
-const WAKE_WORDS = ['xin chào', 'hello', 'hi', 'chào chiri', 'chiri ơi', 'hey chiri', 'alô', 'chào'];
+const WAKE_WORDS = ['xin chào', 'hello', 'hi', 'chào chiri', 'chiri ơi', 'hey chiri', 'alô', 'chào', 'hey', 'wake up'];
 
-// ========== LANGUAGE DETECTION ==========
-function detectLanguage(text) {
+// ========== LANGUAGE DETECTION FOR SPEECH ==========
+function detectLanguageFromText(text) {
     const vietnameseChars = /[àáảãạăâầấẩẫậêềếểễệôồốổỗộơờớởỡợưừứửữựđ]/i;
     if (vietnameseChars.test(text)) {
         return 'vi';
@@ -112,13 +113,12 @@ function stopCountdown() {
     if (countdownDiv) countdownDiv.style.display = 'none';
 }
 
-// ========== TTS - HỖ TRỢ TIẾNG ANH ==========
+// ========== TTS ==========
 let currentUtterance = null;
 
 async function speak(text) {
     if (!text) return;
     
-    // Cancel any ongoing speech
     if (window.speechSynthesis) {
         window.speechSynthesis.cancel();
     }
@@ -130,12 +130,10 @@ async function speak(text) {
     isSpeaking = true;
     setExpression('talking');
     
-    // Detect language for TTS
     const isVietnamese = /[àáảãạăâầấẩẫậêềếểễệôồốổỗộơờớởỡợưừứửữựđ]/i.test(text);
     const ttsLang = isVietnamese ? 'vi' : 'en';
     
     try {
-        // Try server TTS first
         const response = await fetch(`/tts?text=${encodeURIComponent(text.slice(0, 500))}`);
         
         if (response.ok) {
@@ -251,22 +249,22 @@ function updateWakeIndicator(state) {
     wakeDot.classList.remove('listening');
     if (state === 'listening') {
         wakeDot.classList.add('listening');
-        wakeText.innerHTML = '🎤 Listening...';
+        wakeText.innerHTML = '🎤 Đang lắng nghe...';
     } else if (state === 'awake') {
         wakeDot.style.background = '#f39c12';
-        wakeText.innerHTML = '💬 Awake';
+        wakeText.innerHTML = '💬 Đang thức';
     } else {
         wakeDot.style.background = '#2ecc71';
-        wakeText.innerHTML = '😴 Sleeping';
+        wakeText.innerHTML = '😴 Đang ngủ';
     }
 }
 
 function updateDriveModeUI() {
     if (driveControlMode) {
-        driveModeBtn.innerHTML = '🚗 TURN OFF CAR CONTROL';
+        driveModeBtn.innerHTML = '🚗 TẮT CHẾ ĐỘ ĐIỀU KHIỂN XE';
         driveModeBtn.classList.add('drive-active');
     } else {
-        driveModeBtn.innerHTML = '🚗 TURN ON CAR CONTROL';
+        driveModeBtn.innerHTML = '🚗 BẬT CHẾ ĐỘ ĐIỀU KHIỂN XE';
         driveModeBtn.classList.remove('drive-active');
     }
 }
@@ -298,8 +296,8 @@ function wakeUp() {
     setExpression('happy');
     
     const greeting = driveControlMode 
-        ? 'Hello! Car control mode is on. Say: FORWARD, BACK, LEFT, RIGHT, or STOP!'
-        : 'Hello! Chiri is awake. You can ask me anything!';
+        ? 'Chào bạn! Chế độ lái xe đang bật. Hãy nói: Tiến, Lùi, Trái, Phải, hoặc Dừng!'
+        : 'Chào bạn! Chiri đã thức dậy. Bạn có thể hỏi mình bất cứ điều gì!';
     
     addMessage('ai', greeting);
     speak(greeting);
@@ -323,7 +321,7 @@ function goToSleep() {
     
     updateWakeIndicator('sleeping');
     setExpression('sleepy');
-    addMessage('ai', 'Chiri is going to sleep. Say "Hello" to wake me up! 😴');
+    addMessage('ai', 'Chiri đi ngủ đây. Nói "Xin chào" để đánh thức mình nhé! 😴');
 }
 
 function resetInactivityTimer() {
@@ -338,23 +336,24 @@ function resetInactivityTimer() {
     }, INACTIVITY_LIMIT);
 }
 
-// ========== SPEECH RECOGNITION ==========
+// ========== SPEECH RECOGNITION - HỖ TRỢ CẢ TIẾNG VIỆT VÀ TIẾNG ANH ==========
 function initSpeechRecognition() {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) {
-        alert('Your browser does not support voice recognition!');
+        alert('Trình duyệt của bạn không hỗ trợ nhận diện giọng nói!');
         return;
     }
     
     recognition = new SpeechRecognition();
-    // Use auto language detection - try English first, then Vietnamese
-    recognition.lang = 'en-US';
     recognition.continuous = true;
     recognition.interimResults = false;
     recognition.maxAlternatives = 1;
     
+    // QUAN TRỌNG: Đặt ngôn ngữ mặc định là tiếng Việt
+    recognition.lang = 'vi-VN';
+    
     recognition.onstart = () => {
-        console.log('🎤 Microphone started');
+        console.log('🎤 Microphone started - Language:', recognition.lang);
         isListening = true;
         updateWakeIndicator('listening');
         setExpression('listening');
@@ -362,16 +361,16 @@ function initSpeechRecognition() {
     
     recognition.onresult = async (event) => {
         const transcript = event.results[event.results.length - 1][0].transcript.trim();
-        console.log('🎙️ Heard:', transcript);
+        console.log('🎙️ Nghe được:', transcript);
         
         if (!transcript) return;
         
         resetInactivityTimer();
         const lower = transcript.toLowerCase();
         
-        // Wake word detection (support both English and Vietnamese)
+        // Wake word detection
         if (!isAwake) {
-            if (WAKE_WORDS.some(word => lower.includes(word)) || lower.includes('hey') || lower.includes('wake up')) {
+            if (WAKE_WORDS.some(word => lower.includes(word))) {
                 wakeUp();
             }
             return;
@@ -387,9 +386,9 @@ function initSpeechRecognition() {
         console.log('Recognition error:', event.error);
         isListening = false;
         
-        // Try switching language if error persists
-        if (event.error === 'no-speech' || event.error === 'audio-capture') {
-            // Keep current language
+        // Nếu lỗi ngôn ngữ, thử chuyển sang tiếng Anh
+        if (event.error === 'language-not-supported' || event.error === 'not-allowed') {
+            // Giữ nguyên, không chuyển
         }
         
         if (isAwake && !isSpeaking) {
@@ -406,6 +405,25 @@ function initSpeechRecognition() {
     };
 }
 
+// Hàm thử chuyển đổi ngôn ngữ nếu cần
+function switchRecognitionLanguage(lang) {
+    if (!recognition) return;
+    
+    const wasListening = isListening;
+    if (wasListening) {
+        try { recognition.stop(); } catch(e) {}
+    }
+    
+    recognition.lang = lang;
+    console.log(`🔄 Switched recognition language to: ${lang}`);
+    
+    if (wasListening && isAwake) {
+        setTimeout(() => {
+            try { recognition.start(); } catch(e) {}
+        }, 200);
+    }
+}
+
 function startListening() {
     if (!recognition || isListening || isSpeaking || isAIProcessing || !isAwake) return;
     
@@ -416,8 +434,14 @@ function startListening() {
     setTimeout(() => {
         try {
             recognition.start();
+            console.log('🎤 Listening started with language:', recognition.lang);
         } catch(e) {
             console.log('Start listening failed:', e);
+            // Thử khởi tạo lại
+            initSpeechRecognition();
+            setTimeout(() => {
+                try { recognition.start(); } catch(e) {}
+            }, 500);
         }
     }, 200);
 }
@@ -428,7 +452,7 @@ async function processCommand(text) {
     
     isAIProcessing = true;
     setExpression('thinking');
-    statusText.innerHTML = '🤔 Thinking...';
+    statusText.innerHTML = '🤔 Đang suy nghĩ...';
     addMessage('user', text);
     
     if (ws && ws.readyState === WebSocket.OPEN) {
@@ -438,7 +462,7 @@ async function processCommand(text) {
             driveMode: driveControlMode
         }));
     } else {
-        addMessage('ai', '🔌 Connection lost. Reconnecting...');
+        addMessage('ai', '🔌 Mất kết nối server. Đang thử kết nối lại...');
         isAIProcessing = false;
         connectWebSocket();
     }
@@ -452,7 +476,7 @@ function connectWebSocket() {
     ws.onopen = () => {
         reconnectAttempts = 0;
         console.log('✅ WebSocket connected');
-        statusText.innerHTML = '🎤 Say "Hello" to wake me up!';
+        statusText.innerHTML = '🎤 Nói "Xin chào" để đánh thức Chiri!';
     };
     
     ws.onmessage = async (event) => {
@@ -463,7 +487,7 @@ function connectWebSocket() {
                 isAIProcessing = false;
                 addMessage('ai', data.text);
                 await speak(data.text);
-                statusText.innerHTML = '🎤 Listening...';
+                statusText.innerHTML = '🎤 Đang lắng nghe...';
                 resetInactivityTimer();
             }
             
@@ -471,8 +495,8 @@ function connectWebSocket() {
                 addMessage('ai', data.message);
                 speak(data.message);
                 startCountdown(data.seconds, () => {
-                    addMessage('ai', '🔔 Time is up!');
-                    speak('Time is up!');
+                    addMessage('ai', '🔔 Hết giờ rồi!');
+                    speak('Hết giờ rồi!');
                 });
             }
         } catch(e) {
@@ -483,7 +507,7 @@ function connectWebSocket() {
     
     ws.onerror = (error) => {
         console.log('WS error:', error);
-        statusText.innerHTML = '⚠️ Connection lost...';
+        statusText.innerHTML = '⚠️ Đang mất kết nối server...';
     };
     
     ws.onclose = () => {
@@ -495,8 +519,8 @@ function connectWebSocket() {
 
 // ========== INITIALIZATION ==========
 function init() {
-    console.log('🚀 Chiri AI v6.0 - Multi-language Support');
-    console.log('📋 Features: English/Vietnamese, ChatGPT, Voice Control, Countdown, Drive Mode');
+    console.log('🚀 Chiri AI v6.0 - Full Feature');
+    console.log('📋 Features: Tiếng Việt, ChatGPT, Voice Control, Countdown, Drive Mode');
     
     updateWakeIndicator('sleeping');
     updateDriveModeUI();
@@ -519,8 +543,8 @@ function init() {
             wakeUp();
         } else {
             resetInactivityTimer();
-            addMessage('ai', 'Chiri is here! How can I help you? 😊');
-            speak('Chiri is here! How can I help you?');
+            addMessage('ai', 'Chiri vẫn đang thức đây! Bạn cần gì ạ? 😊');
+            speak('Chiri vẫn đang thức đây! Bạn cần gì ạ?');
         }
     });
     
@@ -528,8 +552,8 @@ function init() {
         driveControlMode = !driveControlMode;
         updateDriveModeUI();
         const msg = driveControlMode 
-            ? 'Car control mode activated. Say: FORWARD, BACK, LEFT, RIGHT, or STOP! 🚗'
-            : 'Car control mode deactivated. Chiri will chat normally! 💬';
+            ? 'Đã bật chế độ lái xe. Nói: Tiến, Lùi, Trái, Phải, Dừng! 🚗'
+            : 'Đã tắt chế độ lái xe. Chiri sẽ trò chuyện bình thường! 💬';
         addMessage('ai', msg);
         speak(msg);
     });
