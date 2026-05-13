@@ -18,8 +18,10 @@ let mouthAnimationInterval = null;
 let reconnectAttempts = 0;
 let countdownInterval = null;
 
-const INACTIVITY_LIMIT = 120000;
-const WAKE_WORDS = ['xin chào', 'hello', 'hi', 'chào chiri', 'chiri ơi', 'hey chiri', 'alô'];
+// CHANGE: 60 seconds inactivity limit
+const INACTIVITY_LIMIT = 60000;
+
+const WAKE_WORDS = ['xin chào', 'hello', 'hi', 'chào chiri', 'chiri ơi', 'hey chiri', 'alô', 'chào'];
 
 // ========== COUNTDOWN FUNCTION ==========
 function startCountdown(seconds, onComplete) {
@@ -52,7 +54,6 @@ function startCountdown(seconds, onComplete) {
     }
     
     countdownDiv.style.display = 'block';
-    
     let remaining = seconds;
     
     const updateDisplay = () => {
@@ -64,7 +65,6 @@ function startCountdown(seconds, onComplete) {
             countdownDiv.innerHTML = `⏰ ${remaining} giây`;
         }
         
-        // Warning effect
         if (remaining <= 10 && remaining > 0) {
             countdownDiv.style.transform = 'translate(-50%, -50%) scale(1.1)';
             countdownDiv.style.color = '#ff4444';
@@ -105,22 +105,30 @@ function stopCountdown() {
     if (countdownDiv) countdownDiv.style.display = 'none';
 }
 
-// ========== HIGH QUALITY TTS ==========
+// ========== TTS - FIXED DUAL VOICE ISSUE ==========
+let currentUtterance = null;
+
 async function speak(text) {
     if (!text) return;
     
-    // Stop any ongoing speech
-    window.speechSynthesis.cancel();
+    // Cancel any ongoing speech immediately
+    if (window.speechSynthesis) {
+        window.speechSynthesis.cancel();
+    }
+    
+    // Clear any pending audio
+    if (currentUtterance) {
+        currentUtterance = null;
+    }
     
     isSpeaking = true;
     setExpression('talking');
     
-    // Auto-detect language
     const isVietnamese = /[àáảãạăâầấẩẫậêềếểễệôồốổỗộơờớởỡợưừứửữựđ]/i.test(text);
     const lang = isVietnamese ? 'vi' : 'en';
     
     try {
-        // Try server TTS first (Google TTS - high quality)
+        // Try server TTS first
         const response = await fetch(`/tts?text=${encodeURIComponent(text.slice(0, 500))}`);
         
         if (response.ok) {
@@ -133,7 +141,7 @@ async function speak(text) {
             };
             audio.onerror = () => {
                 URL.revokeObjectURL(audio.src);
-                fallbackSpeak(text, lang);
+                finishSpeaking();
             };
             
             await audio.play();
@@ -148,29 +156,28 @@ async function speak(text) {
 
 function fallbackSpeak(text, lang = 'vi') {
     return new Promise((resolve) => {
+        // Cancel any existing speech
+        window.speechSynthesis.cancel();
+        
         const utterance = new SpeechSynthesisUtterance(text);
         utterance.lang = lang === 'vi' ? 'vi-VN' : 'en-US';
         utterance.rate = 0.9;
         utterance.pitch = 1.1;
         utterance.volume = 1;
+        currentUtterance = utterance;
         
         utterance.onend = () => {
+            currentUtterance = null;
             resolve();
             finishSpeaking();
         };
         utterance.onerror = () => {
+            currentUtterance = null;
             resolve();
             finishSpeaking();
         };
         
-        // Ensure voices are loaded
-        if (window.speechSynthesis.getVoices().length === 0) {
-            window.speechSynthesis.onvoiceschanged = () => {
-                window.speechSynthesis.speak(utterance);
-            };
-        } else {
-            window.speechSynthesis.speak(utterance);
-        }
+        window.speechSynthesis.speak(utterance);
     });
 }
 
@@ -189,9 +196,6 @@ function setExpression(expression) {
     robotSvg.classList.add(expression);
     
     const mouth = document.querySelector('.robot-mouth');
-    const leftEyebrow = document.getElementById('leftEyebrow');
-    const rightEyebrow = document.getElementById('rightEyebrow');
-    
     if (!mouth) return;
     
     stopMouthAnimation();
@@ -199,28 +203,18 @@ function setExpression(expression) {
     switch(expression) {
         case 'talking':
             startMouthAnimation();
-            if (leftEyebrow) leftEyebrow.style.transform = '';
-            if (rightEyebrow) rightEyebrow.style.transform = '';
             break;
         case 'listening':
             mouth.style.transform = 'scaleY(0.7)';
-            if (leftEyebrow) leftEyebrow.style.transform = '';
-            if (rightEyebrow) rightEyebrow.style.transform = '';
             break;
         case 'happy':
             mouth.style.transform = 'scaleY(1.1)';
-            if (leftEyebrow) leftEyebrow.style.transform = 'translateY(-3px) rotate(-5deg)';
-            if (rightEyebrow) rightEyebrow.style.transform = 'translateY(-3px) rotate(5deg)';
             break;
         case 'thinking':
             mouth.style.transform = 'scaleY(0.2)';
-            if (leftEyebrow) leftEyebrow.style.transform = 'translateY(2px) rotate(5deg)';
-            if (rightEyebrow) rightEyebrow.style.transform = 'translateY(2px) rotate(-5deg)';
             break;
         case 'sleepy':
             mouth.style.transform = 'scaleY(0.3)';
-            if (leftEyebrow) leftEyebrow.style.transform = 'translateY(1px)';
-            if (rightEyebrow) rightEyebrow.style.transform = 'translateY(1px)';
             break;
     }
 }
@@ -289,7 +283,7 @@ function escapeHtml(text) {
     return div.innerHTML;
 }
 
-// ========== WAKE/SLEEP ==========
+// ========== WAKE/SLEEP WITH 60s TIMER ==========
 function wakeUp() {
     if (isAwake) return;
     isAwake = true;
@@ -298,18 +292,25 @@ function wakeUp() {
     setExpression('happy');
     
     const greeting = driveControlMode 
-        ? 'Chào bạn! Chiri đã thức. Chế độ lái xe đang bật. Hãy nói Tiến, Lùi, Trái, Phải, hoặc Dừng để điều khiển xe nhé!'
-        : 'Chào bạn! Chiri đã thức dậy. Bạn có thể hỏi mình về mọi thứ, từ khoa học, vũ trụ, đến lịch sử nhé!';
+        ? 'Chào bạn! Chế độ lái xe đang bật. Hãy nói Tiến, Lùi, Trái, Phải, hoặc Dừng!'
+        : 'Chào bạn! Chiri đã thức. Bạn có thể hỏi mình bất cứ điều gì!';
     
     addMessage('ai', greeting);
     speak(greeting);
-    setTimeout(() => startListening(), 1500);
+    setTimeout(() => startListening(), 1000);
 }
 
 function goToSleep() {
+    if (!isAwake) return;
+    
     isAwake = false;
     isListening = false;
     stopCountdown();
+    
+    // Cancel any speech
+    if (window.speechSynthesis) {
+        window.speechSynthesis.cancel();
+    }
     
     if (recognition) {
         try { recognition.stop(); } catch(e) {}
@@ -317,13 +318,18 @@ function goToSleep() {
     
     updateWakeIndicator('sleeping');
     setExpression('sleepy');
-    addMessage('ai', 'Chiri đi ngủ đây. Nói "Xin chào" để đánh thức mình nhé! 😴');
+    addMessage('ai', 'Chiri đi ngủ đây. Nói "Xin chào" để đánh thức nhé! 😴');
 }
 
 function resetInactivityTimer() {
-    if (inactivityTimer) clearTimeout(inactivityTimer);
+    if (inactivityTimer) {
+        clearTimeout(inactivityTimer);
+    }
     inactivityTimer = setTimeout(() => {
-        if (isAwake) goToSleep();
+        if (isAwake && !isSpeaking && !isAIProcessing) {
+            console.log('💤 Auto-sleep after 60 seconds inactivity');
+            goToSleep();
+        }
     }, INACTIVITY_LIMIT);
 }
 
@@ -331,7 +337,7 @@ function resetInactivityTimer() {
 function initSpeechRecognition() {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) {
-        alert('Trình duyệt của bạn không hỗ trợ nhận diện giọng nói. Hãy thử dùng Chrome hoặc Edge!');
+        alert('Trình duyệt của bạn không hỗ trợ nhận diện giọng nói!');
         return;
     }
     
@@ -365,7 +371,7 @@ function initSpeechRecognition() {
             return;
         }
         
-        // Command processing
+        // Process command - prevent duplicate when speaking
         if (!isSpeaking && !isAIProcessing) {
             processCommand(transcript);
         }
@@ -429,14 +435,12 @@ async function processCommand(text) {
 // ========== WEBSOCKET ==========
 function connectWebSocket() {
     const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${protocol}//${location.host}`;
-    
-    ws = new WebSocket(wsUrl);
+    ws = new WebSocket(`${protocol}//${location.host}`);
     
     ws.onopen = () => {
         reconnectAttempts = 0;
         console.log('✅ WebSocket connected');
-        statusText.innerHTML = '🎤 Nói "Xin chào" hoặc "Hello" để đánh thức Chiri!';
+        statusText.innerHTML = '🎤 Nói "Xin chào" để đánh thức Chiri!';
     };
     
     ws.onmessage = async (event) => {
@@ -448,6 +452,7 @@ function connectWebSocket() {
                 addMessage('ai', data.text);
                 await speak(data.text);
                 statusText.innerHTML = '🎤 Đang lắng nghe...';
+                resetInactivityTimer();
             }
             
             if (data.type === 'countdown') {
@@ -457,12 +462,6 @@ function connectWebSocket() {
                     addMessage('ai', '🔔 Hết giờ rồi!');
                     speak('Hết giờ rồi!');
                 });
-            }
-            
-            if (data.type === 'error') {
-                console.error('Server error:', data.message);
-                isAIProcessing = false;
-                addMessage('ai', '⚠️ Có lỗi xảy ra, vui lòng thử lại!');
             }
         } catch(e) {
             console.log('Parse error:', e);
@@ -484,8 +483,8 @@ function connectWebSocket() {
 
 // ========== INITIALIZATION ==========
 function init() {
-    console.log('🚀 Chiri AI v5.0 - Full Feature Loaded');
-    console.log('📋 Features: ChatGPT, Voice Control, Countdown, Drive Mode, Multi-language TTS');
+    console.log('🚀 Chiri AI v5.0 - Fully Fixed');
+    console.log('📋 Features: ChatGPT, Voice Control, Countdown, Drive Mode, 60s Auto-sleep');
     
     updateWakeIndicator('sleeping');
     updateDriveModeUI();
@@ -503,7 +502,6 @@ function init() {
         }
     }, { once: true });
     
-    // Manual wake button
     manualWake.addEventListener('click', () => {
         if (!isAwake) {
             wakeUp();
@@ -514,13 +512,12 @@ function init() {
         }
     });
     
-    // Drive mode toggle
     driveModeBtn.addEventListener('click', () => {
         driveControlMode = !driveControlMode;
         updateDriveModeUI();
         const msg = driveControlMode 
-            ? 'Đã bật chế độ lái xe. Bạn có thể nói: Tiến, Lùi, Trái, Phải, Dừng để điều khiển xe! 🚗'
-            : 'Đã tắt chế độ lái xe. Chiri sẽ trò chuyện thông minh như AI! 💬';
+            ? 'Đã bật chế độ lái xe. Nói: Tiến, Lùi, Trái, Phải, Dừng! 🚗'
+            : 'Đã tắt chế độ lái xe. Chiri sẽ trò chuyện bình thường! 💬';
         addMessage('ai', msg);
         speak(msg);
     });
@@ -534,18 +531,6 @@ function init() {
             });
         }
     }, 4500);
-    
-    // Floating effect for robot
-    let floatDirection = 1;
-    setInterval(() => {
-        const robotAvatar = document.querySelector('.robot-avatar');
-        if (robotAvatar && isAwake && !isSpeaking) {
-            const currentY = parseFloat(robotAvatar.style.transform?.match(/translateY\(([^)]+)\)/)?.[1] || '0');
-            let newY = currentY + 0.5 * floatDirection;
-            if (Math.abs(newY) > 5) floatDirection *= -1;
-            robotAvatar.style.transform = `translateY(${newY}px)`;
-        }
-    }, 100);
 }
 
 document.addEventListener('DOMContentLoaded', init);
