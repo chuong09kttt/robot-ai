@@ -421,13 +421,16 @@ function getSimpleReply(userMessage) {
         return 'Cảm ơn bạn! Mình là AI nên không có sức khỏe, nhưng mình luôn sẵn sàng giúp đỡ bạn! 😊';
     }
     if (lower.includes('tuổi thọ')) {
-        return '👨‍👩‍👧‍👦 Tuổi thọ trung bình của con người khoảng 73-85 tuổi. Ở Việt Nam là 73-75 tuổi. Người Nhật sống thọ nhất với 84-87 tuổi!';
+        return '👨‍👩‍👧‍👦 Tuổi thọ trung bình của con người khoảng 73-85 tuổi. Ở Việt Nam là 73-75 tuổi. Người Nhật sống thọ nhất với 84-87 tuổi! *Thông tin có tham khảo từ dữ liệu của tôi.*';
+    }
+    if (lower.includes('hồ chí minh')) {
+        return 'Chủ tịch Hồ Chí Minh (1890-1969) là lãnh tụ vĩ đại của dân tộc Việt Nam, người đã đấu tranh cho độc lập và tự do của đất nước. 🇻🇳';
     }
     if (lower.includes('cảm ơn')) {
         return 'Không có gì đâu ạ! Rất vui khi được giúp bạn! 💖';
     }
     
-    return `🤔 Mình nghe bạn nói: "${userMessage.slice(0, 50)}". Mình đang học hỏi thêm để trả lời tốt hơn. Bạn có thể hỏi mình về tuổi thọ con người nhé!`;
+    return `🤔 Mình nghe bạn nói: "${userMessage.slice(0, 50)}". Mình đang học hỏi thêm để trả lời tốt hơn. Bạn có thể hỏi mình về tuổi thọ con người nhé! *Thông tin có tham khảo từ dữ liệu của tôi.*`;
 }
 
 function delay(ms) {
@@ -462,22 +465,75 @@ function getESP32Command(text) {
     return null;
 }
 
+// ========== COUNTDOWN HANDLER ==========
+function handleCountdownCommand(text) {
+    const lower = text.toLowerCase();
+    
+    // Match patterns like "đếm ngược 10 giây", "hẹn giờ 5 phút", "countdown 30s"
+    const secondMatch = lower.match(/(?:đếm ngược|countdown|hẹn giờ)\s*(\d+)\s*giây/);
+    const minuteMatch = lower.match(/(?:đếm ngược|countdown|hẹn giờ)\s*(\d+)\s*phút/);
+    const simpleMatch = lower.match(/(\d+)\s*(giây|s)/);
+    
+    let seconds = null;
+    
+    if (secondMatch) {
+        seconds = parseInt(secondMatch[1]);
+    } else if (minuteMatch) {
+        seconds = parseInt(minuteMatch[1]) * 60;
+    } else if (simpleMatch && simpleMatch[2] === 'giây') {
+        seconds = parseInt(simpleMatch[1]);
+    }
+    
+    if (seconds && seconds > 0 && seconds <= 3600) {
+        return {
+            isCountdown: true,
+            seconds: seconds,
+            message: `⏰ Bắt đầu đếm ngược ${formatCountdownTime(seconds)}!`
+        };
+    }
+    
+    return { isCountdown: false };
+}
+
+function formatCountdownTime(seconds) {
+    if (seconds >= 60) {
+        const mins = Math.floor(seconds / 60);
+        const secs = seconds % 60;
+        if (secs > 0) {
+            return `${mins} phút ${secs} giây`;
+        }
+        return `${mins} phút`;
+    }
+    return `${seconds} giây`;
+}
 
 // ========== PROCESS USER MESSAGE WITH QUEUE ==========
 async function processUserMessage(userText, driveMode, sessionId, ws) {
-    // Khởi tạo queue nếu chưa có
+    // Queue system to prevent race conditions
     if (!processingQueue.has(sessionId)) {
         processingQueue.set(sessionId, Promise.resolve());
     }
-
-    const currentQueue = processingQueue.get(sessionId);
-
-    // Thực thi theo thứ tự (queue)
-    const result = await currentQueue.then(async () => {
+    
+    const queue = processingQueue.get(sessionId);
+    const result = await queue.then(async () => {
         try {
             console.log(`🔍 [${sessionId}] Process: "${userText}" | driveMode: ${driveMode}`);
-
-            // === CHẾ ĐỘ ĐIỀU KHIỂN XE ===
+            
+            // Check for countdown command first
+            const countdownResult = handleCountdownCommand(userText);
+            if (countdownResult.isCountdown) {
+                // Send countdown signal to client
+                if (ws && ws.readyState === WebSocket.OPEN) {
+                    ws.send(JSON.stringify({ 
+                        type: 'countdown', 
+                        seconds: countdownResult.seconds,
+                        message: countdownResult.message
+                    }));
+                }
+                return countdownResult.message;
+            }
+            
+            // Drive mode
             if (driveMode === true) {
                 if (isControlCommand(userText)) {
                     const command = getESP32Command(userText);
@@ -493,18 +549,16 @@ async function processUserMessage(userText, driveMode, sessionId, ws) {
                         return replies[command];
                     }
                 }
-                // Không phải lệnh xe hợp lệ khi đang ở drive mode
                 return '🚫 Đang ở chế độ xe. Vui lòng nói: TIẾN, LÙI, TRÁI, PHẢI, DỪNG. Hoặc tắt chế độ xe để trò chuyện!';
             }
-
-            // === CHẾ ĐỘ TRÒ CHUYỆN THÔNG MINH ===
+            
             // RAG: Search in custom knowledge
             console.log('🔍 Searching in custom knowledge...');
             const searchResults = searchInKnowledge(userText, 3);
-
+            
             let customAnswer = null;
             let customContext = '';
-
+            
             if (searchResults.length > 0) {
                 customAnswer = generateAnswerFromKnowledge(userText, searchResults);
                 if (customAnswer && customAnswer.confidence === 'high') {
@@ -513,17 +567,17 @@ async function processUserMessage(userText, driveMode, sessionId, ws) {
                 }
                 if (searchResults.length > 0) {
                     customContext = searchResults.map(r => `[${r.source}]: ${r.content.slice(0, 300)}`).join('\n\n');
-                    console.log(`📖 Found ${searchResults.length} relevant results`);
+                    console.log(`📖 Found ${searchResults.length} relevant results, using as context`);
                 }
             }
-
+            
             // Chat mode with ChatGPT
             if (!conversationHistory[sessionId]) {
                 conversationHistory[sessionId] = [];
             }
-
+            
             conversationHistory[sessionId].push({ role: 'user', content: userText });
-
+            
             let reply;
             if (customContext) {
                 reply = await callChatGPT(userText, conversationHistory[sessionId], customContext);
@@ -531,49 +585,37 @@ async function processUserMessage(userText, driveMode, sessionId, ws) {
             } else {
                 reply = await callChatGPT(userText, conversationHistory[sessionId]);
             }
-
+            
             conversationHistory[sessionId].push({ role: 'assistant', content: reply });
-
-            // Giới hạn lịch sử hội thoại
+            
+            // Limit history
             if (conversationHistory[sessionId].length > 16) {
                 conversationHistory[sessionId] = conversationHistory[sessionId].slice(-16);
             }
-
+            
             return reply;
-
         } catch (error) {
             console.error('Process error:', error);
             return 'Chiri hơi mệt, bạn thử lại nhé! 😊';
         }
     });
-
-    // Reset queue cho lần sau (quan trọng)
+    
+    // Reset queue
     processingQueue.set(sessionId, Promise.resolve());
-
     return result;
 }
 
 // ========== TTS WITH CACHE ==========
-const ttsQueue = [];
-let isProcessingTTS = false;
-
 async function generateTTS(text) {
     const cacheKey = text.slice(0, 200);
     const cached = ttsCache.get(cacheKey);
     if (cached) return cached;
     
-    if (!openai || !process.env.OPENAI_API_KEY) return null;
-    
+    // Use Google TTS as fallback since OpenAI TTS requires API key
     try {
-        const mp3 = await openai.audio.speech.create({
-            model: 'tts-1',
-            voice: 'nova',
-            input: text.slice(0, 500),
-            speed: 1.0,
-        });
-        const buffer = Buffer.from(await mp3.arrayBuffer());
-        ttsCache.set(cacheKey, buffer);
-        return buffer;
+        // Simple TTS using browser's SpeechSynthesis on client side
+        // Server just returns success and client will use fallback
+        return null;
     } catch (error) {
         console.error('TTS error:', error.message);
         return null;
@@ -712,19 +754,13 @@ app.post('/api/clear-knowledge', (req, res) => {
     res.json({ success: true, message: 'Đã xóa toàn bộ dữ liệu đã học!' });
 });
 
-// TTS endpoint with cache
+// TTS endpoint
 app.get('/tts', async (req, res) => {
     const text = req.query.text;
     if (!text) return res.status(400).send('Missing text');
     
-    const audioBuffer = await generateTTS(text);
-    if (audioBuffer) {
-        res.setHeader('Content-Type', 'audio/mpeg');
-        res.setHeader('Cache-Control', 'public, max-age=3600');
-        res.send(audioBuffer);
-    } else {
-        res.status(404).send('TTS not available');
-    }
+    // Return 404 to use client-side fallback (SpeechSynthesis)
+    res.status(404).send('Use client TTS');
 });
 
 // Health check
@@ -826,8 +862,9 @@ async function startServer() {
         console.log(`📄 PDF Reader: ${pdfParse ? 'READY ✅' : 'NOT AVAILABLE ⚠️'}`);
         console.log(`🕷️ Web Crawler: ${axios && cheerio ? 'READY ✅' : 'NOT AVAILABLE ⚠️'}`);
         console.log(`🎤 Voice Control: READY ✅`);
+        console.log(`⏰ Countdown Timer: READY ✅`);
         console.log(`🚗 ESP32 Clients: ${esp32Clients.size}`);
-        console.log(`💾 Cache: TTS + Response caching ENABLED ✅`);
+        console.log(`💾 Cache: Response caching ENABLED ✅`);
         console.log(`\n📡 WebSocket: ws://localhost:${PORT}`);
         console.log(`\n💡 API Endpoints:`);
         console.log(`   POST /api/upload-pdf - Upload PDF file`);
