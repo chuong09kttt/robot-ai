@@ -125,6 +125,7 @@ async function processTTSQueue() {
             await fallbackSpeak(textToPlay);
         }
     } catch (e) {
+        console.error("TTS error:", e);
         await fallbackSpeak(textToPlay);
     }
     
@@ -159,7 +160,7 @@ function finishSpeaking() {
     stopMouthAnimation();
     if (isAwake) {
         setExpression('listening');
-        setTimeout(startListening, 600);   // Delay quan trọng
+        setTimeout(startListening, 800);
     }
 }
 
@@ -179,7 +180,7 @@ function wakeUp() {
     addMessage('ai', greeting);
     playAudio(greeting);
     setExpression('happy');
-    setTimeout(startListening, 1000);
+    setTimeout(startListening, 1200);
 }
 
 function goToSleep() {
@@ -237,7 +238,7 @@ function initSpeechRecognition() {
     };
 
     recognition.onerror = (event) => {
-        console.error('Recognition error:', event.error);
+        console.error('❌ Recognition error:', event.error);
         isListening = false;
     };
 
@@ -246,7 +247,7 @@ function initSpeechRecognition() {
         console.log('🔴 Recognition ended');
         if (isAwake && !isProcessing) {
             clearTimeout(restartTimeout);
-            restartTimeout = setTimeout(startListening, 800);
+            restartTimeout = setTimeout(startListening, 900);
         }
     };
 }
@@ -256,26 +257,37 @@ function startListening() {
     try {
         recognition.start();
     } catch (e) {
-        console.error('Start failed:', e);
-        setTimeout(startListening, 1200);
+        console.error('Start recognition failed:', e);
+        setTimeout(startListening, 1500);
     }
 }
 
 // ================== COMMAND & WEBSOCKET ==================
 async function processCommand(text) {
-    if (isProcessing) return;
+    if (isProcessing) {
+        console.log("⚠️ Đang xử lý lệnh trước, bỏ qua...");
+        return;
+    }
+    
     isProcessing = true;
+    console.log(`📤 Gửi lệnh lên server: "${text}"`);
     
     addMessage('user', text);
     setExpression('thinking');
     statusText.innerHTML = '🤔 Chiri đang suy nghĩ...';
 
     if (ws && ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({ type: 'voice', text: text, driveMode: driveControlMode }));
+        ws.send(JSON.stringify({ 
+            type: 'voice', 
+            text: text, 
+            driveMode: driveControlMode 
+        }));
     } else {
-        addMessage('ai', 'Mất kết nối server...');
+        console.error("❌ WebSocket không kết nối");
+        addMessage('ai', 'Mất kết nối với server. Đang thử kết nối lại...');
         isProcessing = false;
         setExpression('listening');
+        setTimeout(startListening, 1000);
     }
 }
 
@@ -283,16 +295,27 @@ function connectWebSocket() {
     const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
     ws = new WebSocket(`${protocol}//${location.host}`);
 
-    ws.onopen = () => { reconnectAttempts = 0; console.log('✅ WebSocket connected'); };
+    ws.onopen = () => { 
+        reconnectAttempts = 0; 
+        console.log('✅ WebSocket connected'); 
+    };
+
     ws.onmessage = (event) => {
-        const data = JSON.parse(event.data);
-        if (data.type === 'ai') {
-            addMessage('ai', data.text);
-            playAudio(data.text);
-            statusText.innerHTML = driveControlMode ? '🎮 Đang nghe lệnh xe...' : '🎤 Đang lắng nghe...';
+        try {
+            const data = JSON.parse(event.data);
+            if (data.type === 'ai') {
+                console.log("📥 Nhận phản hồi từ AI");
+                addMessage('ai', data.text);
+                playAudio(data.text);
+                statusText.innerHTML = driveControlMode ? '🎮 Đang nghe lệnh xe...' : '🎤 Đang lắng nghe...';
+            }
+        } catch(e) {
+            console.error("Lỗi parse message:", e);
         }
     };
+
     ws.onclose = () => {
+        console.log('WebSocket closed, reconnecting...');
         const delay = Math.min(1000 * Math.pow(2, reconnectAttempts++), 8000);
         setTimeout(connectWebSocket, delay);
     };
@@ -305,7 +328,7 @@ function resetInactivityTimer() {
 
 // ================== INIT ==================
 function init() {
-    console.log('🚀 Chiri AI v5.2 - Professional Edition');
+    console.log('🚀 Chiri AI v5.3 - Debug Mode');
     setExpression('sleepy');
     updateWakeIndicator('sleeping');
     updateDriveModeUI();
