@@ -71,48 +71,68 @@ if (OpenAI && process.env.OPENAI_API_KEY) {
 }
 
 // ========== REAL-TIME FUNCTIONS ==========
-function getCurrentTime() {
+function getCurrentTime(lang = 'vi') {
     const now = new Date();
     const hours = now.getHours();
     const minutes = now.getMinutes();
     const seconds = now.getSeconds();
     
-    let period = '';
-    let hour12 = hours % 12;
-    if (hour12 === 0) hour12 = 12;
-    
-    if (hours < 12) period = 'sáng';
-    else if (hours < 18) period = 'chiều';
-    else period = 'tối';
-    
-    return `Bây giờ là ${hour12} giờ ${minutes} phút ${seconds} giây ${period}. (${hours}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')})`;
+    if (lang === 'en') {
+        const period = hours < 12 ? 'AM' : 'PM';
+        const hour12 = hours % 12 || 12;
+        return `It's ${hour12}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')} ${period}.`;
+    } else {
+        let period = '';
+        let hour12 = hours % 12;
+        if (hour12 === 0) hour12 = 12;
+        if (hours < 12) period = 'sáng';
+        else if (hours < 18) period = 'chiều';
+        else period = 'tối';
+        return `Bây giờ là ${hour12} giờ ${minutes} phút ${seconds} giây ${period}.`;
+    }
 }
 
-function getCurrentDate() {
+function getCurrentDate(lang = 'vi') {
     const now = new Date();
     const day = now.getDate();
     const month = now.getMonth() + 1;
     const year = now.getFullYear();
     
-    const weekdays = ['Chủ nhật', 'Thứ hai', 'Thứ ba', 'Thứ tư', 'Thứ năm', 'Thứ sáu', 'Thứ bảy'];
-    const weekday = weekdays[now.getDay()];
-    
-    return `Hôm nay là ${weekday}, ngày ${day} tháng ${month} năm ${year}.`;
+    if (lang === 'en') {
+        const weekdays = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+        const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+        return `Today is ${weekdays[now.getDay()]}, ${months[month - 1]} ${day}, ${year}.`;
+    } else {
+        const weekdays = ['Chủ nhật', 'Thứ hai', 'Thứ ba', 'Thứ tư', 'Thứ năm', 'Thứ sáu', 'Thứ bảy'];
+        const weekday = weekdays[now.getDay()];
+        return `Hôm nay là ${weekday}, ngày ${day} tháng ${month} năm ${year}.`;
+    }
 }
 
 // ========== LANGUAGE DETECTION ==========
+// Quan trọng: phát hiện chính xác ngôn ngữ câu hỏi
 function detectLanguage(text) {
+    if (!text || text.length === 0) return 'vi'; // Mặc định tiếng Việt
+    
     // Kiểm tra ký tự tiếng Việt có dấu
     const vietnameseChars = /[àáảãạăâầấẩẫậêềếểễệôồốổỗộơờớởỡợưừứửữựđ]/i;
     
-    // Nếu có ký tự tiếng Việt -> tiếng Việt
+    // Nếu có ký tự tiếng Việt có dấu -> chắc chắn là tiếng Việt
     if (vietnameseChars.test(text)) {
         return 'vi';
     }
     
-    // Nếu không có ký tự tiếng Việt và chủ yếu là ký tự Latin -> tiếng Anh
-    const englishChars = /[a-zA-Z]/;
-    if (englishChars.test(text) && text.length > 0) {
+    // Các từ khóa tiếng Anh phổ biến (không có trong tiếng Việt)
+    const englishKeywords = /\b(what|where|when|why|how|who|which|is|are|am|was|were|do|does|did|have|has|had|can|could|will|would|should|may|might|please|thank|hello|hi|hey|good|bad|nice|love|like|help|support|please|sorry|yes|no|ok|okay|thanks|welcome)\b/i;
+    
+    // Nếu có từ khóa tiếng Anh và không có dấu tiếng Việt -> tiếng Anh
+    if (englishKeywords.test(text)) {
+        return 'en';
+    }
+    
+    // Nếu toàn bộ là ký tự Latin cơ bản (a-z, 0-9, khoảng trắng, dấu câu cơ bản)
+    const latinOnly = /^[a-zA-Z0-9\s\.\,\?\!]+$/.test(text);
+    if (latinOnly && text.length > 2) {
         return 'en';
     }
     
@@ -129,7 +149,7 @@ IMPORTANT:
 - If asked about distance, answer with distance
 - If asked about time, answer with real-time
 - Tone: friendly, enthusiastic, use emojis (❤️, 😊, 🚀)
-- Answer in ENGLISH
+- Answer in ENGLISH only
 - Answer SHORT (2-3 sentences)
 - If you don't know, honestly say "I'm not sure about that"`;
         
@@ -145,7 +165,7 @@ QUAN TRỌNG:
 - Nếu hỏi về thời gian, trả lời thời gian thực
 - Nếu hỏi về VinFast, hãy dùng thông tin từ bài báo Dân trí ngày 13/5/2026
 - Giọng điệu: thân thiện, nhiệt tình, dùng icon cảm xúc (❤️, 😊, 🚀)
-- Trả lời bằng TIẾNG VIỆT
+- Trả lời bằng TIẾNG VIỆT (QUAN TRỌNG: phải trả lời bằng tiếng Việt)
 - Trả lời NGẮN GỌN (2-3 câu)
 - Nếu không biết, hãy thành thật nói "Mình chưa rõ lắm"`;
 
@@ -156,7 +176,7 @@ QUAN TRỌNG:
     }
 }
 
-// ========== FALLBACK KNOWLEDGE (DỰ PHÒNG KHI CRAWL LỖI) ==========
+// ========== FALLBACK KNOWLEDGE (DỰ PHÒNG) ==========
 const fallbackKnowledge = {
     // Vietnamese
     'vinfast': `Theo bài báo Dân trí ngày 13/5/2026, VinFast đang tái cấu trúc:
@@ -374,7 +394,6 @@ async function loadCustomKnowledge() {
     
     const allContent = [];
     
-    // Default websites to crawl
     const defaultWebsites = process.env.DEFAULT_WEBSITES 
         ? process.env.DEFAULT_WEBSITES.split(',')
         : [
@@ -384,7 +403,6 @@ async function loadCustomKnowledge() {
             'https://dantri.com.vn/o-to-xe-may/lanh-dao-vinfast-noi-gi-ve-nghi-van-tu-bo-nganh-o-to-20260513203658767.htm'
           ];
     
-    // Crawl websites
     if (axios && cheerio) {
         console.log('🌐 Crawling websites...');
         for (const url of defaultWebsites) {
@@ -403,7 +421,6 @@ async function loadCustomKnowledge() {
         }
     }
     
-    // Download from Google Drive
     if (GOOGLE_DRIVE_FILE_ID && axios) {
         console.log(`📁 Downloading from Google Drive ID: ${GOOGLE_DRIVE_FILE_ID}...`);
         const pdfContent = await downloadFromGoogleDrive(GOOGLE_DRIVE_FILE_ID);
@@ -419,7 +436,6 @@ async function loadCustomKnowledge() {
         }
     }
     
-    // Process and store knowledge
     for (const item of allContent) {
         console.log(`📖 Processing: ${item.title}`);
         const chunks = splitTextIntoChunks(item.content);
@@ -452,12 +468,10 @@ function searchInKnowledge(query) {
         let score = 0;
         const chunkLower = chunk.content.toLowerCase();
         
-        // Exact phrase match
         if (chunkLower.includes(queryLower)) {
             score += 30;
         }
         
-        // Word matches
         for (const word of queryWords) {
             if (chunkLower.includes(word)) {
                 score += 2;
@@ -467,10 +481,8 @@ function searchInKnowledge(query) {
             }
         }
         
-        // Bonus for content length
         score += Math.min(10, chunk.content.length / 200);
         
-        // Bonus for Dan Tri source (priority for news)
         if (chunk.source && chunk.source.includes('dantri')) {
             score += 15;
         }
@@ -560,23 +572,29 @@ function getSimpleReply(userMessage, lang = 'vi') {
             return 'Hello! I am Chiri AI, nice to meet you! 💕';
         }
         if (lower.includes('how are you')) {
-            return 'I am an AI so I don\'t have health, but I am always ready to help you! 😊';
+            return 'I am doing great! Thank you for asking. How can I help you today? 😊';
         }
         if (lower.includes('thank')) {
             return 'You\'re welcome! Happy to help you! 💖';
         }
-        return `🤔 I heard you say: "${userMessage.slice(0, 50)}". I am still learning to answer better.`;
+        if (lower.includes('what is your name')) {
+            return 'My name is Chiri! I am your friendly AI assistant. ❤️';
+        }
+        return `🤔 I heard you say: "${userMessage.slice(0, 50)}". I am still learning to answer better. Could you please ask me about VinFast, province merger, VARD Vung Tau, or current time?`;
     } else {
         if (lower.includes('xin chào') || lower.includes('hello')) {
             return 'Xin chào bạn! Mình là Chiri AI, rất vui được gặp bạn! 💕';
         }
-        if (lower.includes('khỏe')) {
-            return 'Cảm ơn bạn! Mình là AI nên không có sức khỏe, nhưng mình luôn sẵn sàng giúp đỡ bạn! 😊';
+        if (lower.includes('khỏe') || lower.includes('khoẻ')) {
+            return 'Mình rất tốt, cảm ơn bạn đã hỏi! Bạn có thể giúp gì cho mình hôm nay không? 😊';
         }
         if (lower.includes('cảm ơn')) {
             return 'Không có gì đâu ạ! Rất vui khi được giúp bạn! 💖';
         }
-        return `🤔 Mình nghe bạn nói: "${userMessage.slice(0, 50)}". Mình đang học hỏi thêm để trả lời tốt hơn.`;
+        if (lower.includes('tên bạn')) {
+            return 'Tên mình là Chiri! Mình là trợ lý AI thân thiện của bạn. ❤️';
+        }
+        return `🤔 Mình nghe bạn nói: "${userMessage.slice(0, 50)}". Mình đang học hỏi thêm để trả lời tốt hơn. Bạn có thể hỏi mình về VinFast, sáp nhập tỉnh, VARD Vũng Tàu, hoặc thời gian nhé!`;
     }
 }
 
@@ -654,7 +672,7 @@ async function processUserMessage(userText, driveMode, sessionId, ws) {
         try {
             console.log(`🔍 [${sessionId}] Process: "${userText}" | driveMode: ${driveMode}`);
             
-            // PHÁT HIỆN NGÔN NGỮ
+            // PHÁT HIỆN NGÔN NGỮ - QUAN TRỌNG
             const lang = detectLanguage(userText);
             console.log(`🌐 Detected language: ${lang === 'en' ? 'ENGLISH' : 'VIETNAMESE'}`);
             
@@ -698,26 +716,11 @@ async function processUserMessage(userText, driveMode, sessionId, ws) {
             const lower = userText.toLowerCase();
             if (lower.includes('what time') || lower.includes('current time') || lower.includes('time now') ||
                 lower.includes('mấy giờ') || (lower.includes('giờ') && lower.includes('bao nhiêu'))) {
-                if (lang === 'en') {
-                    const now = new Date();
-                    const hours = now.getHours();
-                    const minutes = now.getMinutes();
-                    const seconds = now.getSeconds();
-                    const period = hours < 12 ? 'AM' : 'PM';
-                    const hour12 = hours % 12 || 12;
-                    return `It's ${hour12}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')} ${period}.`;
-                }
-                return getCurrentTime();
+                return getCurrentTime(lang);
             }
             if (lower.includes('what date') || lower.includes('today') || lower.includes('what day') ||
                 lower.includes('hôm nay') || lower.includes('ngày bao nhiêu') || lower.includes('ngày mấy')) {
-                if (lang === 'en') {
-                    const now = new Date();
-                    const weekdays = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-                    const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-                    return `Today is ${weekdays[now.getDay()]}, ${months[now.getMonth()]} ${now.getDate()}, ${now.getFullYear()}.`;
-                }
-                return getCurrentDate();
+                return getCurrentDate(lang);
             }
             
             // FALLBACK KNOWLEDGE
@@ -738,6 +741,7 @@ async function processUserMessage(userText, driveMode, sessionId, ws) {
                 customAnswer = generateAnswerFromKnowledge(userText, searchResults);
                 if (customAnswer && customAnswer.confidence === 'high') {
                     console.log('✅ Found HIGH confidence answer in knowledge base');
+                    // Đảm bảo câu trả lời bằng đúng ngôn ngữ
                     return customAnswer.answer;
                 }
                 if (searchResults.length > 0) {
@@ -746,7 +750,7 @@ async function processUserMessage(userText, driveMode, sessionId, ws) {
                 }
             }
             
-            // CHAT MODE - ChatGPT
+            // CHAT MODE - ChatGPT với ngôn ngữ đã phát hiện
             if (!conversationHistory[sessionId]) {
                 conversationHistory[sessionId] = [];
             }
@@ -1045,7 +1049,7 @@ async function startServer() {
         console.log(`║  🤖 ChatGPT: ${(openai && process.env.OPENAI_API_KEY ? 'READY ✅' : 'NOT AVAILABLE ⚠️').padEnd(40)}║`);
         console.log(`║  📄 PDF Reader: ${(pdfParse ? 'READY ✅' : 'NOT AVAILABLE ⚠️').padEnd(40)}║`);
         console.log(`║  🕷️ Web Crawler: ${(axios && cheerio ? 'READY ✅' : 'NOT AVAILABLE ⚠️').padEnd(40)}║`);
-        console.log(`║  🌐 Multi-language: VIETNAMESE & ENGLISH ✅                          ║`);
+        console.log(`║  🌐 Language: Auto-detect (VI/EN) ✅                                 ║`);
         console.log(`║  🎤 Voice Control: READY ✅                                          ║`);
         console.log(`║  ⏰ Countdown Timer: READY ✅                                        ║`);
         console.log(`║  📅 Real-time Clock: READY ✅                                       ║`);
@@ -1053,19 +1057,10 @@ async function startServer() {
         console.log(`║  🚗 ESP32 Clients: ${esp32Clients.size.toString().padEnd(40)}║`);
         console.log(`║  💤 Auto-sleep: 60 seconds inactivity                              ║`);
         console.log(`║  📄 PDF Source: Google Drive (sáp nhập tỉnh)                        ║`);
-        console.log(`║  🌐 Website Sources:                                               ║`);
-        console.log(`║     - vard.com/vungtau                                             ║`);
-        console.log(`║     - dantri.com.vn (VinFast)                                      ║`);
+        console.log(`║  🌐 Website Sources: vard.com/vungtau, dantri.com.vn (VinFast)     ║`);
         console.log(`╠═══════════════════════════════════════════════════════════════════╣`);
-        console.log(`║  📡 WebSocket: ws://localhost:${PORT}                                      ║`);
-        console.log(`╠═══════════════════════════════════════════════════════════════════╣`);
-        console.log(`║  💡 API ENDPOINTS:                                                  ║`);
-        console.log(`║     POST /api/upload-pdf     - Upload PDF file                      ║`);
-        console.log(`║     POST /api/add-website    - Add website URL                      ║`);
-        console.log(`║     POST /api/add-drive      - Add Google Drive file ID             ║`);
-        console.log(`║     GET  /api/knowledge-stats - View knowledge stats                ║`);
-        console.log(`║     POST /api/clear-knowledge - Clear all knowledge                 ║`);
-        console.log(`║     GET  /health             - Health check                         ║`);
+        console.log(`║  💡 RULE: VIETNAMESE question → VIETNAMESE answer                  ║`);
+        console.log(`║         ENGLISH question → ENGLISH answer                         ║`);
         console.log(`╚═══════════════════════════════════════════════════════════════════╝`);
         console.log(``);
     });
