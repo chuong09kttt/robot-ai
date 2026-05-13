@@ -20,7 +20,7 @@ let driveControlMode = false;
 let mouthAnimationInterval = null;
 let reconnectAttempts = 0;
 let ttsQueue = [];
-let silenceTimeout = null;
+let restartTimeout = null;
 
 const INACTIVITY_LIMIT = 120000; // 2 phút
 const WAKE_WORDS = ['xin chào', 'hello', 'hi', 'chào chiri', 'chiri ơi', 'hey chiri'];
@@ -28,12 +28,12 @@ const WAKE_WORDS = ['xin chào', 'hello', 'hi', 'chào chiri', 'chiri ơi', 'hey
 function setExpression(expression) {
     robotSvg.classList.remove('listening', 'happy', 'thinking', 'surprised', 'sleepy', 'talking');
     robotSvg.classList.add(expression);
-    
+   
     const mouth = document.querySelector('.robot-mouth');
     if (!mouth) return;
-    
+   
     stopMouthAnimation();
-    
+   
     switch(expression) {
         case 'talking':
             startMouthAnimation();
@@ -105,7 +105,7 @@ function addMessage(type, text) {
     messageDiv.innerHTML = `<div class="bubble">${escapeHtml(text)}</div>`;
     chatBox.appendChild(messageDiv);
     chatBox.scrollTop = chatBox.scrollHeight;
-    
+   
     while (chatBox.children.length > 30) chatBox.removeChild(chatBox.firstChild);
 }
 
@@ -124,12 +124,12 @@ async function playAudio(text) {
 
 async function processTTSQueue() {
     if (currentAudio || isProcessing || ttsQueue.length === 0) return;
-    
+   
     isProcessing = true;
     const textToPlay = ttsQueue.shift();
-    
+   
     setExpression('talking');
-    
+   
     try {
         const response = await fetch(`/tts?text=${encodeURIComponent(textToPlay.slice(0, 300))}`);
         if (response.ok) {
@@ -141,7 +141,7 @@ async function processTTSQueue() {
     } catch (e) {
         await fallbackSpeak(textToPlay);
     }
-    
+   
     finishSpeaking();
 }
 
@@ -149,7 +149,7 @@ function playBlobAudio(blob) {
     return new Promise(resolve => {
         const url = URL.createObjectURL(blob);
         currentAudio = new Audio(url);
-        
+       
         currentAudio.onended = () => {
             URL.revokeObjectURL(url);
             currentAudio = null;
@@ -160,7 +160,7 @@ function playBlobAudio(blob) {
             currentAudio = null;
             resolve();
         };
-        
+       
         currentAudio.play().catch(() => {
             currentAudio = null;
             resolve();
@@ -170,16 +170,16 @@ function playBlobAudio(blob) {
 
 function fallbackSpeak(text) {
     if (!('speechSynthesis' in window)) return Promise.resolve();
-    
+   
     return new Promise(resolve => {
         const utterance = new SpeechSynthesisUtterance(text.slice(0, 200));
         utterance.lang = 'vi-VN';
         utterance.rate = 0.95;
         utterance.pitch = 1.05;
-        
+       
         utterance.onend = () => { resolve(); };
         utterance.onerror = () => { resolve(); };
-        
+       
         window.speechSynthesis.speak(utterance);
     });
 }
@@ -201,33 +201,37 @@ function wakeUp() {
     resetInactivityTimer();
     updateWakeIndicator('awake');
     updateDriveModeUI();
-    
-    const greeting = driveControlMode 
-        ? "Chiri đã thức! Chế độ điều khiển xe đang bật." 
+   
+    const greeting = driveControlMode
+        ? "Chiri đã thức! Chế độ điều khiển xe đang bật."
         : "Chiri đã thức dậy! Mình sẵn sàng trò chuyện rồi ❤️";
-    
+   
     addMessage('ai', greeting);
     playAudio(greeting);
     setExpression('happy');
+    
+    // Fix mic: Bắt đầu nghe ngay sau khi wake
+    setTimeout(startListening, 800);
 }
 
 function goToSleep() {
     if (!isAwake) return;
     isAwake = false;
     isListening = false;
+    if (recognition) recognition.abort();
     stopMouthAnimation();
     updateWakeIndicator('sleeping');
     setExpression('sleepy');
-    
+   
     const msg = "Chiri đi ngủ đây. Nói 'Xin chào' để đánh thức mình nhé!";
     addMessage('ai', msg);
     playAudio(msg);
-    
+   
     if (inactivityTimer) clearTimeout(inactivityTimer);
     if (countdownInterval) clearInterval(countdownInterval);
 }
 
-// ================== SPEECH RECOGNITION (ĐÃ CẢI TIẾN) ==================
+// ================== SPEECH RECOGNITION (ĐÃ FIX MẤT MIC) ==================
 function initSpeechRecognition() {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) {
@@ -237,19 +241,22 @@ function initSpeechRecognition() {
 
     recognition = new SpeechRecognition();
     recognition.lang = 'vi-VN';
-    recognition.continuous = false;        // Quan trọng: false để ổn định
+    recognition.continuous = false;
     recognition.interimResults = false;
     recognition.maxAlternatives = 1;
 
     recognition.onstart = () => {
         isListening = true;
+        console.log('🎤 Microphone started');
         setExpression('listening');
         updateWakeIndicator('listening');
     };
 
     recognition.onresult = (event) => {
-        const transcript = event.results[0][0].transcript.trim();
-        if (!transcript || transcript.length < 2) return;
+        const transcript = event.results[event.results.length - 1][0].transcript.trim();
+        console.log(`🎙️ Nghe được: "${transcript}"`);
+
+        if (transcript.length < 2) return;
 
         lastActivityTime = Date.now();
         resetInactivityTimer();
@@ -266,7 +273,7 @@ function initSpeechRecognition() {
     };
 
     recognition.onerror = (event) => {
-        console.error('Recognition error:', event.error);
+        console.error('❌ Recognition error:', event.error);
         isListening = false;
         if (event.error === 'not-allowed') {
             statusText.innerHTML = '❌ Cần cấp quyền Microphone!';
@@ -275,8 +282,11 @@ function initSpeechRecognition() {
 
     recognition.onend = () => {
         isListening = false;
+        console.log('🔴 Recognition ended');
+
         if (isAwake && !isProcessing) {
-            setTimeout(startListening, 600);
+            clearTimeout(restartTimeout);
+            restartTimeout = setTimeout(startListening, 700);
         }
     };
 }
@@ -285,23 +295,26 @@ function startListening() {
     if (!recognition || isListening || isProcessing || !isAwake) return;
     try {
         recognition.start();
-    } catch (e) {}
+    } catch (e) {
+        console.error('Start recognition failed:', e);
+        setTimeout(startListening, 1000);
+    }
 }
 
 // ================== COMMAND & WEBSOCKET ==================
 async function processCommand(text) {
     if (isProcessing) return;
     isProcessing = true;
-    
+   
     addMessage('user', text);
     setExpression('thinking');
     statusText.innerHTML = '🤔 Chiri đang suy nghĩ...';
 
     if (ws && ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({ 
-            type: 'voice', 
-            text: text, 
-            driveMode: driveControlMode 
+        ws.send(JSON.stringify({
+            type: 'voice',
+            text: text,
+            driveMode: driveControlMode
         }));
     } else {
         addMessage('ai', 'Mất kết nối với server. Đang thử kết nối lại...');
@@ -343,11 +356,11 @@ function resetInactivityTimer() {
 
 // ================== INIT ==================
 function init() {
-    console.log('🚀 Chiri AI v5.0 - Professional Edition');
+    console.log('🚀 Chiri AI v5.1 - Professional Edition');
     setExpression('sleepy');
     updateWakeIndicator('sleeping');
     updateDriveModeUI();
-    
+   
     connectWebSocket();
     initSpeechRecognition();
     resetInactivityTimer();
@@ -367,8 +380,8 @@ function init() {
     driveModeBtn.addEventListener('click', () => {
         driveControlMode = !driveControlMode;
         updateDriveModeUI();
-        const msg = driveControlMode 
-            ? "Đã bật chế độ điều khiển xe!" 
+        const msg = driveControlMode
+            ? "Đã bật chế độ điều khiển xe!"
             : "Đã chuyển sang chế độ trò chuyện thông minh!";
         addMessage('ai', msg);
         playAudio(msg);
