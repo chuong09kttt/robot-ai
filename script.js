@@ -17,17 +17,19 @@ let driveControlMode = false;
 let mouthAnimationInterval = null;
 let reconnectAttempts = 0;
 let countdownInterval = null;
-let currentLang = 'vi-VN';
 
 const INACTIVITY_LIMIT = 60000;
 const WAKE_WORDS = ['xin chào', 'hello', 'hi', 'chào chiri', 'chiri ơi', 'hey chiri', 'alô', 'chào', 'hey', 'wake up'];
 
-// ========== FACE DETECTION - PHIÊN BẢN ĐƠN GIẢN ==========
+// ========== FACE DETECTION ==========
 let isCameraActive = false;
 let cameraButton = null;
 let videoElement = null;
 let stream = null;
 let detectionInterval = null;
+let lastFaceState = { hasFace: false, glasses: false, hat: false };
+let faceDetectionStableCount = 0;
+const REQUIRED_STABLE_COUNT = 3; // Cần 3 lần liên tiếp giống nhau mới báo
 
 async function initFaceDetection() {
     cameraButton = document.getElementById('cameraToggleBtn');
@@ -48,8 +50,18 @@ async function initFaceDetection() {
 }
 
 async function startCamera() {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        const errorMsg = 'Trình duyệt không hỗ trợ camera. Vui lòng dùng Chrome/Edge trên HTTPS.';
+        addMessage('ai', '⚠️ ' + errorMsg);
+        const faceText = document.getElementById('faceText');
+        if (faceText) faceText.textContent = '❌ Trình duyệt không hỗ trợ camera';
+        return;
+    }
+    
     try {
-        // Request camera permission
+        const faceText = document.getElementById('faceText');
+        if (faceText) faceText.textContent = '📷 Đang yêu cầu quyền camera...';
+        
         stream = await navigator.mediaDevices.getUserMedia({ 
             video: { 
                 width: { ideal: 640 },
@@ -58,12 +70,10 @@ async function startCamera() {
             } 
         });
         
-        // Display video
         if (videoElement) {
             videoElement.srcObject = stream;
             videoElement.style.display = 'block';
             
-            // Wait for video to be ready
             await new Promise((resolve) => {
                 videoElement.onloadedmetadata = () => {
                     resolve();
@@ -77,23 +87,33 @@ async function startCamera() {
         cameraButton.textContent = '📷 TẮT CAMERA';
         cameraButton.classList.add('active');
         
-        // Update status
+        if (faceText) faceText.textContent = '📷 Camera đang hoạt động!';
         const faceEmoji = document.getElementById('faceEmoji');
-        const faceText = document.getElementById('faceText');
         if (faceEmoji) faceEmoji.textContent = '📷';
-        if (faceText) faceText.textContent = 'Camera đang hoạt động! Đang phát hiện...';
-        
-        // Start simple face detection
-        startSimpleFaceDetection();
         
         addMessage('ai', '📷 Camera đã được bật! Chiri đang nhìn thấy bạn!');
         
+        startFaceDetection();
+        
     } catch (error) {
         console.error('Camera error:', error);
-        addMessage('ai', '⚠️ Không thể truy cập camera. Vui lòng kiểm tra quyền truy cập!');
         
+        let errorMsg = '';
+        if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
+            errorMsg = 'Bạn chưa cho phép truy cập camera. Vui lòng nhấn vào biểu tượng camera trên thanh địa chỉ và chọn "Cho phép".';
+        } else if (error.name === 'NotFoundError') {
+            errorMsg = 'Không tìm thấy camera trên thiết bị của bạn.';
+        } else if (error.name === 'NotReadableError') {
+            errorMsg = 'Camera đang được sử dụng bởi ứng dụng khác.';
+        } else if (error.message.includes('HTTP')) {
+            errorMsg = 'Trang web cần chạy qua HTTPS để sử dụng camera.';
+        } else {
+            errorMsg = 'Không thể khởi tạo camera: ' + error.message;
+        }
+        
+        addMessage('ai', '⚠️ ' + errorMsg);
         const faceText = document.getElementById('faceText');
-        if (faceText) faceText.textContent = '❌ Không thể truy cập camera';
+        if (faceText) faceText.textContent = '❌ ' + errorMsg.substring(0, 50);
     }
 }
 
@@ -125,18 +145,17 @@ function stopCamera() {
     
     if (faceEmoji) faceEmoji.textContent = '🤖';
     if (faceText) faceText.textContent = 'Camera đã tắt';
-    if (glassesStatus) glassesStatus.textContent = '🕶️ Đang kiểm tra';
-    if (hatStatus) hatStatus.textContent = '🧢 Đang kiểm tra';
+    if (glassesStatus) glassesStatus.textContent = '🕶️ --';
+    if (hatStatus) hatStatus.textContent = '🧢 --';
     
     addMessage('ai', '📷 Camera đã tắt.');
 }
 
-function startSimpleFaceDetection() {
+function startFaceDetection() {
     if (detectionInterval) {
         clearInterval(detectionInterval);
     }
     
-    // Create hidden canvas for analysis
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
     
@@ -145,161 +164,248 @@ function startSimpleFaceDetection() {
             return;
         }
         
-        // Set canvas dimensions to match video
         canvas.width = videoElement.videoWidth;
         canvas.height = videoElement.videoHeight;
         
         if (canvas.width === 0 || canvas.height === 0) return;
         
-        // Draw current video frame to canvas
         ctx.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
         
-        // Get image data for analysis
         const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
         
-        // Detect face by skin color
         const hasFace = detectFaceBySkinColor(imageData);
         
-        // Detect glasses and hat (simplified)
-        const hasGlasses = detectGlassesSimple(imageData);
-        const hasHat = detectHatSimple(imageData);
+        let hasGlasses = false;
+        let hasHat = false;
         
-        // Update UI
-        updateFaceStatusUI(hasFace, hasGlasses, hasHat);
-        
-        // Speak when face is detected
-        if (hasFace && isAwake && !isSpeaking && !isAIProcessing) {
-            const lastStatus = localStorage.getItem('lastFaceStatus');
-            const currentStatus = `${hasGlasses}-${hasHat}`;
-            
-            if (lastStatus !== currentStatus) {
-                localStorage.setItem('lastFaceStatus', currentStatus);
-                
-                if (hasGlasses && hasHat) {
-                    addMessage('ai', 'Chiri thấy bạn đang đeo kính và đội mũ! Trông thật phong cách! 😎🧢');
-                    speak('Chiri thấy bạn đang đeo kính và đội mũ! Trông thật phong cách!');
-                } else if (hasGlasses) {
-                    addMessage('ai', 'Chiri thấy bạn đang đeo kính! Rất là ngầu! 😎');
-                    speak('Chiri thấy bạn đang đeo kính! Rất là ngầu!');
-                } else if (hasHat) {
-                    addMessage('ai', 'Chiri thấy bạn đang đội mũ! Đẹp quá! 🧢');
-                    speak('Chiri thấy bạn đang đội mũ! Đẹp quá!');
-                } else if (lastStatus === '') {
-                    addMessage('ai', 'Chiri nhìn thấy bạn rồi! Bạn thật dễ thương! 😊');
-                    speak('Chiri nhìn thấy bạn rồi! Bạn thật dễ thương!');
-                }
-            }
+        if (hasFace) {
+            hasGlasses = detectGlassesAccurate(imageData);
+            hasHat = detectHatAccurate(imageData);
         }
         
-    }, 500); // Check every 500ms
+        updateFaceStatusUI(hasFace, hasGlasses, hasHat);
+        
+    }, 1000);
 }
 
+// ========== PHÁT HIỆN KHUÔN MẶT CHÍNH XÁC ==========
 function detectFaceBySkinColor(imageData) {
-    let skinPixelCount = 0;
     const width = imageData.width;
     const height = imageData.height;
     
-    // Check center region of image
     const centerX = width / 2;
     const centerY = height / 2;
-    const regionWidth = width * 0.4;
-    const regionHeight = height * 0.4;
+    const regionWidth = width * 0.5;
+    const regionHeight = height * 0.5;
     
     const startX = Math.max(0, centerX - regionWidth / 2);
     const endX = Math.min(width, centerX + regionWidth / 2);
     const startY = Math.max(0, centerY - regionHeight / 2);
     const endY = Math.min(height, centerY + regionHeight / 2);
     
+    let skinPixelCount = 0;
+    let totalPixels = 0;
+    let highBrightnessCount = 0;
+    
     for (let y = startY; y < endY; y++) {
         for (let x = startX; x < endX; x++) {
-            const idx = (y * width + x) * 4;
-            const r = imageData.data[idx];
-            const g = imageData.data[idx + 1];
-            const b = imageData.data[idx + 2];
-            
-            // Skin color detection (RGB range for Asian skin)
-            if (r > 80 && g > 40 && b > 20 && r > g && Math.abs(r - g) > 15) {
-                skinPixelCount++;
-            }
-        }
-    }
-    
-    const totalPixels = (endX - startX) * (endY - startY);
-    const skinPercentage = skinPixelCount / totalPixels;
-    
-    return skinPercentage > 0.1; // At least 10% skin color in center region
-}
-
-function detectGlassesSimple(imageData) {
-    // Simplified detection: look for dark regions in upper half of face area
-    const width = imageData.width;
-    const height = imageData.height;
-    const centerY = height * 0.45; // Eye level
-    
-    let darkPixelCount = 0;
-    const checkWidth = width * 0.3;
-    const leftX = width * 0.35;
-    const rightX = width * 0.65;
-    
-    // Check left eye area
-    for (let x = leftX; x < leftX + checkWidth / 2; x++) {
-        for (let y = centerY - 20; y < centerY + 20; y++) {
             const idx = (Math.floor(y) * width + Math.floor(x)) * 4;
-            if (idx >= 0 && idx < imageData.data.length) {
-                const brightness = (imageData.data[idx] + imageData.data[idx + 1] + imageData.data[idx + 2]) / 3;
-                if (brightness < 80) darkPixelCount++;
-            }
-        }
-    }
-    
-    // Check right eye area
-    for (let x = rightX; x < rightX + checkWidth / 2; x++) {
-        for (let y = centerY - 20; y < centerY + 20; y++) {
-            const idx = (Math.floor(y) * width + Math.floor(x)) * 4;
-            if (idx >= 0 && idx < imageData.data.length) {
-                const brightness = (imageData.data[idx] + imageData.data[idx + 1] + imageData.data[idx + 2]) / 3;
-                if (brightness < 80) darkPixelCount++;
-            }
-        }
-    }
-    
-    return darkPixelCount > 30; // Threshold for glasses detection
-}
-
-function detectHatSimple(imageData) {
-    // Simplified detection: look for patterns above face
-    const width = imageData.width;
-    const height = imageData.height;
-    const topY = height * 0.15;
-    const bottomY = height * 0.35;
-    
-    let edgeCount = 0;
-    const startX = width * 0.3;
-    const endX = width * 0.7;
-    
-    for (let x = startX; x < endX; x++) {
-        for (let y = topY; y < bottomY; y++) {
-            const idx = (Math.floor(y) * width + Math.floor(x)) * 4;
-            if (idx >= 4 && idx < imageData.data.length - 4) {
+            if (idx >= 0 && idx < imageData.data.length - 3) {
+                totalPixels++;
+                
                 const r = imageData.data[idx];
                 const g = imageData.data[idx + 1];
                 const b = imageData.data[idx + 2];
+                const brightness = (r + g + b) / 3;
                 
-                // Look for color variations (hat rims)
-                const nextIdx = (Math.floor(y) * width + Math.floor(x + 1)) * 4;
-                const rNext = imageData.data[nextIdx];
-                const gNext = imageData.data[nextIdx + 1];
-                const bNext = imageData.data[nextIdx + 2];
+                // Điều kiện màu da người châu Á
+                const isSkinColor = (r > 70 && g > 35 && b > 25) && 
+                                    (r > g) && 
+                                    (Math.abs(r - g) > 12) &&
+                                    (brightness > 50 && brightness < 220);
                 
-                const diff = Math.abs(r - rNext) + Math.abs(g - gNext) + Math.abs(b - bNext);
-                if (diff > 100) edgeCount++;
+                if (isSkinColor) {
+                    skinPixelCount++;
+                }
+                
+                if (brightness > 200) {
+                    highBrightnessCount++;
+                }
             }
         }
     }
     
-    return edgeCount > 50;
+    const skinPercentage = totalPixels > 0 ? skinPixelCount / totalPixels : 0;
+    const brightnessPercentage = totalPixels > 0 ? highBrightnessCount / totalPixels : 0;
+    
+    return skinPercentage > 0.08 && brightnessPercentage < 0.4;
 }
 
+// ========== PHÁT HIỆN KÍNH CHÍNH XÁC ==========
+function detectGlassesAccurate(imageData) {
+    const hasFace = detectFaceBySkinColor(imageData);
+    if (!hasFace) return false;
+    
+    const width = imageData.width;
+    const height = imageData.height;
+    
+    // Vùng mắt (35% - 65% chiều rộng, 40% - 52% chiều cao)
+    const eyeYStart = height * 0.4;
+    const eyeYEnd = height * 0.52;
+    const eyeXStart = width * 0.32;
+    const eyeXEnd = width * 0.68;
+    
+    let darkPixelCount = 0;
+    let totalPixels = 0;
+    let brightPixelCount = 0;
+    let reflectionCount = 0;
+    
+    for (let y = eyeYStart; y < eyeYEnd; y++) {
+        for (let x = eyeXStart; x < eyeXEnd; x++) {
+            const idx = (Math.floor(y) * width + Math.floor(x)) * 4;
+            if (idx >= 0 && idx < imageData.data.length - 3) {
+                const r = imageData.data[idx];
+                const g = imageData.data[idx + 1];
+                const b = imageData.data[idx + 2];
+                const brightness = (r + g + b) / 3;
+                
+                totalPixels++;
+                
+                // Vùng tối (viền kính)
+                if (brightness < 60) {
+                    darkPixelCount++;
+                }
+                
+                // Vùng sáng (phản xạ kính)
+                if (brightness > 200 && Math.abs(r - g) < 40 && Math.abs(g - b) < 40) {
+                    brightPixelCount++;
+                }
+                
+                // Phản xạ đặc trưng của kính (chấm sáng nhỏ)
+                if (brightness > 220 && (r > 200 || g > 200 || b > 200)) {
+                    reflectionCount++;
+                }
+            }
+        }
+    }
+    
+    const darkPercentage = totalPixels > 0 ? darkPixelCount / totalPixels : 0;
+    const brightPercentage = totalPixels > 0 ? brightPixelCount / totalPixels : 0;
+    const reflectionPercentage = totalPixels > 0 ? reflectionCount / totalPixels : 0;
+    
+    // Điều kiện phát hiện kính (chặt chẽ)
+    const hasGlasses = (darkPercentage > 0.12 && brightPercentage > 0.04) || 
+                       (darkPercentage > 0.15) ||
+                       (reflectionPercentage > 0.03 && darkPercentage > 0.08);
+    
+    if (hasGlasses) {
+        console.log(`🕶️ Glasses: dark=${(darkPercentage*100).toFixed(1)}%, bright=${(brightPercentage*100).toFixed(1)}%, ref=${(reflectionPercentage*100).toFixed(1)}%`);
+    }
+    
+    return hasGlasses;
+}
+
+// ========== PHÁT HIỆN MŨ CHÍNH XÁC ==========
+function detectHatAccurate(imageData) {
+    const hasFace = detectFaceBySkinColor(imageData);
+    if (!hasFace) return false;
+    
+    const width = imageData.width;
+    const height = imageData.height;
+    
+    // Vùng trên đầu (8% - 32% chiều cao)
+    const hatYStart = height * 0.08;
+    const hatYEnd = height * 0.32;
+    const hatXStart = width * 0.25;
+    const hatXEnd = width * 0.75;
+    
+    // Vùng mặt để lấy màu da tham chiếu
+    const faceYStart = height * 0.35;
+    const faceYEnd = height * 0.65;
+    const faceXStart = width * 0.3;
+    const faceXEnd = width * 0.7;
+    
+    let avgFaceR = 0, avgFaceG = 0, avgFaceB = 0;
+    let facePixelCount = 0;
+    
+    for (let y = faceYStart; y < faceYEnd; y++) {
+        for (let x = faceXStart; x < faceXEnd; x++) {
+            const idx = (Math.floor(y) * width + Math.floor(x)) * 4;
+            if (idx >= 0 && idx < imageData.data.length - 3) {
+                avgFaceR += imageData.data[idx];
+                avgFaceG += imageData.data[idx + 1];
+                avgFaceB += imageData.data[idx + 2];
+                facePixelCount++;
+            }
+        }
+    }
+    
+    if (facePixelCount > 0) {
+        avgFaceR /= facePixelCount;
+        avgFaceG /= facePixelCount;
+        avgFaceB /= facePixelCount;
+    }
+    
+    let edgeCount = 0;
+    let totalPixels = 0;
+    let nonSkinCount = 0;
+    let darkAreaCount = 0;
+    
+    for (let y = hatYStart; y < hatYEnd; y++) {
+        for (let x = hatXStart; x < hatXEnd; x++) {
+            const idx = (Math.floor(y) * width + Math.floor(x)) * 4;
+            if (idx >= 4 && idx < imageData.data.length - 4) {
+                totalPixels++;
+                
+                const r = imageData.data[idx];
+                const g = imageData.data[idx + 1];
+                const b = imageData.data[idx + 2];
+                const brightness = (r + g + b) / 3;
+                
+                // So sánh với màu da
+                const colorDiff = Math.abs(r - avgFaceR) + Math.abs(g - avgFaceG) + Math.abs(b - avgFaceB);
+                if (colorDiff > 90) {
+                    nonSkinCount++;
+                }
+                
+                // Vùng tối (bóng mũ)
+                if (brightness < 70) {
+                    darkAreaCount++;
+                }
+                
+                // Phát hiện cạnh (viền mũ)
+                const nextIdx = (Math.floor(y) * width + Math.floor(x + 1)) * 4;
+                if (nextIdx >= 0 && nextIdx < imageData.data.length - 3) {
+                    const rNext = imageData.data[nextIdx];
+                    const gNext = imageData.data[nextIdx + 1];
+                    const bNext = imageData.data[nextIdx + 2];
+                    
+                    const diff = Math.abs(r - rNext) + Math.abs(g - gNext) + Math.abs(b - bNext);
+                    if (diff > 70) {
+                        edgeCount++;
+                    }
+                }
+            }
+        }
+    }
+    
+    const edgePercentage = totalPixels > 0 ? edgeCount / totalPixels : 0;
+    const nonSkinPercentage = totalPixels > 0 ? nonSkinCount / totalPixels : 0;
+    const darkPercentage = totalPixels > 0 ? darkAreaCount / totalPixels : 0;
+    
+    // Điều kiện phát hiện mũ
+    const hasHat = (edgePercentage > 0.12 && nonSkinPercentage > 0.35) || 
+                   (edgePercentage > 0.18) ||
+                   (darkPercentage > 0.25 && nonSkinPercentage > 0.4);
+    
+    if (hasHat) {
+        console.log(`🧢 Hat: edge=${(edgePercentage*100).toFixed(1)}%, non-skin=${(nonSkinPercentage*100).toFixed(1)}%, dark=${(darkPercentage*100).toFixed(1)}%`);
+    }
+    
+    return hasHat;
+}
+
+// ========== CẬP NHẬT UI VỚI DEBOUNCE ==========
 function updateFaceStatusUI(hasFace, hasGlasses, hasHat) {
     const faceEmoji = document.getElementById('faceEmoji');
     const faceText = document.getElementById('faceText');
@@ -308,7 +414,20 @@ function updateFaceStatusUI(hasFace, hasGlasses, hasHat) {
     
     if (!faceEmoji || !faceText) return;
     
-    if (hasFace) {
+    const currentState = { hasFace, glasses: hasGlasses, hat: hasHat };
+    const isSameAsLast = (currentState.hasFace === lastFaceState.hasFace &&
+                          currentState.glasses === lastFaceState.glasses &&
+                          currentState.hat === lastFaceState.hat);
+    
+    if (isSameAsLast) {
+        faceDetectionStableCount++;
+    } else {
+        faceDetectionStableCount = 0;
+    }
+    
+    const isStable = faceDetectionStableCount >= REQUIRED_STABLE_COUNT;
+    
+    if (hasFace && isStable) {
         faceEmoji.textContent = '😊';
         faceText.textContent = 'Đã phát hiện khuôn mặt!';
         
@@ -321,16 +440,45 @@ function updateFaceStatusUI(hasFace, hasGlasses, hasHat) {
             hatStatus.innerHTML = hasHat ? '🧢 ĐANG ĐỘI MŨ ✅' : '🧢 KHÔNG ĐỘI MŨ';
             hatStatus.style.background = hasHat ? '#4caf50' : '#666';
         }
-    } else {
+        
+        // Chỉ thông báo khi có thay đổi trạng thái
+        if (isStable && (currentState.glasses !== lastFaceState.glasses || currentState.hat !== lastFaceState.hat)) {
+            if (hasGlasses && hasHat) {
+                const msg = 'Chiri thấy bạn đang đeo kính và đội mũ!';
+                speak(msg);
+                addMessage('ai', '👓🧢 ' + msg);
+            } else if (hasGlasses && !lastFaceState.glasses) {
+                const msg = 'Chiri thấy bạn đang đeo kính! Rất phong cách!';
+                speak(msg);
+                addMessage('ai', '👓 ' + msg);
+            } else if (hasHat && !lastFaceState.hat) {
+                const msg = 'Chiri thấy bạn đang đội mũ! Đẹp quá!';
+                speak(msg);
+                addMessage('ai', '🧢 ' + msg);
+            } else if (!hasGlasses && !hasHat && (lastFaceState.glasses || lastFaceState.hat)) {
+                const msg = 'Chiri thấy bạn đã tháo kính/mũ!';
+                speak(msg);
+                addMessage('ai', '😊 ' + msg);
+            }
+        }
+        
+        lastFaceState = { ...currentState };
+        
+    } else if (!hasFace) {
         faceEmoji.textContent = '😔';
         faceText.textContent = 'Chưa phát hiện khuôn mặt';
         if (glassesStatus) {
-            glassesStatus.innerHTML = '🕶️ Chưa phát hiện';
+            glassesStatus.innerHTML = '🕶️ --';
             glassesStatus.style.background = '#666';
         }
         if (hatStatus) {
-            hatStatus.innerHTML = '🧢 Chưa phát hiện';
+            hatStatus.innerHTML = '🧢 --';
             hatStatus.style.background = '#666';
+        }
+        
+        if (isStable && lastFaceState.hasFace) {
+            lastFaceState = { hasFace: false, glasses: false, hat: false };
+            faceDetectionStableCount = 0;
         }
     }
 }
@@ -458,7 +606,6 @@ async function speak(text) {
             await fallbackSpeak(text, ttsLang);
         }
     } catch (error) {
-        console.log('Server TTS failed, using fallback');
         await fallbackSpeak(text, ttsLang);
     }
 }
@@ -655,7 +802,7 @@ function initSpeechRecognition() {
     recognition.lang = 'vi-VN';
     
     recognition.onstart = () => {
-        console.log('🎤 Microphone started - Language:', recognition.lang);
+        console.log('🎤 Microphone started');
         isListening = true;
         updateWakeIndicator('listening');
         setExpression('listening');
@@ -709,12 +856,9 @@ function startListening() {
     setTimeout(() => {
         try {
             recognition.start();
-            console.log('🎤 Listening started with language:', recognition.lang);
+            console.log('🎤 Listening started');
         } catch(e) {
             console.log('Start listening failed:', e);
-            setTimeout(() => {
-                try { recognition.start(); } catch(e) {}
-            }, 500);
         }
     }, 200);
 }
@@ -792,7 +936,7 @@ function connectWebSocket() {
 
 // ========== INITIALIZATION ==========
 function init() {
-    console.log('🚀 Chiri AI v6.0 - Full Feature');
+    console.log('🚀 Chiri AI v6.0 - Full Feature with Accurate Face Detection');
     console.log('📋 Features: Tiếng Việt, ChatGPT, Voice Control, Countdown, Drive Mode, Face Detection');
     
     updateWakeIndicator('sleeping');
