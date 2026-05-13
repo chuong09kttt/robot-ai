@@ -52,11 +52,6 @@ body {
     animation: pulse 1.2s infinite;
 }
 
-.wake-dot.sleeping {
-    background-color: #2ecc71;
-    box-shadow: none;
-}
-
 #wakeText {
     font-weight: bold;
     color: #f9eec1;
@@ -93,16 +88,6 @@ body {
     transition: transform 0.2s ease;
 }
 
-/* ========== ANIMATION CHO MIỆNG, MẮT, LÔNG MÀY ========== */
-
-@keyframes mouthTalk {
-    0% { transform: scaleY(0.4); }
-    25% { transform: scaleY(1); }
-    50% { transform: scaleY(0.4); }
-    75% { transform: scaleY(1); }
-    100% { transform: scaleY(0.4); }
-}
-
 .robot-mouth {
     transition: all 0.05s ease;
     transform-origin: center;
@@ -129,8 +114,12 @@ body {
     transform: scaleY(0.3);
 }
 
-.robot-svg.surprised .robot-mouth {
-    transform: scaleY(1.3) scaleX(1.2);
+@keyframes mouthTalk {
+    0% { transform: scaleY(0.4); }
+    25% { transform: scaleY(1); }
+    50% { transform: scaleY(0.4); }
+    75% { transform: scaleY(1); }
+    100% { transform: scaleY(0.4); }
 }
 
 @keyframes blink {
@@ -138,64 +127,11 @@ body {
     95% { transform: scaleY(0.05); }
 }
 
-@keyframes lookAround {
-    0% { transform: translateX(0); }
-    25% { transform: translateX(3px); }
-    75% { transform: translateX(-3px); }
-    100% { transform: translateX(0); }
-}
-
 .robot-eye {
     transition: all 0.1s ease;
     transform-origin: center;
     transform-box: fill-box;
     animation: blink 4s infinite;
-}
-
-.robot-svg.listening .robot-eye {
-    animation: blink 4s infinite, lookAround 3s infinite;
-}
-
-.robot-svg.happy .robot-eye {
-    transform: scaleX(1) scaleY(0.7);
-    animation: none;
-}
-
-.robot-svg.thinking .robot-eye {
-    transform: scaleX(0.8) scaleY(0.5);
-    animation: none;
-}
-
-.robot-svg.sleepy .robot-eye {
-    transform: scaleY(0.05);
-    animation: none;
-}
-
-.robot-svg.surprised .robot-eye {
-    transform: scale(1.2);
-    animation: none;
-}
-
-.robot-eyebrow {
-    transition: all 0.2s ease;
-    transform-origin: center;
-    transform-box: fill-box;
-}
-
-.robot-svg.happy .robot-eyebrow {
-    transform: translateY(-3px) rotate(-5deg);
-}
-
-.robot-svg.thinking .robot-eyebrow {
-    transform: translateY(2px) rotate(5deg);
-}
-
-.robot-svg.surprised .robot-eyebrow {
-    transform: translateY(-6px) scaleY(1.3);
-}
-
-.robot-svg.sleepy .robot-eyebrow {
-    transform: translateY(1px);
 }
 
 .robot-name {
@@ -219,6 +155,102 @@ body {
     margin: 8px auto;
     color: #5a3e1b;
     box-shadow: inset 0 -1px 0 #b98f5c, 0 2px 8px rgba(0,0,0,0.05);
+}
+
+/* Camera Section */
+.camera-section {
+    margin: 15px 20px;
+    padding: 15px;
+    background: linear-gradient(135deg, #2a3a4a, #1a2a3a);
+    border-radius: 30px;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+}
+
+.camera-container {
+    position: relative;
+    width: 100%;
+    min-height: 280px;
+    background: #000;
+    border-radius: 20px;
+    overflow: hidden;
+}
+
+#video {
+    width: 100%;
+    border-radius: 20px;
+    background: #000;
+    transform: scaleX(-1);
+    display: block;
+}
+
+#canvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    display: none;
+}
+
+.face-status {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 15px;
+    margin-top: 15px;
+    padding: 10px;
+    background: rgba(0,0,0,0.7);
+    border-radius: 50px;
+    backdrop-filter: blur(10px);
+}
+
+#faceEmoji {
+    font-size: 28px;
+}
+
+#faceText {
+    font-size: 14px;
+    font-weight: bold;
+    color: #ffd966;
+}
+
+.face-details {
+    display: flex;
+    justify-content: center;
+    gap: 15px;
+    margin: 12px 0;
+}
+
+.detail-item {
+    background: rgba(255,255,255,0.2);
+    padding: 6px 16px;
+    border-radius: 40px;
+    font-size: 13px;
+    font-weight: bold;
+    color: white;
+}
+
+.camera-toggle {
+    width: 100%;
+    padding: 12px;
+    margin-top: 10px;
+    background: linear-gradient(120deg, #2c5f2d, #1f3b20);
+    border: none;
+    border-radius: 40px;
+    font-weight: bold;
+    font-size: 16px;
+    color: white;
+    cursor: pointer;
+    transition: 0.2s;
+}
+
+.camera-toggle:active {
+    transform: scale(0.98);
+}
+
+.camera-toggle.active {
+    background: linear-gradient(120deg, #e67e22, #b45f1b);
 }
 
 .drive-toggle {
@@ -396,101 +428,4 @@ body {
 ::-webkit-scrollbar-thumb {
     background: #b97f44;
     border-radius: 10px;
-}
-
-/* Camera Section */
-.camera-section {
-    margin: 15px 20px;
-    padding: 15px;
-    background: linear-gradient(135deg, #2a3a4a, #1a2a3a);
-    border-radius: 30px;
-    box-shadow: 0 5px 15px rgba(0,0,0,0.3);
-}
-
-.camera-container {
-    position: relative;
-    width: 100%;
-    border-radius: 20px;
-    overflow: hidden;
-    background: #000;
-}
-
-#video, #canvas {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: auto;
-    border-radius: 20px;
-}
-
-#video {
-    position: relative;
-    z-index: 1;
-}
-
-#canvas {
-    position: absolute;
-    z-index: 2;
-    pointer-events: none;
-}
-
-.face-status {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 15px;
-    margin-top: 80px;
-    padding: 12px;
-    background: rgba(0,0,0,0.7);
-    border-radius: 50px;
-    backdrop-filter: blur(10px);
-}
-
-#faceEmoji {
-    font-size: 32px;
-}
-
-#faceText {
-    font-size: 16px;
-    font-weight: bold;
-    color: #ffd966;
-}
-
-.face-details {
-    display: flex;
-    justify-content: center;
-    gap: 20px;
-    margin: 15px 0;
-}
-
-.detail-item {
-    background: rgba(255,255,255,0.2);
-    padding: 8px 20px;
-    border-radius: 40px;
-    font-size: 14px;
-    font-weight: bold;
-    color: white;
-}
-
-.camera-toggle {
-    width: 100%;
-    padding: 12px;
-    margin-top: 10px;
-    background: linear-gradient(120deg, #2c5f2d, #1f3b20);
-    border: none;
-    border-radius: 40px;
-    font-weight: bold;
-    font-size: 16px;
-    color: white;
-    cursor: pointer;
-    transition: 0.2s;
-}
-
-.camera-toggle:active {
-    transform: scale(0.98);
-}
-
-.camera-toggle.active {
-    background: linear-gradient(120deg, #e67e22, #b45f1b);
 }
