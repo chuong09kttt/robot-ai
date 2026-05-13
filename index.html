@@ -5,18 +5,23 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
     <title>🐹 Chiri AI - Robot thông minh</title>
     <link rel="stylesheet" href="style.css">
+    <!-- MediaPipe Face Detection -->
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_detection/face_detection.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
 </head>
 <body>
     <div class="container">
         <div class="wake-badge">
             <div class="wake-dot" id="wakeDot"></div>
-            <span id="wakeText">😴 Đang ngủ</span>
+            <span id="wakeText">😴 Sleeping</span>
         </div>
-        <div class="sleep-timer" id="sleepTimer">😴 Sẽ ngủ sau 2:00</div>
+        <div class="sleep-timer" id="sleepTimer">😴 Sleep in 60s</div>
 
         <div class="robot-section">
             <div class="robot-avatar">
                 <svg class="robot-svg" viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg">
+                    <!-- SVG giữ nguyên -->
                     <circle cx="90" cy="100" r="40" fill="#FFB347" stroke="#E67E22" stroke-width="3"/>
                     <circle cx="90" cy="100" r="20" fill="#FF8C42" opacity="0.5"/>
                     <circle cx="310" cy="100" r="40" fill="#FFB347" stroke="#E67E22" stroke-width="3"/>
@@ -54,35 +59,48 @@
                 </svg>
             </div>
             <div class="robot-name">🐹 CHIRI AI</div>
-            <div class="status-text" id="statusText">🎤 Nói "Xin chào" hoặc "Hello" để đánh thức</div>
+            <div class="status-text" id="statusText">🎤 Say "Hello" to wake me up!</div>
+        </div>
+
+        <!-- Camera Section -->
+        <div class="camera-section" id="cameraSection">
+            <div class="camera-container">
+                <video id="video" autoplay playsinline style="width: 100%; border-radius: 20px;"></video>
+                <canvas id="canvas" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;"></canvas>
+            </div>
+            <div class="face-status" id="faceStatus">
+                <span id="faceEmoji">🤖</span>
+                <span id="faceText">Nhấn nút bên dưới để bật camera</span>
+            </div>
+            <div class="face-details" id="faceDetails">
+                <div class="detail-item" id="glassesStatus">🕶️ Đang kiểm tra</div>
+                <div class="detail-item" id="hatStatus">🧢 Đang kiểm tra</div>
+            </div>
+            <button class="camera-toggle" id="cameraToggleBtn">📷 BẬT CAMERA</button>
         </div>
 
         <div class="drive-toggle">
-            <button class="drive-btn" id="driveModeBtn">🚗 BẬT CHẾ ĐỘ ĐIỀU KHIỂN XE</button>
+            <button class="drive-btn" id="driveModeBtn">🚗 TURN ON CAR CONTROL</button>
         </div>
 
         <div class="wake-examples">
-            <span class="wake-example">🗣️ "Xin chào"</span>
             <span class="wake-example">🗣️ "Hello"</span>
-            <span class="wake-example">🗣️ "Chào Chiri"</span>
-            <span class="wake-example drive-hint" id="driveHint">🚗 "Tiến, Lùi, Trái, Phải, Dừng"</span>
-            <span class="wake-example">⏰ "Đếm ngược 10 giây"</span>
+            <span class="wake-example">🗣️ "Xin chào"</span>
+            <span class="wake-example">🗣️ "Hi Chiri"</span>
+            <span class="wake-example drive-hint" id="driveHint">🚗 "Forward, Back, Left, Right, Stop"</span>
+            <span class="wake-example">⏰ "Countdown 10 seconds"</span>
+            <span class="wake-example">📷 "Bật camera"</span>
         </div>
 
         <div class="chat-section">
             <div class="chat-box" id="chatBox">
                 <div class="message ai">
-                    <div class="bubble">🐹 Chào bạn! Mình là Chiri AI phiên bản 5.0. Mình có thể:<br>
-                    • 💬 Trò chuyện thông minh với ChatGPT<br>
-                    • 🚗 Điều khiển xe bằng giọng nói<br>
-                    • ⏰ Đếm ngược thời gian<br>
-                    • 🌍 Nói được cả tiếng Việt và tiếng Anh<br><br>
-                    Hãy nói "Xin chào" để bắt đầu nhé!</div>
+                    <div class="bubble">🐹 Hello! I am Chiri AI. I can detect faces, glasses, and hats! Click the camera button below to start face detection!</div>
                 </div>
             </div>
         </div>
         
-        <div class="tip">💡 Mẹo: Nói "Xin chào" để đánh thức. Sau 2 phút im lặng, Chiri sẽ tự ngủ. Khi bật chế độ xe, robot sẽ nhận lệnh điều khiển. Nói "Đếm ngược X giây" để hẹn giờ. Hỏi về "Sao Kim", "Tuổi thọ", "Hồ Chí Minh" để xem phản hồi thông minh!</div>
+        <div class="tip">💡 Tip: Click "BẬT CAMERA" to let me see you! I can detect if you're wearing glasses or a hat!</div>
 
         <div class="manual-wake" id="manualWake">
             <svg viewBox="0 0 24 24">
