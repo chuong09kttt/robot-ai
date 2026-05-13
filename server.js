@@ -462,19 +462,22 @@ function getESP32Command(text) {
     return null;
 }
 
+
 // ========== PROCESS USER MESSAGE WITH QUEUE ==========
 async function processUserMessage(userText, driveMode, sessionId, ws) {
-    // Queue system to prevent race conditions
+    // Khởi tạo queue nếu chưa có
     if (!processingQueue.has(sessionId)) {
         processingQueue.set(sessionId, Promise.resolve());
     }
-    
-    const queue = processingQueue.get(sessionId);
-    const result = await queue.then(async () => {
+
+    const currentQueue = processingQueue.get(sessionId);
+
+    // Thực thi theo thứ tự (queue)
+    const result = await currentQueue.then(async () => {
         try {
             console.log(`🔍 [${sessionId}] Process: "${userText}" | driveMode: ${driveMode}`);
-            
-            // Drive mode
+
+            // === CHẾ ĐỘ ĐIỀU KHIỂN XE ===
             if (driveMode === true) {
                 if (isControlCommand(userText)) {
                     const command = getESP32Command(userText);
@@ -490,16 +493,18 @@ async function processUserMessage(userText, driveMode, sessionId, ws) {
                         return replies[command];
                     }
                 }
+                // Không phải lệnh xe hợp lệ khi đang ở drive mode
                 return '🚫 Đang ở chế độ xe. Vui lòng nói: TIẾN, LÙI, TRÁI, PHẢI, DỪNG. Hoặc tắt chế độ xe để trò chuyện!';
             }
-            
+
+            // === CHẾ ĐỘ TRÒ CHUYỆN THÔNG MINH ===
             // RAG: Search in custom knowledge
             console.log('🔍 Searching in custom knowledge...');
             const searchResults = searchInKnowledge(userText, 3);
-            
+
             let customAnswer = null;
             let customContext = '';
-            
+
             if (searchResults.length > 0) {
                 customAnswer = generateAnswerFromKnowledge(userText, searchResults);
                 if (customAnswer && customAnswer.confidence === 'high') {
@@ -508,17 +513,17 @@ async function processUserMessage(userText, driveMode, sessionId, ws) {
                 }
                 if (searchResults.length > 0) {
                     customContext = searchResults.map(r => `[${r.source}]: ${r.content.slice(0, 300)}`).join('\n\n');
-                    console.log(`📖 Found ${searchResults.length} relevant results, using as context`);
+                    console.log(`📖 Found ${searchResults.length} relevant results`);
                 }
             }
-            
+
             // Chat mode with ChatGPT
             if (!conversationHistory[sessionId]) {
                 conversationHistory[sessionId] = [];
             }
-            
+
             conversationHistory[sessionId].push({ role: 'user', content: userText });
-            
+
             let reply;
             if (customContext) {
                 reply = await callChatGPT(userText, conversationHistory[sessionId], customContext);
@@ -526,23 +531,25 @@ async function processUserMessage(userText, driveMode, sessionId, ws) {
             } else {
                 reply = await callChatGPT(userText, conversationHistory[sessionId]);
             }
-            
+
             conversationHistory[sessionId].push({ role: 'assistant', content: reply });
-            
-            // Limit history
+
+            // Giới hạn lịch sử hội thoại
             if (conversationHistory[sessionId].length > 16) {
                 conversationHistory[sessionId] = conversationHistory[sessionId].slice(-16);
             }
-            
+
             return reply;
+
         } catch (error) {
             console.error('Process error:', error);
             return 'Chiri hơi mệt, bạn thử lại nhé! 😊';
         }
     });
-    
-    // Reset queue
+
+    // Reset queue cho lần sau (quan trọng)
     processingQueue.set(sessionId, Promise.resolve());
+
     return result;
 }
 
