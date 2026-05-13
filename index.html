@@ -63,19 +63,19 @@
             <div class="status-text" id="statusText">🎤 Nói "Xin chào" để đánh thức Chiri!</div>
         </div>
 
-        <!-- Camera Section - NHẬN DIỆN KHUÔN MẶT -->
+        <!-- Camera Section -->
         <div class="camera-section" id="cameraSection">
             <div class="camera-container">
-                <video id="video" autoplay playsinline></video>
-                <canvas id="canvas" style="display: none;"></canvas>
+                <video id="video" autoplay playsinline style="width: 100%; border-radius: 20px; background: #000;"></video>
+                <canvas id="canvas" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none;"></canvas>
             </div>
             <div class="face-status" id="faceStatus">
                 <span id="faceEmoji">🤖</span>
                 <span id="faceText">Nhấn nút bên dưới để bật camera</span>
             </div>
             <div class="face-details" id="faceDetails">
-                <div class="detail-item" id="glassesStatus">🕶️ Đang kiểm tra</div>
-                <div class="detail-item" id="hatStatus">🧢 Đang kiểm tra</div>
+                <div class="detail-item" id="glassesStatus">🕶️ --</div>
+                <div class="detail-item" id="hatStatus">🧢 --</div>
             </div>
             <button class="camera-toggle" id="cameraToggleBtn">📷 BẬT CAMERA</button>
         </div>
