@@ -100,8 +100,65 @@ function getCurrentDate() {
     return `Hôm nay là ${weekday}, ngày ${day} tháng ${month} năm ${year}.`;
 }
 
+// ========== LANGUAGE DETECTION ==========
+function detectLanguage(text) {
+    // Kiểm tra ký tự tiếng Việt có dấu
+    const vietnameseChars = /[àáảãạăâầấẩẫậêềếểễệôồốổỗộơờớởỡợưừứửữựđ]/i;
+    
+    // Nếu có ký tự tiếng Việt -> tiếng Việt
+    if (vietnameseChars.test(text)) {
+        return 'vi';
+    }
+    
+    // Nếu không có ký tự tiếng Việt và chủ yếu là ký tự Latin -> tiếng Anh
+    const englishChars = /[a-zA-Z]/;
+    if (englishChars.test(text) && text.length > 0) {
+        return 'en';
+    }
+    
+    // Mặc định tiếng Việt
+    return 'vi';
+}
+
+// Hàm lấy system prompt theo ngôn ngữ
+function getSystemPrompt(lang, customContext = '') {
+    if (lang === 'en') {
+        let prompt = `You are Chiri - a smart, friendly, cute AI assistant.
+IMPORTANT:
+- Answer ALL user questions accurately and helpfully
+- If asked about distance, answer with distance
+- If asked about time, answer with real-time
+- Tone: friendly, enthusiastic, use emojis (❤️, 😊, 🚀)
+- Answer in ENGLISH
+- Answer SHORT (2-3 sentences)
+- If you don't know, honestly say "I'm not sure about that"`;
+        
+        if (customContext) {
+            prompt += `\n\n**REFERENCE INFORMATION (prioritize using):**\n${customContext.slice(0, 400)}\n\nUse the above information to answer if appropriate.`;
+        }
+        return prompt;
+    } else {
+        let prompt = `Bạn là Chiri - một trợ lý AI thông minh, thân thiện, dễ thương.
+QUAN TRỌNG:
+- Trả lời MỌI câu hỏi của người dùng một cách chính xác, hữu ích
+- Nếu hỏi về khoảng cách, trả lời khoảng cách
+- Nếu hỏi về thời gian, trả lời thời gian thực
+- Nếu hỏi về VinFast, hãy dùng thông tin từ bài báo Dân trí ngày 13/5/2026
+- Giọng điệu: thân thiện, nhiệt tình, dùng icon cảm xúc (❤️, 😊, 🚀)
+- Trả lời bằng TIẾNG VIỆT
+- Trả lời NGẮN GỌN (2-3 câu)
+- Nếu không biết, hãy thành thật nói "Mình chưa rõ lắm"`;
+
+        if (customContext) {
+            prompt += `\n\n**THÔNG TIN THAM KHẢO (ưu tiên sử dụng):**\n${customContext.slice(0, 400)}\n\nHãy dùng thông tin trên để trả lời nếu phù hợp.`;
+        }
+        return prompt;
+    }
+}
+
 // ========== FALLBACK KNOWLEDGE (DỰ PHÒNG KHI CRAWL LỖI) ==========
 const fallbackKnowledge = {
+    // Vietnamese
     'vinfast': `Theo bài báo Dân trí ngày 13/5/2026, VinFast đang tái cấu trúc:
 - Công ty Tương Lai (của ông Phạm Nhật Vượng) mua lại 2 nhà máy tại Hải Phòng và Hà Tĩnh với giá 13.309,6 tỷ đồng
 - Đồng thời nhận lại khoảng 182.000 tỷ đồng nợ của VinFast
@@ -119,9 +176,36 @@ const fallbackKnowledge = {
     'vard vung tau': 'VARD Vũng Tàu là công ty đóng tàu chuyên dụng, thành lập năm 2006, có 1100 nhân viên đến từ 63 tỉnh thành. Địa chỉ: Đường số 6, KCN Đông Xuyên, Phường Rạch Dừa, TP. Vũng Tàu. Công ty có kế hoạch tuyển thêm lên 2000 người, đơn hàng đến 2026.'
 };
 
-function searchFallbackKnowledge(query) {
+function searchFallbackKnowledge(query, lang = 'vi') {
     const lower = query.toLowerCase();
     
+    // English queries
+    if (lang === 'en') {
+        if (lower.includes('vinfast') && (lower.includes('quit') || lower.includes('abandon') || lower.includes('leave'))) {
+            return 'VinFast is not quitting the automotive industry. They are restructuring to optimize costs and reduce debt. VinFast still keeps the brand, still sells cars, still provides warranty. Target is to be profitable from 2027.';
+        }
+        if (lower.includes('vinfast')) {
+            return `According to Dan Tri newspaper on May 13, 2026, VinFast is restructuring:
+- Future Company (of Mr. Pham Nhat Vuong) will buy 2 factories in Hai Phong and Ha Tinh for 13,309.6 billion VND
+- Also takes over about 182,000 billion VND of VinFast's debt
+- After restructuring, VinFast will no longer have manufacturing in Vietnam, instead hire Future Company to produce
+- VinFast still keeps R&D, design, sales, warranty, after-sales
+- VinFast expects to be profitable from 2027
+- Customers are not affected in product quality and warranty`;
+        }
+        if (lower.includes('son la') || (lower.includes('son') && lower.includes('la'))) {
+            return 'Son La province is not included in the proposed merger plan according to the document. Son La remains unchanged.';
+        }
+        if (lower.includes('province') && lower.includes('merge')) {
+            return 'According to the proposed document, 23 new provinces/cities will be merged from the current 63 provinces/cities. Provinces like Hanoi, Hue, Son La, Lai Chau, Dien Bien, Lang Son, Quang Ninh, Thanh Hoa, Nghe An, Ha Tinh, Cao Bang will not merge.';
+        }
+        if (lower.includes('vard') || (lower.includes('vung') && lower.includes('tau'))) {
+            return 'VARD Vung Tau is a specialized shipbuilding company, established in 2006, with 1,100 employees from 63 provinces. Address: Street 6, Dong Xuyen Industrial Park, Rach Dua Ward, Vung Tau City. The company plans to recruit up to 2,000 people, with orders until 2026.';
+        }
+        return null;
+    }
+    
+    // Vietnamese queries
     if (lower.includes('vinfast') && (lower.includes('từ bỏ') || lower.includes('bỏ ngành') || lower.includes('rút lui'))) {
         return fallbackKnowledge['vinfast tu bo o to'];
     }
@@ -188,7 +272,7 @@ async function downloadFromGoogleDrive(fileId) {
     }
 }
 
-// ========== CRAWL WEBSITE (CẢI THIỆN) ==========
+// ========== CRAWL WEBSITE ==========
 async function crawlWebsite(url) {
     if (!axios || !cheerio) {
         console.log('⚠️ Axios or cheerio not available, cannot crawl website');
@@ -290,14 +374,13 @@ async function loadCustomKnowledge() {
     
     const allContent = [];
     
-    // Default websites to crawl (THÊM WEBSITE DÂN TRÍ VỀ VINFAST)
+    // Default websites to crawl
     const defaultWebsites = process.env.DEFAULT_WEBSITES 
         ? process.env.DEFAULT_WEBSITES.split(',')
         : [
             'https://vi.wikipedia.org/wiki/Tuổi_thọ',
             'https://vi.wikipedia.org/wiki/Sức_khỏe',
             'https://www.vard.com/vungtau',
-            'https://khoahoc.tv/nhung-ly-do-khien-con-nguoi-nam-mo-khi-di-ngu-50275',
             'https://dantri.com.vn/o-to-xe-may/lanh-dao-vinfast-noi-gi-ve-nghi-van-tu-bo-nganh-o-to-20260513203658767.htm'
           ];
     
@@ -320,7 +403,7 @@ async function loadCustomKnowledge() {
         }
     }
     
-    // Download from Google Drive (PDF về sáp nhập tỉnh)
+    // Download from Google Drive
     if (GOOGLE_DRIVE_FILE_ID && axios) {
         console.log(`📁 Downloading from Google Drive ID: ${GOOGLE_DRIVE_FILE_ID}...`);
         const pdfContent = await downloadFromGoogleDrive(GOOGLE_DRIVE_FILE_ID);
@@ -384,10 +467,10 @@ function searchInKnowledge(query) {
             }
         }
         
-        // Bonus cho nội dung dài và từ khóa quan trọng
+        // Bonus for content length
         score += Math.min(10, chunk.content.length / 200);
         
-        // Bonus cho nguồn Dân trí (ưu tiên tin tức mới)
+        // Bonus for Dan Tri source (priority for news)
         if (chunk.source && chunk.source.includes('dantri')) {
             score += 15;
         }
@@ -436,30 +519,17 @@ function generateAnswerFromKnowledge(query, results) {
 }
 
 // ========== CALL CHATGPT WITH CONTEXT ==========
-async function callChatGPT(userMessage, history = [], customContext = '') {
-    const cacheKey = userMessage.slice(0, 200);
+async function callChatGPT(userMessage, history = [], customContext = '', lang = 'vi') {
+    const cacheKey = userMessage.slice(0, 200) + lang;
     const cached = responseCache.get(cacheKey);
     if (cached) return cached;
     
     if (!openai || !process.env.OPENAI_API_KEY) {
-        return getSimpleReply(userMessage);
+        return getSimpleReply(userMessage, lang);
     }
     
     try {
-        let systemPrompt = `Bạn là Chiri - một trợ lý AI thông minh, thân thiện, dễ thương.
-QUAN TRỌNG:
-- Trả lời MỌI câu hỏi của người dùng một cách chính xác, hữu ích
-- Nếu hỏi về khoảng cách, trả lời khoảng cách
-- Nếu hỏi về thời gian, trả lời thời gian thực
-- Nếu hỏi về VinFast, hãy dùng thông tin từ bài báo Dân trí ngày 13/5/2026
-- Giọng điệu: thân thiện, nhiệt tình, dùng icon cảm xúc (❤️, 😊, 🚀)
-- Trả lời bằng TIẾNG VIỆT
-- Trả lời NGẮN GỌN (2-3 câu)
-- Nếu không biết, hãy thành thật nói "Mình chưa rõ lắm"`;
-
-        if (customContext) {
-            systemPrompt += `\n\n**THÔNG TIN THAM KHẢO (ưu tiên sử dụng):**\n${customContext.slice(0, 400)}\n\nHãy dùng thông tin trên để trả lời nếu phù hợp.`;
-        }
+        const systemPrompt = getSystemPrompt(lang, customContext);
 
         const completion = await openai.chat.completions.create({
             model: 'gpt-3.5-turbo',
@@ -477,25 +547,37 @@ QUAN TRỌNG:
         return reply;
     } catch (error) {
         console.error('❌ ChatGPT error:', error.message);
-        return getSimpleReply(userMessage);
+        return getSimpleReply(userMessage, lang);
     }
 }
 
 // ========== SIMPLE REPLY FALLBACK ==========
-function getSimpleReply(userMessage) {
+function getSimpleReply(userMessage, lang = 'vi') {
     const lower = userMessage.toLowerCase();
     
-    if (lower.includes('xin chào') || lower.includes('hello')) {
-        return 'Xin chào bạn! Mình là Chiri AI, rất vui được gặp bạn! 💕';
+    if (lang === 'en') {
+        if (lower.includes('hello') || lower.includes('hi')) {
+            return 'Hello! I am Chiri AI, nice to meet you! 💕';
+        }
+        if (lower.includes('how are you')) {
+            return 'I am an AI so I don\'t have health, but I am always ready to help you! 😊';
+        }
+        if (lower.includes('thank')) {
+            return 'You\'re welcome! Happy to help you! 💖';
+        }
+        return `🤔 I heard you say: "${userMessage.slice(0, 50)}". I am still learning to answer better.`;
+    } else {
+        if (lower.includes('xin chào') || lower.includes('hello')) {
+            return 'Xin chào bạn! Mình là Chiri AI, rất vui được gặp bạn! 💕';
+        }
+        if (lower.includes('khỏe')) {
+            return 'Cảm ơn bạn! Mình là AI nên không có sức khỏe, nhưng mình luôn sẵn sàng giúp đỡ bạn! 😊';
+        }
+        if (lower.includes('cảm ơn')) {
+            return 'Không có gì đâu ạ! Rất vui khi được giúp bạn! 💖';
+        }
+        return `🤔 Mình nghe bạn nói: "${userMessage.slice(0, 50)}". Mình đang học hỏi thêm để trả lời tốt hơn.`;
     }
-    if (lower.includes('khỏe')) {
-        return 'Cảm ơn bạn! Mình là AI nên không có sức khỏe, nhưng mình luôn sẵn sàng giúp đỡ bạn! 😊';
-    }
-    if (lower.includes('cảm ơn')) {
-        return 'Không có gì đâu ạ! Rất vui khi được giúp bạn! 💖';
-    }
-    
-    return `🤔 Mình nghe bạn nói: "${userMessage.slice(0, 50)}". Mình đang học hỏi thêm để trả lời tốt hơn.`;
 }
 
 function delay(ms) {
@@ -572,47 +654,74 @@ async function processUserMessage(userText, driveMode, sessionId, ws) {
         try {
             console.log(`🔍 [${sessionId}] Process: "${userText}" | driveMode: ${driveMode}`);
             
+            // PHÁT HIỆN NGÔN NGỮ
+            const lang = detectLanguage(userText);
+            console.log(`🌐 Detected language: ${lang === 'en' ? 'ENGLISH' : 'VIETNAMESE'}`);
+            
             // DRIVE MODE
             if (driveMode === true) {
                 const command = getDriveCommand(userText);
                 if (command) {
                     sendToESP32(command);
                     const replies = {
-                        'FORWARD': '🚗 Xe tiến lên!',
-                        'BACKWARD': '🚗 Xe lùi lại!',
-                        'LEFT': '🚗 Xe rẽ trái!',
-                        'RIGHT': '🚗 Xe rẽ phải!',
-                        'STOP': '🛑 Xe dừng lại!'
+                        'FORWARD': lang === 'en' ? '🚗 Moving forward!' : '🚗 Xe tiến lên!',
+                        'BACKWARD': lang === 'en' ? '🚗 Moving backward!' : '🚗 Xe lùi lại!',
+                        'LEFT': lang === 'en' ? '🚗 Turning left!' : '🚗 Xe rẽ trái!',
+                        'RIGHT': lang === 'en' ? '🚗 Turning right!' : '🚗 Xe rẽ phải!',
+                        'STOP': lang === 'en' ? '🛑 Stopped!' : '🛑 Xe dừng lại!'
                     };
                     return replies[command];
                 }
-                return '🚫 Chế độ điều khiển xe. Vui lòng nói: TIẾN, LÙI, TRÁI, PHẢI, hoặc DỪNG.';
+                return lang === 'en' 
+                    ? '🚫 Car control mode. Please say: FORWARD, BACK, LEFT, RIGHT, or STOP.'
+                    : '🚫 Chế độ điều khiển xe. Vui lòng nói: TIẾN, LÙI, TRÁI, PHẢI, hoặc DỪNG.';
             }
             
-            // COUNTDOWN
+            // COUNTDOWN COMMAND
             const countdown = handleCountdownCommand(userText);
             if (countdown.isCountdown) {
                 if (ws && ws.readyState === WebSocket.OPEN) {
                     ws.send(JSON.stringify({ 
                         type: 'countdown', 
                         seconds: countdown.seconds,
-                        message: `⏰ Đã bắt đầu đếm ngược ${countdown.seconds} giây!`
+                        message: lang === 'en' 
+                            ? `⏰ Countdown started for ${countdown.seconds} seconds!`
+                            : `⏰ Đã bắt đầu đếm ngược ${countdown.seconds} giây!`
                     }));
                 }
-                return `⏰ Đã bắt đầu đếm ngược ${countdown.seconds} giây!`;
+                return lang === 'en'
+                    ? `⏰ Countdown started for ${countdown.seconds} seconds!`
+                    : `⏰ Đã bắt đầu đếm ngược ${countdown.seconds} giây!`;
             }
             
             // REAL-TIME QUESTIONS
             const lower = userText.toLowerCase();
-            if (lower.includes('mấy giờ') || (lower.includes('giờ') && lower.includes('bao nhiêu'))) {
+            if (lower.includes('what time') || lower.includes('current time') || lower.includes('time now') ||
+                lower.includes('mấy giờ') || (lower.includes('giờ') && lower.includes('bao nhiêu'))) {
+                if (lang === 'en') {
+                    const now = new Date();
+                    const hours = now.getHours();
+                    const minutes = now.getMinutes();
+                    const seconds = now.getSeconds();
+                    const period = hours < 12 ? 'AM' : 'PM';
+                    const hour12 = hours % 12 || 12;
+                    return `It's ${hour12}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')} ${period}.`;
+                }
                 return getCurrentTime();
             }
-            if (lower.includes('hôm nay') || lower.includes('ngày bao nhiêu') || lower.includes('ngày mấy')) {
+            if (lower.includes('what date') || lower.includes('today') || lower.includes('what day') ||
+                lower.includes('hôm nay') || lower.includes('ngày bao nhiêu') || lower.includes('ngày mấy')) {
+                if (lang === 'en') {
+                    const now = new Date();
+                    const weekdays = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+                    const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+                    return `Today is ${weekdays[now.getDay()]}, ${months[now.getMonth()]} ${now.getDate()}, ${now.getFullYear()}.`;
+                }
                 return getCurrentDate();
             }
             
-            // FALLBACK KNOWLEDGE (dữ liệu dự phòng)
-            const fallbackAnswer = searchFallbackKnowledge(userText);
+            // FALLBACK KNOWLEDGE
+            const fallbackAnswer = searchFallbackKnowledge(userText, lang);
             if (fallbackAnswer) {
                 console.log('✅ Found answer in fallback knowledge');
                 return fallbackAnswer;
@@ -646,10 +755,11 @@ async function processUserMessage(userText, driveMode, sessionId, ws) {
             
             let reply;
             if (customContext) {
-                reply = await callChatGPT(userText, conversationHistory[sessionId], customContext);
-                reply += `\n\n📌 *Thông tin có tham khảo từ dữ liệu của tôi.*`;
+                reply = await callChatGPT(userText, conversationHistory[sessionId], customContext, lang);
+                const note = lang === 'en' ? '\n\n📌 *Information referenced from my data.*' : '\n\n📌 *Thông tin có tham khảo từ dữ liệu của tôi.*';
+                reply += note;
             } else {
-                reply = await callChatGPT(userText, conversationHistory[sessionId]);
+                reply = await callChatGPT(userText, conversationHistory[sessionId], '', lang);
             }
             
             conversationHistory[sessionId].push({ role: 'assistant', content: reply });
@@ -662,7 +772,10 @@ async function processUserMessage(userText, driveMode, sessionId, ws) {
             
         } catch (error) {
             console.error('Process error:', error);
-            return 'Xin lỗi, Chiri gặp chút vấn đề. Vui lòng thử lại! 😊';
+            const lang = detectLanguage(userText);
+            return lang === 'en'
+                ? 'Sorry, Chiri is having a problem. Please try again! 😊'
+                : 'Xin lỗi, Chiri gặp chút vấn đề. Vui lòng thử lại! 😊';
         }
     }).finally(() => {
         processingQueue.set(sessionId, Promise.resolve());
@@ -689,12 +802,6 @@ async function generateHighQualityTTS(text, lang = 'vi') {
         console.error('TTS error:', error.message);
         return null;
     }
-}
-
-function detectLanguage(text) {
-    const vietnameseChars = /[àáảãạăâầấẩẫậêềếểễệôồốổỗộơờớởỡợưừứửữựđ]/i;
-    if (vietnameseChars.test(text)) return 'vi';
-    return 'en';
 }
 
 // ========== API ENDPOINTS ==========
@@ -938,6 +1045,7 @@ async function startServer() {
         console.log(`║  🤖 ChatGPT: ${(openai && process.env.OPENAI_API_KEY ? 'READY ✅' : 'NOT AVAILABLE ⚠️').padEnd(40)}║`);
         console.log(`║  📄 PDF Reader: ${(pdfParse ? 'READY ✅' : 'NOT AVAILABLE ⚠️').padEnd(40)}║`);
         console.log(`║  🕷️ Web Crawler: ${(axios && cheerio ? 'READY ✅' : 'NOT AVAILABLE ⚠️').padEnd(40)}║`);
+        console.log(`║  🌐 Multi-language: VIETNAMESE & ENGLISH ✅                          ║`);
         console.log(`║  🎤 Voice Control: READY ✅                                          ║`);
         console.log(`║  ⏰ Countdown Timer: READY ✅                                        ║`);
         console.log(`║  📅 Real-time Clock: READY ✅                                       ║`);
