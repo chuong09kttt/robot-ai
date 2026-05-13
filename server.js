@@ -760,12 +760,10 @@ async function processUserMessage(userText, driveMode, sessionId, ws) {
             let reply;
             if (customContext) {
                 reply = await callChatGPT(userText, conversationHistory[sessionId], customContext, lang);
-                const note = lang === 'en' ? '\n\n📌 *Information referenced from my data.*' : '\n\n📌 *Thông tin có tham khảo từ dữ liệu của tôi.*';
-                reply += note;
             } else {
                 reply = await callChatGPT(userText, conversationHistory[sessionId], '', lang);
             }
-            
+                        
             conversationHistory[sessionId].push({ role: 'assistant', content: reply });
             
             if (conversationHistory[sessionId].length > 20) {
