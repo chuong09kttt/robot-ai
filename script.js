@@ -1,11 +1,5 @@
-const wakeDot = document.getElementById('wakeDot');
-const wakeText = document.getElementById('wakeText');
-const robotSvg = document.querySelector('.robot-svg');
-const statusText = document.getElementById('statusText');
-const chatBox = document.getElementById('chatBox');
-const manualWake = document.getElementById('manualWake');
-const driveModeBtn = document.getElementById('driveModeBtn');
-
+// ========== GLOBAL VARIABLES ==========
+let currentUser = null;
 let ws = null;
 let recognition = null;
 let isAwake = false;
@@ -18,113 +12,371 @@ let mouthAnimationInterval = null;
 let reconnectAttempts = 0;
 let countdownInterval = null;
 
-const INACTIVITY_LIMIT = 60000;
-const WAKE_WORDS = ['xin chào', 'hello', 'hi', 'chào chiri', 'chiri ơi', 'hey chiri', 'alô', 'chào'];
+// Translation variables
+let isTranslatorMode = false;
+let sourceLang = 'vi';
+let targetLang = 'en';
+let isVoiceToVoiceMode = true;
+let translationRecognition = null;
+let lastProcessedText = '';
+let translationTimeout = null;
 
-// ========== MEDIAPIPE FACE MESH (468 điểm) ==========
+// Face Mesh variables
 let isCameraActive = false;
-let cameraButton = null;
-let videoElement = null;
-let canvasElement = null;
 let faceMesh = null;
 let camera = null;
+let videoElement = null;
+let canvasElement = null;
 
-// Trạng thái nhận diện
-let lastFaceState = { hasFace: false, glasses: false, hat: false, eyeOpen: true };
-let detectionStableCount = 0;
-let lastDetectionTime = 0;
-const REQUIRED_STABLE_COUNT = 3;
+// Face Recognition Database
+let faceDatabase = new Map();
+let recognizedFaces = new Map();
+let currentFaceDescriptors = [];
 
-// Các chỉ số landmarks cho Face Mesh
-const LANDMARKS = {
-    // Mắt trái
-    LEFT_EYE: {
-        INNER: 133,
-        OUTER: 33,
-        TOP: 159,
-        BOTTOM: 145,
-        IRIS: 468
-    },
-    // Mắt phải
-    RIGHT_EYE: {
-        INNER: 362,
-        OUTER: 263,
-        TOP: 386,
-        BOTTOM: 374,
-        IRIS: 473
-    },
-    // Lông mày
-    LEFT_EYEBROW: {
-        INNER: 55,
-        OUTER: 46
-    },
-    RIGHT_EYEBROW: {
-        INNER: 285,
-        OUTER: 276
-    },
-    // Mũi
-    NOSE: {
-        TIP: 1,
-        BRIDGE: 168,
-        BOTTOM: 2
-    },
-    // Miệng
-    MOUTH: {
-        LEFT: 61,
-        RIGHT: 291,
-        TOP: 13,
-        BOTTOM: 14
-    },
-    // Viền mặt
-    FACE_OVAL: [10, 338, 297, 332, 284, 251, 389, 356, 454, 323, 361, 288, 397, 365, 379, 378, 400, 377, 152, 148, 176, 149, 150, 136, 172, 58, 132, 93, 234, 127, 162, 21, 54, 103, 67, 109]
-};
+// Register mode
+let isRegisterMode = false;
+let capturedPhotos = [];
 
+const INACTIVITY_LIMIT = 60000;
+const WAKE_WORDS = ['xin chào', 'hello', 'hi', 'chào chiri', 'chiri ơi'];
+
+// ========== TRANSLATION FUNCTIONS ==========
+async function translateText(text, source, target) {
+    if (!text || text.trim() === '') return '';
+    
+    try {
+        // Sử dụng API dịch miễn phí (MyMemory)
+        const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=${source}|${target}`;
+        const response = await fetch(url);
+        const data = await response.json();
+        
+        if (data && data.responseData && data.responseData.translatedText) {
+            let translated = data.responseData.translatedText;
+            // Xóa thông báo lỗi nếu có
+            translated = translated.replace(/^\[ERROR\]\s*/, '');
+            return translated;
+        }
+        return text;
+    } catch (error) {
+        console.error('Translation error:', error);
+        return text;
+    }
+}
+
+function toggleTranslatorMode() {
+    isTranslatorMode = !isTranslatorMode;
+    const panel = document.getElementById('translatorPanel');
+    const btn = document.getElementById('translatorModeBtn');
+    
+    if (isTranslatorMode) {
+        panel.style.display = 'block';
+        btn.classList.add('active');
+        btn.innerHTML = '🌐 ĐANG PHIÊN DỊCH...';
+        startTranslationMode();
+        addMessage('ai', '🌐 Đã bật chế độ phiên dịch real-time! Chọn ngôn ngữ và bắt đầu nói.');
+        speak('Đã bật chế độ phiên dịch real time');
+    } else {
+        panel.style.display = 'none';
+        btn.classList.remove('active');
+        btn.innerHTML = '🌐 PHIÊN DỊCH REAL-TIME';
+        stopTranslationMode();
+        addMessage('ai', '🌐 Đã tắt chế độ phiên dịch.');
+        speak('Đã tắt chế độ phiên dịch');
+    }
+}
+
+function startTranslationMode() {
+    if (translationRecognition) {
+        try { translationRecognition.stop(); } catch(e) {}
+    }
+    
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+        alert('Trình duyệt không hỗ trợ nhận diện giọng nói!');
+        return;
+    }
+    
+    translationRecognition = new SpeechRecognition();
+    translationRecognition.continuous = true;
+    translationRecognition.interimResults = true;
+    translationRecognition.lang = getLanguageCode(sourceLang);
+    
+    translationRecognition.onstart = () => {
+        document.getElementById('translationStatus').innerHTML = '🎤 Đang lắng nghe... Hãy nói!';
+        document.getElementById('translationStatus').style.color = '#4caf50';
+    };
+    
+    translationRecognition.onresult = async (event) => {
+        let interimText = '';
+        let finalText = '';
+        
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+            const transcript = event.results[i][0].transcript;
+            if (event.results[i].isFinal) {
+                finalText += transcript;
+            } else {
+                interimText += transcript;
+            }
+        }
+        
+        const displayText = finalText || interimText;
+        if (displayText && displayText !== lastProcessedText) {
+            // Hiển thị nguyên bản
+            document.getElementById('originalText').innerHTML = escapeHtml(displayText);
+            
+            // Debounce translation
+            if (translationTimeout) clearTimeout(translationTimeout);
+            translationTimeout = setTimeout(async () => {
+                const translated = await translateText(displayText, sourceLang, targetLang);
+                document.getElementById('translatedText').innerHTML = escapeHtml(translated);
+                
+                // Tự động đọc bản dịch nếu ở chế độ voice-to-voice
+                if (isVoiceToVoiceMode && finalText && translated && translated !== displayText) {
+                    await speakTranslation(translated);
+                }
+                
+                lastProcessedText = displayText;
+            }, 500);
+        }
+    };
+    
+    translationRecognition.onerror = (event) => {
+        console.error('Translation recognition error:', event.error);
+        document.getElementById('translationStatus').innerHTML = `⚠️ Lỗi: ${event.error}`;
+        document.getElementById('translationStatus').style.color = '#ff4444';
+    };
+    
+    translationRecognition.onend = () => {
+        if (isTranslatorMode) {
+            document.getElementById('translationStatus').innerHTML = '🔄 Đang khởi động lại...';
+            setTimeout(() => {
+                if (isTranslatorMode) translationRecognition.start();
+            }, 500);
+        } else {
+            document.getElementById('translationStatus').innerHTML = '⏸️ Đã dừng phiên dịch';
+        }
+    };
+    
+    translationRecognition.start();
+}
+
+function stopTranslationMode() {
+    if (translationRecognition) {
+        translationRecognition.stop();
+        translationRecognition = null;
+    }
+    if (translationTimeout) clearTimeout(translationTimeout);
+}
+
+async function speakTranslation(text) {
+    if (!text || isSpeaking) return;
+    
+    try {
+        const lang = targetLang;
+        const ttsLang = getTTSLanguage(lang);
+        const response = await fetch(`/tts?text=${encodeURIComponent(text.slice(0, 300))}&lang=${ttsLang}`);
+        
+        if (response.ok) {
+            const blob = await response.blob();
+            const audio = new Audio(URL.createObjectURL(blob));
+            audio.play();
+        } else {
+            // Fallback browser TTS
+            const utterance = new SpeechSynthesisUtterance(text);
+            utterance.lang = ttsLang;
+            utterance.rate = 0.9;
+            window.speechSynthesis.speak(utterance);
+        }
+    } catch(e) {
+        console.error('Speak translation error:', e);
+    }
+}
+
+function updateTranslationLanguage() {
+    sourceLang = document.getElementById('sourceLang').value;
+    targetLang = document.getElementById('targetLang').value;
+    
+    if (isTranslatorMode && translationRecognition) {
+        // Restart recognition with new language
+        translationRecognition.lang = getLanguageCode(sourceLang);
+        translationRecognition.stop();
+        setTimeout(() => translationRecognition.start(), 500);
+    }
+    
+    // Update display
+    document.querySelector('.translated-box .box-header').innerHTML = `🌐 Dịch sang ${getLanguageName(targetLang)}`;
+}
+
+function swapLanguages() {
+    const temp = sourceLang;
+    sourceLang = targetLang;
+    targetLang = temp;
+    
+    document.getElementById('sourceLang').value = sourceLang;
+    document.getElementById('targetLang').value = targetLang;
+    
+    updateTranslationLanguage();
+    
+    // Clear display
+    document.getElementById('originalText').innerHTML = 'Chưa có dữ liệu...';
+    document.getElementById('translatedText').innerHTML = 'Chưa có dữ liệu...';
+}
+
+function getLanguageCode(lang) {
+    const codes = {
+        'vi': 'vi-VN',
+        'en': 'en-US',
+        'zh': 'zh-CN',
+        'ja': 'ja-JP',
+        'ko': 'ko-KR',
+        'fr': 'fr-FR',
+        'de': 'de-DE',
+        'es': 'es-ES'
+    };
+    return codes[lang] || 'en-US';
+}
+
+function getLanguageName(lang) {
+    const names = {
+        'vi': 'Tiếng Việt',
+        'en': 'Tiếng Anh',
+        'zh': 'Tiếng Trung',
+        'ja': 'Tiếng Nhật',
+        'ko': 'Tiếng Hàn',
+        'fr': 'Tiếng Pháp',
+        'de': 'Tiếng Đức',
+        'es': 'Tiếng Tây Ban Nha'
+    };
+    return names[lang] || lang;
+}
+
+function getTTSLanguage(lang) {
+    const ttsMap = {
+        'vi': 'vi',
+        'en': 'en',
+        'zh': 'zh',
+        'ja': 'ja',
+        'ko': 'ko',
+        'fr': 'fr',
+        'de': 'de',
+        'es': 'es'
+    };
+    return ttsMap[lang] || 'en';
+}
+
+function setVoiceToVoiceMode(active) {
+    isVoiceToVoiceMode = active;
+    document.getElementById('voiceToVoiceMode').classList.toggle('active', active);
+    document.getElementById('listenOnlyMode').classList.toggle('active', !active);
+}
+
+function clearTranslation() {
+    document.getElementById('originalText').innerHTML = 'Chưa có dữ liệu...';
+    document.getElementById('translatedText').innerHTML = 'Chưa có dữ liệu...';
+    lastProcessedText = '';
+}
+
+// ========== FACE RECOGNITION FUNCTIONS ==========
+async function loadFaceDatabase() {
+    try {
+        const saved = localStorage.getItem('chiri_face_database');
+        if (saved) {
+            const data = JSON.parse(saved);
+            for (const [name, descriptors] of Object.entries(data)) {
+                faceDatabase.set(name, descriptors);
+            }
+            console.log(`✅ Loaded ${faceDatabase.size} faces from database`);
+        }
+    } catch(e) { console.log('No saved face data'); }
+}
+
+function saveFaceDatabase() {
+    const data = {};
+    for (const [name, descriptors] of faceDatabase) {
+        data[name] = descriptors;
+    }
+    localStorage.setItem('chiri_face_database', JSON.stringify(data));
+}
+
+function extractFaceDescriptor(landmarks) {
+    const keyIndices = [
+        1, 33, 61, 133, 152, 199, 263, 291, 362, 454,
+        10, 338, 297, 332, 284, 251, 389, 356,
+        46, 53, 55, 65, 66, 69, 70, 105, 107,
+        266, 276, 283, 285, 295, 296, 299, 300, 334, 336
+    ];
+    
+    const descriptor = [];
+    for (const idx of keyIndices) {
+        if (landmarks[idx]) {
+            descriptor.push(landmarks[idx].x, landmarks[idx].y, landmarks[idx].z || 0);
+        }
+    }
+    return descriptor;
+}
+
+function compareFaces(desc1, desc2, threshold = 0.12) {
+    if (!desc1 || !desc2 || desc1.length !== desc2.length) return false;
+    
+    let sumSquaredDiff = 0;
+    for (let i = 0; i < desc1.length; i++) {
+        sumSquaredDiff += Math.pow(desc1[i] - desc2[i], 2);
+    }
+    const distance = Math.sqrt(sumSquaredDiff / desc1.length);
+    return distance < threshold;
+}
+
+function findMatchingFace(descriptor) {
+    let bestMatch = null;
+    let bestDistance = 1;
+    
+    for (const [name, descriptors] of faceDatabase) {
+        for (const savedDesc of descriptors) {
+            if (compareFaces(descriptor, savedDesc, 0.12)) {
+                let distance = 0;
+                for (let i = 0; i < descriptor.length; i++) {
+                    distance += Math.abs(descriptor[i] - savedDesc[i]);
+                }
+                distance /= descriptor.length;
+                if (distance < bestDistance) {
+                    bestDistance = distance;
+                    bestMatch = name;
+                }
+            }
+        }
+    }
+    return bestMatch;
+}
+
+// ========== FACE MESH INIT ==========
 async function initFaceMesh() {
-    cameraButton = document.getElementById('cameraToggleBtn');
     videoElement = document.getElementById('video');
     canvasElement = document.getElementById('canvas');
     
-    if (!cameraButton) {
-        console.log('⚠️ Camera button not found');
-        return;
-    }
-    
-    cameraButton.addEventListener('click', async () => {
-        if (!isCameraActive) {
-            await startCamera();
-        } else {
-            stopCamera();
-        }
+    faceMesh = new FaceMesh({
+        locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`
     });
+    
+    faceMesh.setOptions({
+        maxNumFaces: 4,
+        refineLandmarks: true,
+        minDetectionConfidence: 0.5,
+        minTrackingConfidence: 0.5
+    });
+    
+    faceMesh.onResults(onFaceMeshResults);
+}
+
+async function toggleCamera() {
+    if (!isCameraActive) {
+        await startCamera();
+    } else {
+        stopCamera();
+    }
 }
 
 async function startCamera() {
-    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        addMessage('ai', '⚠️ Trình duyệt không hỗ trợ camera!');
-        return;
-    }
-    
     try {
-        const faceText = document.getElementById('faceText');
-        if (faceText) faceText.textContent = '📷 Đang khởi tạo Face Mesh...';
-        
-        // Khởi tạo MediaPipe Face Mesh (468 điểm)
-        faceMesh = new FaceMesh({
-            locateFile: (file) => {
-                return `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`;
-            }
-        });
-        
-        faceMesh.setOptions({
-            maxNumFaces: 1,
-            refineLandmarks: true,  // Làm mịn landmarks, bao gồm iris
-            minDetectionConfidence: 0.5,
-            minTrackingConfidence: 0.5
-        });
-        
-        faceMesh.onResults(onFaceMeshResults);
-        
-        // Khởi tạo camera
         camera = new Camera(videoElement, {
             onFrame: async () => {
                 if (isCameraActive && faceMesh) {
@@ -136,27 +388,14 @@ async function startCamera() {
         });
         
         await camera.start();
-        
         isCameraActive = true;
-        cameraButton.textContent = '📷 TẮT CAMERA (FACE MESH)';
-        cameraButton.classList.add('active');
+        document.getElementById('cameraToggleBtn').textContent = '📷 TẮT CAMERA';
+        document.getElementById('faceText').textContent = '📷 Đang nhận diện...';
         
-        if (faceText) faceText.textContent = '📷 Face Mesh đang hoạt động! 468 điểm theo dõi';
-        document.getElementById('faceEmoji').textContent = '🔍';
-        
-        addMessage('ai', '📷 Camera đã được bật! Chiri đang sử dụng Face Mesh để nhìn thấy bạn chi tiết hơn!');
-        
-        if (canvasElement) {
-            canvasElement.style.display = 'block';
-            canvasElement.width = 640;
-            canvasElement.height = 480;
-        }
-        
+        addMessage('ai', '📷 Camera đã được bật! Chiri đang nhìn thấy bạn!');
     } catch (error) {
         console.error('Camera error:', error);
-        let errorMsg = 'Không thể khởi tạo camera. Vui lòng kiểm tra quyền truy cập!';
-        addMessage('ai', '⚠️ ' + errorMsg);
-        document.getElementById('faceText').textContent = '❌ ' + errorMsg;
+        addMessage('ai', '⚠️ Không thể bật camera!');
     }
 }
 
@@ -165,31 +404,197 @@ function stopCamera() {
         camera.stop();
         camera = null;
     }
-    
-    if (videoElement) {
-        videoElement.srcObject = null;
-    }
-    
     isCameraActive = false;
-    cameraButton.textContent = '📷 BẬT CAMERA (FACE MESH)';
-    cameraButton.classList.remove('active');
-    
-    if (canvasElement) {
-        const ctx = canvasElement.getContext('2d');
-        ctx.clearRect(0, 0, canvasElement.width, canvasElement.height);
-        canvasElement.style.display = 'none';
-    }
-    
-    document.getElementById('faceEmoji').textContent = '🤖';
+    document.getElementById('cameraToggleBtn').textContent = '📷 BẬT CAMERA';
     document.getElementById('faceText').textContent = 'Camera đã tắt';
-    document.getElementById('glassesStatus').innerHTML = '🕶️ --';
-    document.getElementById('hatStatus').innerHTML = '🧢 --';
-    document.getElementById('eyeStatus').innerHTML = '👁️ --';
-    
-    addMessage('ai', '📷 Camera đã tắt.');
 }
 
-// Xử lý kết quả từ Face Mesh (468 landmarks)
+// ========== FACE REGISTRATION MODAL ==========
+function openRegisterModal() {
+    const modal = document.getElementById('registerModal');
+    if (modal) modal.style.display = 'flex';
+    capturedPhotos = [];
+    currentFaceDescriptors = [];
+    updatePhotoCount();
+    
+    if (camera) {
+        camera.stop();
+        camera = null;
+    }
+    startRegisterCamera();
+}
+
+function closeRegisterModal() {
+    const modal = document.getElementById('registerModal');
+    if (modal) modal.style.display = 'none';
+    
+    if (registerVideoStream) {
+        registerVideoStream.getTracks().forEach(track => track.stop());
+        registerVideoStream = null;
+    }
+    
+    if (isCameraActive) {
+        setTimeout(() => startCamera(), 500);
+    }
+}
+
+async function startRegisterCamera() {
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+            video: { width: 640, height: 480, facingMode: 'user' }
+        });
+        registerVideoStream = stream;
+        
+        const previewCanvas = document.getElementById('previewCanvas');
+        const video = document.createElement('video');
+        video.srcObject = stream;
+        video.autoplay = true;
+        video.playsInline = true;
+        
+        const ctx = previewCanvas.getContext('2d');
+        const drawInterval = setInterval(() => {
+            if (video.videoWidth > 0) {
+                previewCanvas.width = video.videoWidth;
+                previewCanvas.height = video.videoHeight;
+                ctx.drawImage(video, 0, 0, previewCanvas.width, previewCanvas.height);
+                
+                ctx.strokeStyle = '#00ff00';
+                ctx.lineWidth = 3;
+                ctx.strokeRect(
+                    previewCanvas.width * 0.2,
+                    previewCanvas.height * 0.2,
+                    previewCanvas.width * 0.6,
+                    previewCanvas.height * 0.6
+                );
+                ctx.fillStyle = '#00ff00';
+                ctx.font = '14px Arial';
+                ctx.fillText('Đặt khuôn mặt vào khung', previewCanvas.width * 0.3, previewCanvas.height * 0.15);
+            }
+        }, 100);
+        
+        window.registerDrawInterval = drawInterval;
+        
+        const registerFaceMesh = new FaceMesh({
+            locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`
+        });
+        registerFaceMesh.setOptions({
+            maxNumFaces: 1,
+            refineLandmarks: true,
+            minDetectionConfidence: 0.5
+        });
+        
+        registerFaceMesh.onResults((results) => {
+            if (results.multiFaceLandmarks && results.multiFaceLandmarks.length > 0) {
+                document.getElementById('previewStatus').innerHTML = '✅ Đã phát hiện khuôn mặt! Nhấn "CHỤP ẢNH"';
+                document.getElementById('previewStatus').style.color = '#4caf50';
+                window.currentRegisterDescriptor = extractFaceDescriptor(results.multiFaceLandmarks[0]);
+            } else {
+                document.getElementById('previewStatus').innerHTML = '⚠️ Chưa thấy khuôn mặt. Hãy nhìn vào camera!';
+                document.getElementById('previewStatus').style.color = '#ffaa00';
+            }
+        });
+        
+        const processFrame = async () => {
+            if (video.videoWidth > 0 && registerFaceMesh) {
+                await registerFaceMesh.send({ image: video });
+            }
+            requestAnimationFrame(processFrame);
+        };
+        processFrame();
+        
+        window.registerFaceMesh = registerFaceMesh;
+        window.registerVideo = video;
+        
+    } catch (error) {
+        console.error('Register camera error:', error);
+        document.getElementById('previewStatus').innerHTML = '❌ Không thể mở camera!';
+        document.getElementById('previewStatus').style.color = '#ff4444';
+    }
+}
+
+function capturePhoto() {
+    if (!window.currentRegisterDescriptor) {
+        alert('Vui lòng nhìn vào camera để phát hiện khuôn mặt!');
+        return;
+    }
+    
+    if (capturedPhotos.length >= 3) {
+        alert('Đã chụp đủ 3 ảnh! Nhấn "LƯU FACE ID" để hoàn tất.');
+        return;
+    }
+    
+    capturedPhotos.push([...window.currentRegisterDescriptor]);
+    currentFaceDescriptors.push([...window.currentRegisterDescriptor]);
+    updatePhotoCount();
+    
+    const previewCanvas = document.getElementById('previewCanvas');
+    const ctx = previewCanvas.getContext('2d');
+    ctx.fillStyle = 'white';
+    ctx.fillRect(0, 0, previewCanvas.width, previewCanvas.height);
+    
+    document.getElementById('previewStatus').innerHTML = `✅ Đã chụp ảnh ${capturedPhotos.length}/3!`;
+    
+    if (capturedPhotos.length === 3) {
+        document.getElementById('previewStatus').innerHTML = '🎉 Đã chụp đủ 3 ảnh! Nhấn "LƯU FACE ID" để hoàn tất.';
+    }
+}
+
+function updatePhotoCount() {
+    const countElem = document.getElementById('photoCount');
+    if (countElem) countElem.innerHTML = `Đã chụp: ${capturedPhotos.length}/3 ảnh`;
+}
+
+function saveFaceRegistration() {
+    const name = document.getElementById('faceNameInput').value.trim();
+    
+    if (!name) {
+        alert('Vui lòng nhập tên người dùng!');
+        return;
+    }
+    
+    if (capturedPhotos.length < 3) {
+        alert('Vui lòng chụp đủ 3 ảnh khuôn mặt!');
+        return;
+    }
+    
+    const avgDescriptor = [];
+    for (let i = 0; i < capturedPhotos[0].length; i++) {
+        let sum = 0;
+        for (let j = 0; j < capturedPhotos.length; j++) {
+            sum += capturedPhotos[j][i];
+        }
+        avgDescriptor.push(sum / capturedPhotos.length);
+    }
+    
+    if (!faceDatabase.has(name)) {
+        faceDatabase.set(name, []);
+    }
+    faceDatabase.get(name).push(avgDescriptor);
+    saveFaceDatabase();
+    
+    addMessage('ai', `✅ Đã đăng ký Face ID cho ${name} thành công!`);
+    speak(`Đã đăng ký Face ID cho ${name}`);
+    
+    closeRegisterModal();
+    document.getElementById('faceNameInput').value = '';
+}
+
+// ========== FACE RECOGNITION ==========
+let isRecognizing = false;
+let lastRecognizedTime = new Map();
+
+function startFaceRecognition() {
+    if (isRecognizing) {
+        addMessage('ai', '🔍 Chiri đang nhận diện rồi!');
+        return;
+    }
+    
+    isRecognizing = true;
+    addMessage('ai', '🔍 Bắt đầu nhận diện khuôn mặt...');
+    speak('Bắt đầu nhận diện khuôn mặt');
+}
+
+// ========== FACE MESH RESULTS HANDLER ==========
 function onFaceMeshResults(results) {
     if (!isCameraActive || !canvasElement) return;
     
@@ -198,518 +603,161 @@ function onFaceMeshResults(results) {
     canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
     canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
     
-    let hasFace = false;
     let hasGlasses = false;
     let hasHat = false;
-    let leftEyeOpen = true;
-    let rightEyeOpen = true;
+    let faceCount = 0;
+    let recognizedNames = [];
     
     if (results.multiFaceLandmarks && results.multiFaceLandmarks.length > 0) {
-        hasFace = true;
-        const landmarks = results.multiFaceLandmarks[0];
+        faceCount = results.multiFaceLandmarks.length;
         
-        // Vẽ tất cả 468 điểm landmarks lên canvas
-        drawLandmarks(canvasCtx, landmarks);
+        for (let i = 0; i < results.multiFaceLandmarks.length; i++) {
+            const landmarks = results.multiFaceLandmarks[i];
+            const descriptor = extractFaceDescriptor(landmarks);
+            
+            drawLandmarks(canvasCtx, landmarks, i);
+            
+            const glasses = detectGlasses(landmarks);
+            const hat = detectHat(landmarks);
+            if (glasses) hasGlasses = true;
+            if (hat) hasHat = true;
+            
+            let recognizedName = null;
+            if (isRecognizing) {
+                recognizedName = findMatchingFace(descriptor);
+            }
+            
+            if (recognizedName) {
+                recognizedNames.push(recognizedName);
+                drawText(canvasCtx, landmarks, `👤 ${recognizedName}`, '#00ff00', -40);
+                
+                const now = Date.now();
+                const lastTime = lastRecognizedTime.get(recognizedName) || 0;
+                if (now - lastTime > 30000) {
+                    lastRecognizedTime.set(recognizedName, now);
+                    const greeting = `Xin chào ${recognizedName}!`;
+                    addMessage('ai', `👋 ${greeting}`);
+                    if (isAwake && !isSpeaking && !isTranslatorMode) {
+                        speak(greeting);
+                    }
+                }
+            } else if (isRecognizing) {
+                drawText(canvasCtx, landmarks, '👤 Người lạ', '#ffaa00', -40);
+            }
+            
+            if (glasses) drawText(canvasCtx, landmarks, '👓 Có kính', '#ffff00', -60);
+            if (hat) drawText(canvasCtx, landmarks, '🧢 Có mũ', '#ff8800', -80);
+        }
         
-        // PHÁT HIỆN KÍNH - Dựa trên khoảng cách và tỷ lệ mắt
-        const glassesResult = detectGlassesFromLandmarks(landmarks);
-        hasGlasses = glassesResult.hasGlasses;
-        leftEyeOpen = glassesResult.leftEyeOpen;
-        rightEyeOpen = glassesResult.rightEyeOpen;
-        
-        // PHÁT HIỆN MŨ BẢO HỘ - Dựa trên vùng trán và đỉnh đầu
-        hasHat = detectHatFromLandmarks(landmarks, results.image);
-        
-        // Vẽ các vùng đặc biệt
-        drawEyeRegions(canvasCtx, landmarks);
-        drawHatRegion(canvasCtx, landmarks, hasHat);
-        
-        // Hiển thị thông tin
-        drawInfoText(canvasCtx, landmarks, hasGlasses, hasHat);
+        updateFaceUI(faceCount, hasGlasses, hasHat, recognizedNames);
+    } else {
+        updateFaceUI(0, false, false, []);
     }
     
     canvasCtx.restore();
-    updateFaceStatusUI(hasFace, hasGlasses, hasHat, leftEyeOpen && rightEyeOpen);
 }
 
-// Vẽ 468 điểm landmarks
-function drawLandmarks(ctx, landmarks) {
-    // Vẽ các điểm
-    ctx.fillStyle = '#00ff00';
-    for (let i = 0; i < landmarks.length; i++) {
+function drawLandmarks(ctx, landmarks, index) {
+    const colors = ['#00ff00', '#ff00ff', '#00ffff', '#ffff00'];
+    const color = colors[index % colors.length];
+    
+    ctx.fillStyle = color;
+    for (let i = 0; i < landmarks.length; i += 5) {
         const x = landmarks[i].x * canvasElement.width;
         const y = landmarks[i].y * canvasElement.height;
         ctx.beginPath();
         ctx.arc(x, y, 2, 0, 2 * Math.PI);
         ctx.fill();
     }
-    
-    // Vẽ đường nối viền mặt
-    ctx.strokeStyle = '#00ff00';
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    for (let i = 0; i < LANDMARKS.FACE_OVAL.length; i++) {
-        const idx = LANDMARKS.FACE_OVAL[i];
-        const x = landmarks[idx].x * canvasElement.width;
-        const y = landmarks[idx].y * canvasElement.height;
-        if (i === 0) ctx.moveTo(x, y);
-        else ctx.lineTo(x, y);
-    }
-    ctx.closePath();
-    ctx.stroke();
 }
 
-// Vẽ vùng mắt
-function drawEyeRegions(ctx, landmarks) {
-    // Mắt trái
-    const leftEye = LANDMARKS.LEFT_EYE;
-    const leftEyePoints = [
-        landmarks[leftEye.INNER], landmarks[leftEye.OUTER],
-        landmarks[leftEye.TOP], landmarks[leftEye.BOTTOM]
-    ];
+function drawText(ctx, landmarks, text, color, yOffset = 0) {
+    const nose = landmarks[1];
+    const x = nose.x * canvasElement.width - 40;
+    const y = nose.y * canvasElement.height - 50 + yOffset;
     
-    ctx.strokeStyle = '#ffff00';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    for (const point of leftEyePoints) {
-        const x = point.x * canvasElement.width;
-        const y = point.y * canvasElement.height;
-        ctx.arc(x, y, 5, 0, 2 * Math.PI);
-    }
-    ctx.stroke();
-    
-    // Mắt phải
-    const rightEye = LANDMARKS.RIGHT_EYE;
-    const rightEyePoints = [
-        landmarks[rightEye.INNER], landmarks[rightEye.OUTER],
-        landmarks[rightEye.TOP], landmarks[rightEye.BOTTOM]
-    ];
-    
-    ctx.beginPath();
-    for (const point of rightEyePoints) {
-        const x = point.x * canvasElement.width;
-        const y = point.y * canvasElement.height;
-        ctx.arc(x, y, 5, 0, 2 * Math.PI);
-    }
-    ctx.stroke();
+    ctx.font = 'bold 14px Arial';
+    ctx.fillStyle = color;
+    ctx.shadowBlur = 0;
+    ctx.fillText(text, x, y);
 }
 
-// Vẽ vùng phát hiện mũ
-function drawHatRegion(ctx, landmarks, hasHat) {
-    // Lấy điểm đỉnh đầu (landmark 10)
-    const topHead = landmarks[10];
-    const leftCheek = landmarks[234];
-    const rightCheek = landmarks[454];
+function detectGlasses(landmarks) {
+    const leftEyeInner = landmarks[133];
+    const leftEyeOuter = landmarks[33];
+    const rightEyeInner = landmarks[362];
+    const rightEyeOuter = landmarks[263];
     
-    const hatY = (topHead.y - 0.05) * canvasElement.height;
-    const hatHeight = (topHead.y - leftCheek.y) * canvasElement.height * 0.8;
-    const hatWidth = (rightCheek.x - leftCheek.x) * canvasElement.width * 1.2;
-    const hatX = (leftCheek.x - (rightCheek.x - leftCheek.x) * 0.1) * canvasElement.width;
+    const leftWidth = Math.hypot(leftEyeInner.x - leftEyeOuter.x, leftEyeInner.y - leftEyeOuter.y);
+    const rightWidth = Math.hypot(rightEyeInner.x - rightEyeOuter.x, rightEyeInner.y - rightEyeOuter.y);
+    const avgWidth = (leftWidth + rightWidth) / 2;
     
-    ctx.strokeStyle = hasHat ? '#ff6600' : '#00ff00';
-    ctx.lineWidth = 2;
-    ctx.strokeRect(hatX, hatY, hatWidth, hatHeight);
-    
-    if (hasHat) {
-        ctx.fillStyle = 'rgba(255, 102, 0, 0.2)';
-        ctx.fillRect(hatX, hatY, hatWidth, hatHeight);
-    }
-}
-
-// PHÁT HIỆN KÍNH DỰA TRÊN LANDMARKS
-function detectGlassesFromLandmarks(landmarks) {
-    // Lấy tọa độ mắt
-    const leftEyeInner = landmarks[LANDMARKS.LEFT_EYE.INNER];
-    const leftEyeOuter = landmarks[LANDMARKS.LEFT_EYE.OUTER];
-    const leftEyeTop = landmarks[LANDMARKS.LEFT_EYE.TOP];
-    const leftEyeBottom = landmarks[LANDMARKS.LEFT_EYE.BOTTOM];
-    
-    const rightEyeInner = landmarks[LANDMARKS.RIGHT_EYE.INNER];
-    const rightEyeOuter = landmarks[LANDMARKS.RIGHT_EYE.OUTER];
-    const rightEyeTop = landmarks[LANDMARKS.RIGHT_EYE.TOP];
-    const rightEyeBottom = landmarks[LANDMARKS.RIGHT_EYE.BOTTOM];
-    
-    // Tính chiều rộng và chiều cao mắt
-    const leftEyeWidth = Math.hypot(leftEyeInner.x - leftEyeOuter.x, leftEyeInner.y - leftEyeOuter.y);
-    const leftEyeHeight = Math.hypot(leftEyeTop.x - leftEyeBottom.x, leftEyeTop.y - leftEyeBottom.y);
-    const rightEyeWidth = Math.hypot(rightEyeInner.x - rightEyeOuter.x, rightEyeInner.y - rightEyeOuter.y);
-    const rightEyeHeight = Math.hypot(rightEyeTop.x - rightEyeBottom.x, rightEyeTop.y - rightEyeBottom.y);
-    
-    // Tỷ lệ chiều rộng/cao của mắt
-    const leftEyeRatio = leftEyeWidth / leftEyeHeight;
-    const rightEyeRatio = rightEyeWidth / rightEyeHeight;
-    const avgEyeRatio = (leftEyeRatio + rightEyeRatio) / 2;
-    
-    // Lấy điểm sống mũi để so sánh
-    const noseBridge = landmarks[LANDMARKS.NOSE.BRIDGE];
-    const noseTip = landmarks[LANDMARKS.NOSE.TIP];
+    const noseBridge = landmarks[168];
+    const noseTip = landmarks[1];
     const noseHeight = Math.hypot(noseTip.x - noseBridge.x, noseTip.y - noseBridge.y);
     
-    // PHÁT HIỆN KÍNH:
-    // 1. Mắt thường có tỷ lệ width/height ~ 1.5-2.0
-    // 2. Kính đeo mắt thường làm thay đổi tỷ lệ này (gọng kính làm tăng chiều rộng biểu kiến)
-    // 3. Kính có thể tạo ra vùng tối xung quanh mắt
-    
-    let hasGlasses = false;
-    
-    // Tiêu chí 1: Tỷ lệ mắt bất thường
-    if (avgEyeRatio > 2.2 || avgEyeRatio < 1.2) {
-        hasGlasses = true;
-    }
-    
-    // Tiêu chí 2: So sánh với kích thước mũi
-    const avgEyeSize = (leftEyeWidth + rightEyeWidth) / 2;
-    if (avgEyeSize / noseHeight > 1.5) {
-        hasGlasses = true;
-    }
-    
-    // Tiêu chí 3: Khoảng cách giữa 2 mắt
-    const eyeDistance = Math.hypot(leftEyeOuter.x - rightEyeOuter.x, leftEyeOuter.y - rightEyeOuter.y);
-    const faceWidth = Math.hypot(landmarks[454].x - landmarks[234].x, landmarks[454].y - landmarks[234].y);
-    if (eyeDistance / faceWidth < 0.3) {
-        hasGlasses = true;
-    }
-    
-    // Phát hiện mở mắt (dùng để biết người dùng có đang nhìn không)
-    const leftEyeOpen = leftEyeHeight / leftEyeWidth > 0.3;
-    const rightEyeOpen = rightEyeHeight / rightEyeWidth > 0.3;
-    
-    return { hasGlasses, leftEyeOpen, rightEyeOpen };
+    return avgWidth / noseHeight > 1.3;
 }
 
-// PHÁT HIỆN MŨ BẢO HỘ
-function detectHatFromLandmarks(landmarks, image) {
-    // Lấy điểm đỉnh trán (landmark 10)
+function detectHat(landmarks) {
     const foreheadTop = landmarks[10];
-    // Lấy điểm má
     const leftCheek = landmarks[234];
-    const rightCheek = landmarks[454];
-    // Lấy điểm cằm
     const chin = landmarks[152];
     
-    // Tính tỷ lệ giữa vùng trán và toàn bộ khuôn mặt
-    const faceHeight = Math.abs(foreheadTop.y - chin.y);
-    const foreheadToCheekL = Math.abs(foreheadTop.y - leftCheek.y);
-    const foreheadToCheekR = Math.abs(foreheadTop.y - rightCheek.y);
-    const avgForeheadToCheek = (foreheadToCheekL + foreheadToCheekR) / 2;
+    const foreheadY = foreheadTop.y;
+    const chinY = chin.y;
+    const cheekY = leftCheek.y;
     
-    const foreheadRatio = avgForeheadToCheek / faceHeight;
-    
-    // Nếu tỷ lệ này nhỏ (< 0.25), có thể đang đội mũ che mất trán
-    let hasHat = foreheadRatio < 0.25;
-    
-    // Kiểm tra thêm qua pixel analysis nếu cần
-    if (!hasHat && image && canvasElement) {
-        const ctx = canvasElement.getContext('2d');
-        const hatY = Math.max(0, foreheadTop.y - 0.15);
-        const hatX = Math.max(0, leftCheek.x - 0.05);
-        const hatWidth = Math.min(1 - hatX, rightCheek.x - leftCheek.x + 0.1);
-        const hatHeight = Math.min(0.3, foreheadTop.y - hatY);
-        
-        if (hatY > 0 && hatWidth > 0 && hatHeight > 0) {
-            try {
-                const tempCanvas = document.createElement('canvas');
-                const tempCtx = tempCanvas.getContext('2d');
-                tempCanvas.width = canvasElement.width;
-                tempCanvas.height = canvasElement.height;
-                tempCtx.drawImage(image, 0, 0, canvasElement.width, canvasElement.height);
-                
-                const imageData = tempCtx.getImageData(
-                    hatX * canvasElement.width,
-                    hatY * canvasElement.height,
-                    hatWidth * canvasElement.width,
-                    hatHeight * canvasElement.height
-                );
-                
-                // Phân tích texture - mũ thường có nhiều cạnh
-                let edgeCount = 0;
-                for (let i = 0; i < imageData.data.length; i += 16) {
-                    if (i + 16 < imageData.data.length) {
-                        const diff = Math.abs(imageData.data[i] - imageData.data[i + 16]) +
-                                    Math.abs(imageData.data[i + 1] - imageData.data[i + 17]) +
-                                    Math.abs(imageData.data[i + 2] - imageData.data[i + 18]);
-                        if (diff > 100) edgeCount++;
-                    }
-                }
-                const edgeRatio = edgeCount / (imageData.data.length / 16);
-                if (edgeRatio > 0.15) hasHat = true;
-            } catch(e) {}
-        }
-    }
-    
-    return hasHat;
+    const foreheadRatio = (cheekY - foreheadY) / (chinY - foreheadY);
+    return foreheadRatio < 0.25;
 }
 
-// Vẽ thông tin lên canvas
-function drawInfoText(ctx, landmarks, hasGlasses, hasHat) {
-    const noseTip = landmarks[LANDMARKS.NOSE.TIP];
-    const textX = noseTip.x * canvasElement.width - 50;
-    const textY = (noseTip.y * canvasElement.height) - 50;
-    
-    ctx.font = 'bold 16px Arial';
-    ctx.shadowBlur = 0;
-    
-    if (hasGlasses) {
-        ctx.fillStyle = '#ff4444';
-        ctx.fillText('👓 PHÁT HIỆN KÍNH', textX, textY);
-    } else {
-        ctx.fillStyle = '#44ff44';
-        ctx.fillText('👓 KHÔNG KÍNH', textX, textY);
-    }
-    
-    if (hasHat) {
-        ctx.fillStyle = '#ff8800';
-        ctx.fillText('🧢 PHÁT HIỆN MŨ', textX, textY + 25);
-    } else {
-        ctx.fillStyle = '#44ff44';
-        ctx.fillText('🧢 KHÔNG MŨ', textX, textY + 25);
-    }
-}
-
-// Cập nhật UI
-function updateFaceStatusUI(hasFace, hasGlasses, hasHat, eyesOpen) {
+function updateFaceUI(faceCount, hasGlasses, hasHat, recognizedNames) {
     const faceEmoji = document.getElementById('faceEmoji');
     const faceText = document.getElementById('faceText');
     const glassesStatus = document.getElementById('glassesStatus');
     const hatStatus = document.getElementById('hatStatus');
-    const eyeStatus = document.getElementById('eyeStatus');
+    const recognizedSpan = document.getElementById('recognizedPerson');
     
-    if (!faceEmoji || !faceText) return;
-    
-    const currentState = { hasFace, glasses: hasGlasses, hat: hasHat, eyesOpen };
-    const isSame = (currentState.hasFace === lastFaceState.hasFace &&
-                    currentState.glasses === lastFaceState.glasses &&
-                    currentState.hat === lastFaceState.hat);
-    
-    if (isSame) {
-        detectionStableCount++;
-    } else {
-        detectionStableCount = 0;
-    }
-    
-    const isStable = detectionStableCount >= REQUIRED_STABLE_COUNT;
-    
-    if (hasFace && isStable) {
-        faceEmoji.textContent = eyesOpen ? '😊' : '😑';
-        faceText.textContent = `✅ Face Mesh: ${hasFace ? 'Đã phát hiện' : 'Chưa phát hiện'} | 468 điểm`;
-        
-        // Cập nhật trạng thái kính
-        glassesStatus.innerHTML = hasGlasses ? '🕶️ ĐANG ĐEO KÍNH ✅' : '👓 KHÔNG ĐEO KÍNH';
-        glassesStatus.style.background = hasGlasses ? '#4caf50' : '#666';
-        
-        // Cập nhật trạng thái mũ
-        hatStatus.innerHTML = hasHat ? '🧢 ĐANG ĐỘI MŨ ✅' : '⛑️ KHÔNG ĐỘI MŨ';
-        hatStatus.style.background = hasHat ? '#4caf50' : '#666';
-        
-        // Cập nhật trạng thái mắt
-        eyeStatus.innerHTML = eyesOpen ? '👁️ MẮT MỞ' : '😴 MẮT NHẮM';
-        eyeStatus.style.background = eyesOpen ? '#2196f3' : '#ff9800';
-        
-        // Thông báo bằng giọng nói khi có thay đổi
-        const now = Date.now();
-        if (isStable && (hasGlasses !== lastFaceState.glasses || hasHat !== lastFaceState.hat)) {
-            if (now - lastDetectionTime > 8000) {
-                lastDetectionTime = now;
-                if (hasGlasses && hasHat) {
-                    speak('Chiri thấy bạn đang đeo kính và đội mũ!');
-                    addMessage('ai', '👓🧢 Chiri thấy bạn đang đeo kính và đội mũ!');
-                } else if (hasGlasses && !lastFaceState.glasses) {
-                    speak('Chiri thấy bạn đang đeo kính!');
-                    addMessage('ai', '👓 Chiri thấy bạn đang đeo kính!');
-                } else if (hasHat && !lastFaceState.hat) {
-                    speak('Chiri thấy bạn đang đội mũ bảo hộ!');
-                    addMessage('ai', '🧢 Chiri thấy bạn đang đội mũ bảo hộ!');
-                } else if (!hasGlasses && !hasHat && (lastFaceState.glasses || lastFaceState.hat)) {
-                    speak('Chiri thấy bạn đã tháo kính hoặc mũ!');
-                    addMessage('ai', '😊 Chiri thấy bạn đã tháo kính hoặc mũ!');
-                }
-            }
-        }
-        
-        lastFaceState = { ...currentState };
-        
-    } else if (!hasFace && isStable) {
+    if (faceCount === 0) {
         faceEmoji.textContent = '😔';
-        faceText.textContent = '❌ Chưa phát hiện khuôn mặt';
+        faceText.textContent = 'Chưa có khuôn mặt';
         glassesStatus.innerHTML = '🕶️ --';
         hatStatus.innerHTML = '🧢 --';
-        eyeStatus.innerHTML = '👁️ --';
-        lastFaceState = { hasFace: false, glasses: false, hat: false, eyesOpen: true };
-        detectionStableCount = 0;
-    }
-}
-
-// ========== COUNTDOWN FUNCTION ==========
-function startCountdown(seconds, onComplete) {
-    if (countdownInterval) clearInterval(countdownInterval);
-    
-    let countdownDiv = document.getElementById('countdownDisplay');
-    if (!countdownDiv) {
-        countdownDiv = document.createElement('div');
-        countdownDiv.id = 'countdownDisplay';
-        countdownDiv.style.cssText = `
-            position: fixed;
-            top: 20%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            background: linear-gradient(135deg, #1a2a3a, #0f1a24);
-            color: #ff6a2e;
-            padding: 25px 50px;
-            border-radius: 80px;
-            font-size: 56px;
-            font-weight: bold;
-            font-family: monospace;
-            z-index: 1000;
-            text-align: center;
-            box-shadow: 0 0 50px rgba(255,106,46,0.6);
-            border: 2px solid #ff6a2e;
-            backdrop-filter: blur(10px);
-            white-space: nowrap;
-        `;
-        document.body.appendChild(countdownDiv);
-    }
-    
-    countdownDiv.style.display = 'block';
-    let remaining = seconds;
-    
-    const updateDisplay = () => {
-        const mins = Math.floor(remaining / 60);
-        const secs = remaining % 60;
-        if (mins > 0) {
-            countdownDiv.innerHTML = `⏰ ${mins}:${secs.toString().padStart(2, '0')}`;
+        recognizedSpan.innerHTML = '👤 --';
+    } else {
+        faceEmoji.textContent = faceCount > 1 ? '👥' : '😊';
+        faceText.textContent = `${faceCount} khuôn mặt`;
+        glassesStatus.innerHTML = hasGlasses ? '🕶️ CÓ KÍNH ✅' : '👓 KHÔNG KÍNH';
+        glassesStatus.style.background = hasGlasses ? '#4caf50' : '#666';
+        hatStatus.innerHTML = hasHat ? '🧢 CÓ MŨ ✅' : '⛑️ KHÔNG MŨ';
+        hatStatus.style.background = hasHat ? '#4caf50' : '#666';
+        
+        if (recognizedNames.length > 0) {
+            recognizedSpan.innerHTML = `👤 ${recognizedNames.join(', ')}`;
+            recognizedSpan.style.background = '#4caf50';
+        } else if (isRecognizing) {
+            recognizedSpan.innerHTML = '👤 Người lạ';
+            recognizedSpan.style.background = '#ff9800';
         } else {
-            countdownDiv.innerHTML = `⏰ ${remaining} giây`;
+            recognizedSpan.innerHTML = '👤 --';
+            recognizedSpan.style.background = '#666';
         }
-        
-        if (remaining <= 10 && remaining > 0) {
-            countdownDiv.style.transform = 'translate(-50%, -50%) scale(1.1)';
-            countdownDiv.style.color = '#ff4444';
-            setTimeout(() => {
-                if (countdownDiv) countdownDiv.style.transform = 'translate(-50%, -50%) scale(1)';
-            }, 200);
-        } else {
-            countdownDiv.style.color = '#ff6a2e';
-        }
-    };
-    
-    updateDisplay();
-    
-    countdownInterval = setInterval(() => {
-        remaining--;
-        updateDisplay();
-        
-        if (remaining <= 0) {
-            clearInterval(countdownInterval);
-            countdownInterval = null;
-            countdownDiv.innerHTML = '🔔 HẾT GIỜ! 🔔';
-            countdownDiv.style.background = 'linear-gradient(135deg, #ff4444, #cc0000)';
-            countdownDiv.style.color = 'white';
-            setTimeout(() => {
-                if (countdownDiv) countdownDiv.style.display = 'none';
-            }, 2000);
-            if (onComplete) onComplete();
-        }
-    }, 1000);
-}
-
-function stopCountdown() {
-    if (countdownInterval) {
-        clearInterval(countdownInterval);
-        countdownInterval = null;
-    }
-    const countdownDiv = document.getElementById('countdownDisplay');
-    if (countdownDiv) countdownDiv.style.display = 'none';
-}
-
-// ========== TTS ==========
-let currentUtterance = null;
-
-async function speak(text) {
-    if (!text) return;
-    
-    if (window.speechSynthesis) {
-        window.speechSynthesis.cancel();
-    }
-    
-    if (currentUtterance) {
-        currentUtterance = null;
-    }
-    
-    isSpeaking = true;
-    setExpression('talking');
-    
-    const isVietnamese = /[àáảãạăâầấẩẫậêềếểễệôồốổỗộơờớởỡợưừứửữựđ]/i.test(text);
-    const ttsLang = isVietnamese ? 'vi' : 'en';
-    
-    try {
-        const response = await fetch(`/tts?text=${encodeURIComponent(text.slice(0, 500))}`);
-        
-        if (response.ok) {
-            const blob = await response.blob();
-            const audio = new Audio(URL.createObjectURL(blob));
-            
-            audio.onended = () => {
-                URL.revokeObjectURL(audio.src);
-                finishSpeaking();
-            };
-            audio.onerror = () => {
-                URL.revokeObjectURL(audio.src);
-                finishSpeaking();
-            };
-            
-            await audio.play();
-        } else {
-            await fallbackSpeak(text, ttsLang);
-        }
-    } catch (error) {
-        await fallbackSpeak(text, ttsLang);
     }
 }
 
-function fallbackSpeak(text, lang = 'vi') {
-    return new Promise((resolve) => {
-        window.speechSynthesis.cancel();
-        
-        const utterance = new SpeechSynthesisUtterance(text);
-        utterance.lang = lang === 'vi' ? 'vi-VN' : 'en-US';
-        utterance.rate = 0.9;
-        utterance.pitch = 1.1;
-        utterance.volume = 1;
-        currentUtterance = utterance;
-        
-        utterance.onend = () => {
-            currentUtterance = null;
-            resolve();
-            finishSpeaking();
-        };
-        utterance.onerror = () => {
-            currentUtterance = null;
-            resolve();
-            finishSpeaking();
-        };
-        
-        window.speechSynthesis.speak(utterance);
-    });
-}
-
-function finishSpeaking() {
-    isSpeaking = false;
-    stopMouthAnimation();
-    if (isAwake) {
-        setExpression('listening');
-        setTimeout(() => startListening(), 300);
-    }
-}
-
-// ========== ROBOT FACE ==========
+// ========== SPEECH & UI FUNCTIONS ==========
 function setExpression(expression) {
-    robotSvg.classList.remove('listening', 'happy', 'thinking', 'sleepy', 'talking');
-    robotSvg.classList.add(expression);
+    const robotSvg = document.querySelector('.robot-svg');
+    if (robotSvg) {
+        robotSvg.classList.remove('listening', 'happy', 'thinking', 'sleepy', 'talking');
+        robotSvg.classList.add(expression);
+    }
     
     const mouth = document.querySelector('.robot-mouth');
     if (!mouth) return;
     
-    stopMouthAnimation();
+    if (mouthAnimationInterval) clearInterval(mouthAnimationInterval);
     
     switch(expression) {
         case 'talking':
@@ -747,43 +795,35 @@ function stopMouthAnimation() {
         clearInterval(mouthAnimationInterval);
         mouthAnimationInterval = null;
     }
-    const mouth = document.querySelector('.robot-mouth');
-    if (mouth) mouth.style.transform = '';
 }
 
-// ========== UI ==========
 function updateWakeIndicator(state) {
-    wakeDot.classList.remove('listening');
+    const wakeDot = document.getElementById('wakeDot');
+    const wakeText = document.getElementById('wakeText');
+    
     if (state === 'listening') {
         wakeDot.classList.add('listening');
         wakeText.innerHTML = '🎤 Đang lắng nghe...';
     } else if (state === 'awake') {
+        wakeDot.classList.remove('listening');
         wakeDot.style.background = '#f39c12';
         wakeText.innerHTML = '💬 Đang thức';
     } else {
+        wakeDot.classList.remove('listening');
         wakeDot.style.background = '#2ecc71';
         wakeText.innerHTML = '😴 Đang ngủ';
     }
 }
 
-function updateDriveModeUI() {
-    if (driveControlMode) {
-        driveModeBtn.innerHTML = '🚗 TẮT CHẾ ĐỘ ĐIỀU KHIỂN XE';
-        driveModeBtn.classList.add('drive-active');
-    } else {
-        driveModeBtn.innerHTML = '🚗 BẬT CHẾ ĐỘ ĐIỀU KHIỂN XE';
-        driveModeBtn.classList.remove('drive-active');
-    }
-}
-
 function addMessage(type, text) {
+    const chatBox = document.getElementById('chatBox');
     const messageDiv = document.createElement('div');
     messageDiv.className = `message ${type}`;
     messageDiv.innerHTML = `<div class="bubble">${escapeHtml(text)}</div>`;
     chatBox.appendChild(messageDiv);
     chatBox.scrollTop = chatBox.scrollHeight;
     
-    while (chatBox.children.length > 40) {
+    while (chatBox.children.length > 50) {
         chatBox.removeChild(chatBox.firstChild);
     }
 }
@@ -794,154 +834,282 @@ function escapeHtml(text) {
     return div.innerHTML;
 }
 
-// ========== WAKE/SLEEP ==========
+async function speak(text) {
+    if (!text) return;
+    if (isTranslatorMode) return; // Không đọc trong chế độ dịch để tránh xung đột
+    
+    if (window.speechSynthesis) window.speechSynthesis.cancel();
+    
+    isSpeaking = true;
+    setExpression('talking');
+    
+    try {
+        const response = await fetch(`/tts?text=${encodeURIComponent(text.slice(0, 300))}`);
+        if (response.ok) {
+            const blob = await response.blob();
+            const audio = new Audio(URL.createObjectURL(blob));
+            audio.onended = () => finishSpeaking();
+            audio.onerror = () => finishSpeaking();
+            await audio.play();
+        } else {
+            fallbackSpeak(text);
+        }
+    } catch(e) {
+        fallbackSpeak(text);
+    }
+}
+
+function fallbackSpeak(text) {
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = 'vi-VN';
+    utterance.rate = 0.9;
+    utterance.onend = () => finishSpeaking();
+    utterance.onerror = () => finishSpeaking();
+    window.speechSynthesis.speak(utterance);
+}
+
+function finishSpeaking() {
+    isSpeaking = false;
+    stopMouthAnimation();
+    if (isAwake && !isTranslatorMode) setExpression('listening');
+}
+
 function wakeUp() {
     if (isAwake) return;
     isAwake = true;
     updateWakeIndicator('awake');
-    resetInactivityTimer();
     setExpression('happy');
     
     const greeting = driveControlMode 
-        ? 'Chào bạn! Chế độ lái xe đang bật. Hãy nói: Tiến, Lùi, Trái, Phải, hoặc Dừng!'
-        : 'Chào bạn! Chiri đã thức dậy. Bạn có thể hỏi mình bất cứ điều gì!';
+        ? 'Chào bạn! Chế độ lái xe đang bật!'
+        : 'Chào bạn! Chiri đã thức!';
     
     addMessage('ai', greeting);
-    speak(greeting);
-    setTimeout(() => startListening(), 1000);
+    if (!isTranslatorMode) speak(greeting);
+    
+    startInactivityCountdown();
 }
 
 function goToSleep() {
     if (!isAwake) return;
-    
     isAwake = false;
     isListening = false;
-    stopCountdown();
-    
-    if (window.speechSynthesis) {
-        window.speechSynthesis.cancel();
-    }
+    updateWakeIndicator('sleeping');
+    setExpression('sleepy');
     
     if (recognition) {
         try { recognition.stop(); } catch(e) {}
     }
+}
+
+let inactivitySeconds = 60;
+let inactivityInterval = null;
+
+function startInactivityCountdown() {
+    if (inactivityInterval) clearInterval(inactivityInterval);
+    inactivitySeconds = 60;
     
-    updateWakeIndicator('sleeping');
-    setExpression('sleepy');
-    addMessage('ai', 'Chiri đi ngủ đây. Nói "Xin chào" để đánh thức mình nhé! 😴');
-}
-
-function resetInactivityTimer() {
-    if (inactivityTimer) {
-        clearTimeout(inactivityTimer);
-    }
-    inactivityTimer = setTimeout(() => {
-        if (isAwake && !isSpeaking && !isAIProcessing) {
-            console.log('💤 Auto-sleep after 60 seconds inactivity');
-            goToSleep();
+    inactivityInterval = setInterval(() => {
+        if (!isAwake || isSpeaking || isAIProcessing || isTranslatorMode) {
+            inactivitySeconds = 60;
+            document.getElementById('sleepTimer').innerHTML = '😴 Sẽ ngủ sau 60s';
+            return;
         }
-    }, INACTIVITY_LIMIT);
+        
+        if (inactivitySeconds <= 0) {
+            clearInterval(inactivityInterval);
+            goToSleep();
+        } else {
+            document.getElementById('sleepTimer').innerHTML = `😴 Sẽ ngủ sau ${inactivitySeconds}s`;
+            inactivitySeconds--;
+        }
+    }, 1000);
 }
 
-// ========== SPEECH RECOGNITION ==========
+// ========== DRIVE CONTROL ==========
+let currentDriveCommand = null;
+let driveStartTime = null;
+
+function startDriveCommand(e) {
+    const cmd = e.currentTarget.getAttribute('data-cmd');
+    if (!cmd) return;
+    
+    currentDriveCommand = cmd;
+    driveStartTime = Date.now();
+    
+    e.currentTarget.classList.add('active');
+    document.getElementById('driveStatus').innerHTML = `🚗 ĐANG ${getCommandName(cmd)}...`;
+    document.getElementById('driveStatus').style.background = '#4caf50';
+    
+    if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: 'drive_command', command: cmd, duration: 0 }));
+    }
+    
+    if (window.driveTimeout) clearTimeout(window.driveTimeout);
+    window.driveTimeout = setTimeout(() => {
+        if (currentDriveCommand) stopDriveCommand();
+    }, 5000);
+}
+
+function stopDriveCommand(e) {
+    if (!currentDriveCommand) return;
+    
+    const duration = Date.now() - driveStartTime;
+    document.getElementById('driveStatus').innerHTML = `⏸️ Đã dừng sau ${Math.round(duration/1000)}s`;
+    document.getElementById('driveStatus').style.background = '#666';
+    
+    if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: 'drive_command', command: 'STOP', duration: 0 }));
+    }
+    
+    document.querySelectorAll('.drive-arrow').forEach(btn => {
+        btn.classList.remove('active');
+    });
+    
+    currentDriveCommand = null;
+    if (window.driveTimeout) clearTimeout(window.driveTimeout);
+}
+
+function getCommandName(cmd) {
+    const names = { FORWARD: 'TIẾN', BACKWARD: 'LÙI', LEFT: 'TRÁI', RIGHT: 'PHẢI', STOP: 'DỪNG' };
+    return names[cmd] || cmd;
+}
+
+function toggleDriveMode() {
+    if (isTranslatorMode) {
+        addMessage('ai', '⚠️ Vui lòng tắt chế độ phiên dịch trước khi bật điều khiển xe!');
+        return;
+    }
+    
+    driveControlMode = !driveControlMode;
+    if (driveControlMode) {
+        document.getElementById('driveModeBtn').innerHTML = '🚗 TẮT CHẾ ĐỘ ĐIỀU KHIỂN XE';
+        document.getElementById('driveModeBtn').classList.add('active');
+        document.getElementById('driveControls').style.display = 'block';
+        document.getElementById('chatModeBtn').classList.remove('active');
+        addMessage('ai', 'Đã bật chế độ lái xe! Dùng nút bấm hoặc giọng nói: TIẾN, LÙI, TRÁI, PHẢI, DỪNG');
+        if (!isTranslatorMode) speak('Đã bật chế độ lái xe!');
+    } else {
+        document.getElementById('driveModeBtn').innerHTML = '🚗 BẬT CHẾ ĐỘ ĐIỀU KHIỂN XE';
+        document.getElementById('driveModeBtn').classList.remove('active');
+        document.getElementById('driveControls').style.display = 'none';
+        addMessage('ai', 'Đã tắt chế độ lái xe!');
+        if (!isTranslatorMode) speak('Đã tắt chế độ lái xe!');
+    }
+}
+
+function enableChatMode() {
+    if (isTranslatorMode) {
+        addMessage('ai', '⚠️ Vui lòng tắt chế độ phiên dịch trước!');
+        return;
+    }
+    
+    if (driveControlMode) {
+        driveControlMode = false;
+        document.getElementById('driveModeBtn').innerHTML = '🚗 BẬT CHẾ ĐỘ ĐIỀU KHIỂN XE';
+        document.getElementById('driveModeBtn').classList.remove('active');
+        document.getElementById('driveControls').style.display = 'none';
+        document.getElementById('chatModeBtn').classList.add('active');
+        addMessage('ai', 'Đã chuyển sang chế độ trò chuyện! 💬');
+        speak('Đã chuyển sang chế độ trò chuyện!');
+    }
+}
+
+// ========== SPEECH RECOGNITION FOR CHAT MODE ==========
 function initSpeechRecognition() {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) {
-        alert('Trình duyệt của bạn không hỗ trợ nhận diện giọng nói!');
+        alert('Trình duyệt không hỗ trợ!');
         return;
     }
     
     recognition = new SpeechRecognition();
     recognition.continuous = true;
-    recognition.interimResults = false;
-    recognition.maxAlternatives = 1;
     recognition.lang = 'vi-VN';
     
     recognition.onstart = () => {
-        console.log('🎤 Microphone started');
         isListening = true;
-        updateWakeIndicator('listening');
-        setExpression('listening');
+        if (!isTranslatorMode) {
+            updateWakeIndicator('listening');
+            setExpression('listening');
+        }
     };
     
-    recognition.onresult = async (event) => {
+    recognition.onresult = (event) => {
         const transcript = event.results[event.results.length - 1][0].transcript.trim();
-        console.log('🎙️ Nghe được:', transcript);
+        console.log('🎙️:', transcript);
         
         if (!transcript) return;
         
-        resetInactivityTimer();
+        // Voice commands for translator
         const lower = transcript.toLowerCase();
+        if (lower.includes('bật phiên dịch') || lower.includes('bật dịch')) {
+            if (!isTranslatorMode) toggleTranslatorMode();
+            return;
+        }
+        if (lower.includes('tắt phiên dịch') || lower.includes('tắt dịch')) {
+            if (isTranslatorMode) toggleTranslatorMode();
+            return;
+        }
+        
+        if (isTranslatorMode) return; // Translator handles its own recognition
         
         if (!isAwake) {
-            if (WAKE_WORDS.some(word => lower.includes(word))) {
-                wakeUp();
-            }
+            if (WAKE_WORDS.some(w => lower.includes(w))) wakeUp();
             return;
         }
         
         if (!isSpeaking && !isAIProcessing) {
+            if (lower.includes('nhận diện') || lower.includes('face id')) {
+                startFaceRecognition();
+                return;
+            }
+            
+            if (driveControlMode) {
+                let command = null;
+                if (lower.includes('tiến')) command = 'FORWARD';
+                else if (lower.includes('lùi')) command = 'BACKWARD';
+                else if (lower.includes('trái')) command = 'LEFT';
+                else if (lower.includes('phải')) command = 'RIGHT';
+                else if (lower.includes('dừng')) command = 'STOP';
+                
+                if (command) {
+                    if (ws && ws.readyState === WebSocket.OPEN) {
+                        ws.send(JSON.stringify({ type: 'drive_command', command: command, duration: 0 }));
+                        addMessage('user', transcript);
+                        addMessage('ai', `🚗 ${getCommandName(command)}!`);
+                        speak(`${getCommandName(command)}!`);
+                    }
+                    return;
+                }
+            }
             processCommand(transcript);
         }
     };
     
-    recognition.onerror = (event) => {
-        console.log('Recognition error:', event.error);
-        isListening = false;
-        if (isAwake && !isSpeaking) {
-            setTimeout(() => startListening(), 1000);
-        }
-    };
-    
     recognition.onend = () => {
-        console.log('🔴 Recognition ended');
         isListening = false;
-        if (isAwake && !isSpeaking && !isAIProcessing) {
-            setTimeout(() => startListening(), 500);
+        if (isAwake && !isSpeaking && !isTranslatorMode) {
+            setTimeout(() => recognition.start(), 500);
         }
     };
+    
+    recognition.start();
 }
 
-function startListening() {
-    if (!recognition || isListening || isSpeaking || isAIProcessing || !isAwake) return;
-    
-    try {
-        recognition.stop();
-    } catch(e) {}
-    
-    setTimeout(() => {
-        try {
-            recognition.start();
-            console.log('🎤 Listening started');
-        } catch(e) {
-            console.log('Start listening failed:', e);
-        }
-    }, 200);
-}
-
-// ========== COMMAND PROCESSING ==========
 async function processCommand(text) {
-    if (isAIProcessing || isSpeaking) return;
-    
     isAIProcessing = true;
     setExpression('thinking');
-    statusText.innerHTML = '🤔 Đang suy nghĩ...';
     addMessage('user', text);
     
     if (ws && ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({
-            type: 'voice',
-            text: text,
-            driveMode: driveControlMode
-        }));
+        ws.send(JSON.stringify({ type: 'voice', text: text, driveMode: driveControlMode }));
     } else {
-        addMessage('ai', '🔌 Mất kết nối server. Đang thử kết nối lại...');
+        addMessage('ai', 'Mất kết nối!');
         isAIProcessing = false;
-        connectWebSocket();
     }
 }
 
-// ========== WEBSOCKET ==========
 function connectWebSocket() {
     const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
     ws = new WebSocket(`${protocol}//${location.host}`);
@@ -949,96 +1117,130 @@ function connectWebSocket() {
     ws.onopen = () => {
         reconnectAttempts = 0;
         console.log('✅ WebSocket connected');
-        statusText.innerHTML = '🎤 Nói "Xin chào" để đánh thức Chiri!';
     };
     
-    ws.onmessage = async (event) => {
-        try {
-            const data = JSON.parse(event.data);
-            
-            if (data.type === 'ai') {
-                isAIProcessing = false;
-                addMessage('ai', data.text);
-                await speak(data.text);
-                statusText.innerHTML = '🎤 Đang lắng nghe...';
-                resetInactivityTimer();
-            }
-            
-            if (data.type === 'countdown') {
-                addMessage('ai', data.message);
-                speak(data.message);
-                startCountdown(data.seconds, () => {
-                    addMessage('ai', '🔔 Hết giờ rồi!');
-                    speak('Hết giờ rồi!');
-                });
-            }
-        } catch(e) {
-            console.log('Parse error:', e);
+    ws.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        if (data.type === 'ai') {
             isAIProcessing = false;
+            addMessage('ai', data.text);
+            if (!isTranslatorMode) speak(data.text);
         }
     };
     
-    ws.onerror = (error) => {
-        console.log('WS error:', error);
-        statusText.innerHTML = '⚠️ Đang mất kết nối server...';
-    };
-    
     ws.onclose = () => {
-        console.log('WS disconnected');
         const delay = Math.min(1000 * Math.pow(2, reconnectAttempts++), 8000);
         setTimeout(connectWebSocket, delay);
     };
 }
 
-// ========== INITIALIZATION ==========
-function init() {
-    console.log('🚀 Chiri AI v8.0 - MediaPipe Face Mesh (468 landmarks)');
-    console.log('📋 Features: Face Mesh Detection, Glasses Detection, Hat Detection, Voice Control');
+// ========== LOGIN & INIT ==========
+async function login() {
+    const username = document.getElementById('loginUsername').value;
+    const password = document.getElementById('loginPassword').value;
+    const errorDiv = document.getElementById('loginError');
+    
+    try {
+        const response = await fetch('/api/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, password })
+        });
+        const data = await response.json();
+        
+        if (data.success) {
+            currentUser = { username: data.username, name: data.name };
+            document.getElementById('loginScreen').style.display = 'none';
+            document.getElementById('mainApp').style.display = 'block';
+            document.getElementById('userNameDisplay').innerHTML = `👤 ${data.name}`;
+            initApp();
+        } else {
+            errorDiv.textContent = data.message;
+        }
+    } catch(e) {
+        errorDiv.textContent = 'Lỗi kết nối!';
+    }
+}
+
+async function initApp() {
+    console.log('🚀 Chiri AI v11.0 - Real-time Translation + Face ID');
+    await loadFaceDatabase();
     
     updateWakeIndicator('sleeping');
-    updateDriveModeUI();
     setExpression('sleepy');
     
     connectWebSocket();
     initSpeechRecognition();
     initFaceMesh();
     
-    document.addEventListener('click', () => {
-        const audio = new Audio();
-        audio.play().catch(()=>{});
-        if (!isAwake) {
-            wakeUp();
-        }
-    }, { once: true });
-    
-    manualWake.addEventListener('click', () => {
-        if (!isAwake) {
-            wakeUp();
-        } else {
-            resetInactivityTimer();
-            addMessage('ai', 'Chiri vẫn đang thức đây! Bạn cần gì ạ? 😊');
-            speak('Chiri vẫn đang thức đây! Bạn cần gì ạ?');
+    // Event listeners
+    document.getElementById('logoutBtn').addEventListener('click', logout);
+    document.getElementById('chatModeBtn').addEventListener('click', enableChatMode);
+    document.getElementById('driveModeBtn').addEventListener('click', toggleDriveMode);
+    document.getElementById('cameraToggleBtn').addEventListener('click', toggleCamera);
+    document.getElementById('registerFaceBtn').addEventListener('click', openRegisterModal);
+    document.getElementById('recognizeFaceBtn').addEventListener('click', startFaceRecognition);
+    document.getElementById('manualWake').addEventListener('click', () => {
+        if (!isAwake) wakeUp();
+        else {
+            addMessage('ai', 'Chiri đây! Bạn cần gì ạ?');
+            if (!isTranslatorMode) speak('Chiri đây! Bạn cần gì ạ?');
         }
     });
     
-    driveModeBtn.addEventListener('click', () => {
-        driveControlMode = !driveControlMode;
-        updateDriveModeUI();
-        const msg = driveControlMode 
-            ? 'Đã bật chế độ lái xe. Nói: Tiến, Lùi, Trái, Phải, Dừng! 🚗'
-            : 'Đã tắt chế độ lái xe. Chiri sẽ trò chuyện bình thường! 💬';
-        addMessage('ai', msg);
-        speak(msg);
+    // Translator event listeners
+    document.getElementById('translatorModeBtn').addEventListener('click', toggleTranslatorMode);
+    document.getElementById('closeTranslatorBtn').addEventListener('click', toggleTranslatorMode);
+    document.getElementById('sourceLang').addEventListener('change', updateTranslationLanguage);
+    document.getElementById('targetLang').addEventListener('change', updateTranslationLanguage);
+    document.getElementById('swapLangBtn').addEventListener('click', swapLanguages);
+    document.getElementById('voiceToVoiceMode').addEventListener('click', () => setVoiceToVoiceMode(true));
+    document.getElementById('listenOnlyMode').addEventListener('click', () => setVoiceToVoiceMode(false));
+    document.getElementById('speakTranslationBtn').addEventListener('click', () => {
+        const translated = document.getElementById('translatedText').innerText;
+        if (translated && translated !== 'Chưa có dữ liệu...') {
+            speakTranslation(translated);
+        }
+    });
+    document.getElementById('clearTranslationBtn').addEventListener('click', clearTranslation);
+    
+    // Modal events
+    const closeModal = document.querySelector('.close-modal');
+    if (closeModal) closeModal.addEventListener('click', closeRegisterModal);
+    const captureBtn = document.getElementById('capturePhotoBtn');
+    if (captureBtn) captureBtn.addEventListener('click', capturePhoto);
+    const saveBtn = document.getElementById('saveFaceBtn');
+    if (saveBtn) saveBtn.addEventListener('click', saveFaceRegistration);
+    
+    // Drive control buttons
+    document.querySelectorAll('.drive-arrow').forEach(btn => {
+        btn.addEventListener('mousedown', startDriveCommand);
+        btn.addEventListener('mouseup', stopDriveCommand);
+        btn.addEventListener('mouseleave', stopDriveCommand);
+        btn.addEventListener('touchstart', startDriveCommand);
+        btn.addEventListener('touchend', stopDriveCommand);
     });
     
-    setInterval(() => {
-        if (isAwake && !isSpeaking) {
-            document.querySelectorAll('.robot-eye').forEach(eye => {
-                eye.style.transform = 'scaleY(0.05)';
-                setTimeout(() => eye.style.transform = '', 120);
-            });
-        }
-    }, 4500);
+    startInactivityCountdown();
 }
 
-document.addEventListener('DOMContentLoaded', init);
+function logout() {
+    if (isTranslatorMode) toggleTranslatorMode();
+    currentUser = null;
+    document.getElementById('loginScreen').style.display = 'flex';
+    document.getElementById('mainApp').style.display = 'none';
+    if (ws) ws.close();
+    if (recognition) recognition.stop();
+    stopCamera();
+    if (inactivityInterval) clearInterval(inactivityInterval);
+}
+
+window.onclick = function(event) {
+    const modal = document.getElementById('registerModal');
+    if (event.target === modal) closeRegisterModal();
+}
+
+document.getElementById('loginBtn').addEventListener('click', login);
+document.getElementById('loginPassword').addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') login();
+});
