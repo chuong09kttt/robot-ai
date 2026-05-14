@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
-    <title>🐹 Chiri AI - Robot thông minh với Face ID</title>
+    <title>🐹 Chiri AI - Robot thông minh với Phiên dịch Real-time</title>
     <link rel="stylesheet" href="style.css">
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
@@ -63,6 +63,60 @@
             <div class="status-text" id="statusText">🎤 Nói "Xin chào" để đánh thức</div>
         </div>
 
+        <!-- Translator Section -->
+        <div class="translator-section">
+            <button id="translatorModeBtn" class="translator-toggle">🌐 PHIÊN DỊCH REAL-TIME</button>
+            <div id="translatorPanel" class="translator-panel" style="display: none;">
+                <div class="translator-header">
+                    <h3>🌐 Phiên dịch trực tiếp</h3>
+                    <button id="closeTranslatorBtn" class="close-translator">✖</button>
+                </div>
+                <div class="language-selector">
+                    <select id="sourceLang" class="lang-select">
+                        <option value="vi">🇻🇳 Tiếng Việt</option>
+                        <option value="en">🇺🇸 Tiếng Anh</option>
+                        <option value="zh">🇨🇳 Tiếng Trung</option>
+                        <option value="ja">🇯🇵 Tiếng Nhật</option>
+                        <option value="ko">🇰🇷 Tiếng Hàn</option>
+                        <option value="fr">🇫🇷 Tiếng Pháp</option>
+                        <option value="de">🇩🇪 Tiếng Đức</option>
+                        <option value="es">🇪🇸 Tiếng Tây Ban Nha</option>
+                    </select>
+                    <span class="arrow-icon">➡️</span>
+                    <select id="targetLang" class="lang-select">
+                        <option value="en">🇺🇸 Tiếng Anh</option>
+                        <option value="vi">🇻🇳 Tiếng Việt</option>
+                        <option value="zh">🇨🇳 Tiếng Trung</option>
+                        <option value="ja">🇯🇵 Tiếng Nhật</option>
+                        <option value="ko">🇰🇷 Tiếng Hàn</option>
+                        <option value="fr">🇫🇷 Tiếng Pháp</option>
+                        <option value="de">🇩🇪 Tiếng Đức</option>
+                        <option value="es">🇪🇸 Tiếng Tây Ban Nha</option>
+                    </select>
+                    <button id="swapLangBtn" class="swap-btn">🔄</button>
+                </div>
+                <div class="translator-mode">
+                    <button id="voiceToVoiceMode" class="mode-btn active">🎤 Nói → Dịch (Real-time)</button>
+                    <button id="listenOnlyMode" class="mode-btn">👂 Chỉ nghe & Hiển thị</button>
+                </div>
+                <div class="translation-display">
+                    <div class="original-box">
+                        <div class="box-header">🎙️ Nguyên bản</div>
+                        <div id="originalText" class="original-text">Chưa có dữ liệu...</div>
+                    </div>
+                    <div class="translated-box">
+                        <div class="box-header">🌐 Dịch sang</div>
+                        <div id="translatedText" class="translated-text">Chưa có dữ liệu...</div>
+                    </div>
+                </div>
+                <div class="translation-controls">
+                    <button id="speakTranslationBtn" class="speak-btn">🔊 Đọc bản dịch</button>
+                    <button id="clearTranslationBtn" class="clear-btn">🗑️ Xóa</button>
+                    <div class="translation-status" id="translationStatus">⏸️ Chưa kích hoạt</div>
+                </div>
+            </div>
+        </div>
+
         <!-- Camera Section with Face ID -->
         <div class="camera-section">
             <div class="camera-container">
@@ -82,30 +136,6 @@
                 <button id="cameraToggleBtn" class="camera-toggle">📷 BẬT CAMERA</button>
                 <button id="registerFaceBtn" class="camera-toggle register-btn">💾 ĐĂNG KÝ FACE ID</button>
                 <button id="recognizeFaceBtn" class="camera-toggle recognize-btn">🔍 NHẬN DIỆN FACE ID</button>
-            </div>
-        </div>
-
-        <!-- Register Face Modal -->
-        <div id="registerModal" class="modal">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h3>📸 ĐĂNG KÝ FACE ID</h3>
-                    <span class="close-modal">&times;</span>
-                </div>
-                <div class="modal-body">
-                    <div class="preview-container">
-                        <canvas id="previewCanvas" width="320" height="240"></canvas>
-                        <div class="preview-status" id="previewStatus">Đang chụp ảnh khuôn mặt...</div>
-                    </div>
-                    <div class="register-form">
-                        <input type="text" id="faceNameInput" placeholder="Nhập tên người dùng (VD: Nguyễn Văn A)" autocomplete="off">
-                        <div class="photo-count" id="photoCount">Đã chụp: 0/3 ảnh</div>
-                        <div class="register-buttons">
-                            <button id="capturePhotoBtn" class="capture-btn">📸 CHỤP ẢNH</button>
-                            <button id="saveFaceBtn" class="save-btn">💾 LƯU FACE ID</button>
-                        </div>
-                    </div>
-                </div>
             </div>
         </div>
 
@@ -136,6 +166,7 @@
             <span class="wake-example">🗣️ "Xin chào"</span>
             <span class="wake-example">🗣️ "Hello"</span>
             <span class="wake-example">⏰ "Đếm ngược 10 giây"</span>
+            <span class="wake-example">🌐 "Bật phiên dịch"</span>
             <span class="wake-example">🔍 "Nhận diện face"</span>
         </div>
 
@@ -144,6 +175,7 @@
                 <div class="message ai">
                     <div class="bubble">🐹 Chào bạn! Mình là Chiri AI. Mình có thể:<br>
                     • 💬 Trò chuyện thông minh<br>
+                    • 🌐 Phiên dịch real-time đa ngôn ngữ<br>
                     • 🚗 Điều khiển xe bằng nút bấm hoặc giọng nói<br>
                     • 📸 Đăng ký Face ID để nhận diện khuôn mặt<br>
                     • 👋 Chào bạn khi nhận diện được khuôn mặt</div>
@@ -151,7 +183,7 @@
             </div>
         </div>
         
-        <div class="tip">💡 Mẹo: Bật camera -> Đăng ký Face ID -> Chụp 3 ảnh khuôn mặt -> Nhập tên -> Lưu. Sau đó bấm "Nhận diện Face ID" để robot nhận ra bạn!</div>
+        <div class="tip">💡 Mẹo: Nhấn "PHIÊN DỊCH REAL-TIME" để bắt đầu dịch trực tiếp. Chọn ngôn ngữ nguồn và đích, sau đó nói để Chiri dịch ngay lập tức!</div>
 
         <div class="manual-wake" id="manualWake">
             <svg viewBox="0 0 24 24"><path d="M12 16c-2.21 0-4-1.79-4-4V6c0-2.21 1.79-4 4-4s4 1.79 4 4v6c0 2.21-1.79 4-4 4z"/></svg>
