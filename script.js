@@ -1,3 +1,75 @@
+// ========== MODE SELECTION & NAVIGATION ==========
+// Thêm vào đầu file, trước tất cả các biến global
+
+// Hàm chuyển đổi giữa các màn hình
+function showModeScreen() {
+    document.getElementById('modeScreen').style.display = 'block';
+    document.getElementById('mainApp').style.display = 'none';
+    document.getElementById('chatPanel').style.display = 'none';
+    document.getElementById('drivePanel').style.display = 'none';
+    document.getElementById('translatePanel').style.display = 'none';
+    document.getElementById('cameraPanel').style.display = 'none';
+    
+    // Dừng các chế độ đang chạy
+    if (isTranslatorMode) toggleTranslatorMode();
+    if (isCameraActive) stopCamera();
+    if (recognition) recognition.stop();
+}
+
+function showChatMode() {
+    document.getElementById('modeScreen').style.display = 'none';
+    document.getElementById('mainApp').style.display = 'block';
+    document.getElementById('chatPanel').style.display = 'none';
+    document.getElementById('drivePanel').style.display = 'none';
+    document.getElementById('translatePanel').style.display = 'none';
+    document.getElementById('cameraPanel').style.display = 'none';
+    
+    // Khởi tạo lại chat mode
+    if (recognition) recognition.stop();
+    initSpeechRecognition();
+}
+
+function showDriveMode() {
+    document.getElementById('modeScreen').style.display = 'none';
+    document.getElementById('mainApp').style.display = 'none';
+    document.getElementById('chatPanel').style.display = 'none';
+    document.getElementById('drivePanel').style.display = 'block';
+    document.getElementById('translatePanel').style.display = 'none';
+    document.getElementById('cameraPanel').style.display = 'none';
+    
+    // Đảm bảo drive mode được bật
+    if (!driveControlMode) {
+        driveControlMode = true;
+        document.getElementById('driveModeBtn').innerHTML = '🚗 TẮT CHẾ ĐỘ ĐIỀU KHIỂN XE';
+        document.getElementById('driveModeBtn').classList.add('active');
+        document.getElementById('driveControls').style.display = 'block';
+    }
+}
+
+function showTranslateMode() {
+    document.getElementById('modeScreen').style.display = 'none';
+    document.getElementById('mainApp').style.display = 'none';
+    document.getElementById('chatPanel').style.display = 'none';
+    document.getElementById('drivePanel').style.display = 'none';
+    document.getElementById('translatePanel').style.display = 'block';
+    document.getElementById('cameraPanel').style.display = 'none';
+    
+    // Bật chế độ dịch
+    if (!isTranslatorMode) toggleTranslatorMode();
+}
+
+function showCameraMode() {
+    document.getElementById('modeScreen').style.display = 'none';
+    document.getElementById('mainApp').style.display = 'none';
+    document.getElementById('chatPanel').style.display = 'none';
+    document.getElementById('drivePanel').style.display = 'none';
+    document.getElementById('translatePanel').style.display = 'none';
+    document.getElementById('cameraPanel').style.display = 'block';
+    
+    // Khởi tạo camera
+    initFaceMesh();
+}
+
 // ========== GLOBAL VARIABLES ==========
 let currentUser = null;
 let ws = null;
@@ -36,6 +108,7 @@ let currentFaceDescriptors = [];
 // Register mode
 let isRegisterMode = false;
 let capturedPhotos = [];
+let registerVideoStream = null;
 
 const INACTIVITY_LIMIT = 60000;
 const WAKE_WORDS = ['xin chào', 'hello', 'hi', 'chào chiri', 'chiri ơi'];
@@ -204,7 +277,10 @@ function updateTranslationLanguage() {
     }
     
     // Update display
-    document.querySelector('.translated-box .box-header').innerHTML = `🌐 Dịch sang ${getLanguageName(targetLang)}`;
+    const translatedBoxHeader = document.querySelector('#translatePanel .translated-box .box-header-gaming');
+    if (translatedBoxHeader) {
+        translatedBoxHeader.innerHTML = `🌐 Dịch sang ${getLanguageName(targetLang)}`;
+    }
 }
 
 function swapLanguages() {
@@ -266,8 +342,10 @@ function getTTSLanguage(lang) {
 
 function setVoiceToVoiceMode(active) {
     isVoiceToVoiceMode = active;
-    document.getElementById('voiceToVoiceMode').classList.toggle('active', active);
-    document.getElementById('listenOnlyMode').classList.toggle('active', !active);
+    const voiceBtn = document.getElementById('voiceToVoiceMode');
+    const listenBtn = document.getElementById('listenOnlyMode');
+    if (voiceBtn) voiceBtn.classList.toggle('active', active);
+    if (listenBtn) listenBtn.classList.toggle('active', !active);
 }
 
 function clearTranslation() {
@@ -353,6 +431,11 @@ async function initFaceMesh() {
     videoElement = document.getElementById('video');
     canvasElement = document.getElementById('canvas');
     
+    if (!videoElement || !canvasElement) {
+        console.log('Camera elements not found');
+        return;
+    }
+    
     faceMesh = new FaceMesh({
         locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`
     });
@@ -376,6 +459,8 @@ async function toggleCamera() {
 }
 
 async function startCamera() {
+    if (!videoElement) return;
+    
     try {
         camera = new Camera(videoElement, {
             onFrame: async () => {
@@ -389,8 +474,10 @@ async function startCamera() {
         
         await camera.start();
         isCameraActive = true;
-        document.getElementById('cameraToggleBtn').textContent = '📷 TẮT CAMERA';
-        document.getElementById('faceText').textContent = '📷 Đang nhận diện...';
+        const camBtn = document.getElementById('cameraToggleBtn');
+        if (camBtn) camBtn.textContent = '📷 TẮT CAMERA';
+        const faceText = document.getElementById('faceText');
+        if (faceText) faceText.textContent = '📷 Đang nhận diện...';
         
         addMessage('ai', '📷 Camera đã được bật! Chiri đang nhìn thấy bạn!');
     } catch (error) {
@@ -405,8 +492,10 @@ function stopCamera() {
         camera = null;
     }
     isCameraActive = false;
-    document.getElementById('cameraToggleBtn').textContent = '📷 BẬT CAMERA';
-    document.getElementById('faceText').textContent = 'Camera đã tắt';
+    const camBtn = document.getElementById('cameraToggleBtn');
+    if (camBtn) camBtn.textContent = '📷 BẬT CAMERA';
+    const faceText = document.getElementById('faceText');
+    if (faceText) faceText.textContent = 'Camera đã tắt';
 }
 
 // ========== FACE REGISTRATION MODAL ==========
@@ -446,6 +535,8 @@ async function startRegisterCamera() {
         registerVideoStream = stream;
         
         const previewCanvas = document.getElementById('previewCanvas');
+        if (!previewCanvas) return;
+        
         const video = document.createElement('video');
         video.srcObject = stream;
         video.autoplay = true;
@@ -485,12 +576,18 @@ async function startRegisterCamera() {
         
         registerFaceMesh.onResults((results) => {
             if (results.multiFaceLandmarks && results.multiFaceLandmarks.length > 0) {
-                document.getElementById('previewStatus').innerHTML = '✅ Đã phát hiện khuôn mặt! Nhấn "CHỤP ẢNH"';
-                document.getElementById('previewStatus').style.color = '#4caf50';
+                const statusElem = document.getElementById('previewStatus');
+                if (statusElem) {
+                    statusElem.innerHTML = '✅ Đã phát hiện khuôn mặt! Nhấn "CHỤP ẢNH"';
+                    statusElem.style.color = '#4caf50';
+                }
                 window.currentRegisterDescriptor = extractFaceDescriptor(results.multiFaceLandmarks[0]);
             } else {
-                document.getElementById('previewStatus').innerHTML = '⚠️ Chưa thấy khuôn mặt. Hãy nhìn vào camera!';
-                document.getElementById('previewStatus').style.color = '#ffaa00';
+                const statusElem = document.getElementById('previewStatus');
+                if (statusElem) {
+                    statusElem.innerHTML = '⚠️ Chưa thấy khuôn mặt. Hãy nhìn vào camera!';
+                    statusElem.style.color = '#ffaa00';
+                }
             }
         });
         
@@ -507,8 +604,11 @@ async function startRegisterCamera() {
         
     } catch (error) {
         console.error('Register camera error:', error);
-        document.getElementById('previewStatus').innerHTML = '❌ Không thể mở camera!';
-        document.getElementById('previewStatus').style.color = '#ff4444';
+        const statusElem = document.getElementById('previewStatus');
+        if (statusElem) {
+            statusElem.innerHTML = '❌ Không thể mở camera!';
+            statusElem.style.color = '#ff4444';
+        }
     }
 }
 
@@ -528,14 +628,22 @@ function capturePhoto() {
     updatePhotoCount();
     
     const previewCanvas = document.getElementById('previewCanvas');
-    const ctx = previewCanvas.getContext('2d');
-    ctx.fillStyle = 'white';
-    ctx.fillRect(0, 0, previewCanvas.width, previewCanvas.height);
+    if (previewCanvas) {
+        const ctx = previewCanvas.getContext('2d');
+        ctx.fillStyle = 'white';
+        ctx.fillRect(0, 0, previewCanvas.width, previewCanvas.height);
+    }
     
-    document.getElementById('previewStatus').innerHTML = `✅ Đã chụp ảnh ${capturedPhotos.length}/3!`;
+    const statusElem = document.getElementById('previewStatus');
+    if (statusElem) {
+        statusElem.innerHTML = `✅ Đã chụp ảnh ${capturedPhotos.length}/3!`;
+    }
     
     if (capturedPhotos.length === 3) {
-        document.getElementById('previewStatus').innerHTML = '🎉 Đã chụp đủ 3 ảnh! Nhấn "LƯU FACE ID" để hoàn tất.';
+        const statusElem = document.getElementById('previewStatus');
+        if (statusElem) {
+            statusElem.innerHTML = '🎉 Đã chụp đủ 3 ảnh! Nhấn "LƯU FACE ID" để hoàn tất.';
+        }
     }
 }
 
@@ -719,29 +827,37 @@ function updateFaceUI(faceCount, hasGlasses, hasHat, recognizedNames) {
     const hatStatus = document.getElementById('hatStatus');
     const recognizedSpan = document.getElementById('recognizedPerson');
     
+    if (!faceEmoji) return;
+    
     if (faceCount === 0) {
         faceEmoji.textContent = '😔';
-        faceText.textContent = 'Chưa có khuôn mặt';
-        glassesStatus.innerHTML = '🕶️ --';
-        hatStatus.innerHTML = '🧢 --';
-        recognizedSpan.innerHTML = '👤 --';
+        if (faceText) faceText.textContent = 'Chưa có khuôn mặt';
+        if (glassesStatus) glassesStatus.innerHTML = '🕶️ --';
+        if (hatStatus) hatStatus.innerHTML = '🧢 --';
+        if (recognizedSpan) recognizedSpan.innerHTML = '👤 --';
     } else {
         faceEmoji.textContent = faceCount > 1 ? '👥' : '😊';
-        faceText.textContent = `${faceCount} khuôn mặt`;
-        glassesStatus.innerHTML = hasGlasses ? '🕶️ CÓ KÍNH ✅' : '👓 KHÔNG KÍNH';
-        glassesStatus.style.background = hasGlasses ? '#4caf50' : '#666';
-        hatStatus.innerHTML = hasHat ? '🧢 CÓ MŨ ✅' : '⛑️ KHÔNG MŨ';
-        hatStatus.style.background = hasHat ? '#4caf50' : '#666';
+        if (faceText) faceText.textContent = `${faceCount} khuôn mặt`;
+        if (glassesStatus) {
+            glassesStatus.innerHTML = hasGlasses ? '🕶️ CÓ KÍNH ✅' : '👓 KHÔNG KÍNH';
+            glassesStatus.style.background = hasGlasses ? '#4caf50' : '#666';
+        }
+        if (hatStatus) {
+            hatStatus.innerHTML = hasHat ? '🧢 CÓ MŨ ✅' : '⛑️ KHÔNG MŨ';
+            hatStatus.style.background = hasHat ? '#4caf50' : '#666';
+        }
         
-        if (recognizedNames.length > 0) {
-            recognizedSpan.innerHTML = `👤 ${recognizedNames.join(', ')}`;
-            recognizedSpan.style.background = '#4caf50';
-        } else if (isRecognizing) {
-            recognizedSpan.innerHTML = '👤 Người lạ';
-            recognizedSpan.style.background = '#ff9800';
-        } else {
-            recognizedSpan.innerHTML = '👤 --';
-            recognizedSpan.style.background = '#666';
+        if (recognizedSpan) {
+            if (recognizedNames.length > 0) {
+                recognizedSpan.innerHTML = `👤 ${recognizedNames.join(', ')}`;
+                recognizedSpan.style.background = '#4caf50';
+            } else if (isRecognizing) {
+                recognizedSpan.innerHTML = '👤 Người lạ';
+                recognizedSpan.style.background = '#ff9800';
+            } else {
+                recognizedSpan.innerHTML = '👤 --';
+                recognizedSpan.style.background = '#666';
+            }
         }
     }
 }
@@ -802,21 +918,27 @@ function updateWakeIndicator(state) {
     const wakeText = document.getElementById('wakeText');
     
     if (state === 'listening') {
-        wakeDot.classList.add('listening');
-        wakeText.innerHTML = '🎤 Đang lắng nghe...';
+        if (wakeDot) wakeDot.classList.add('listening');
+        if (wakeText) wakeText.innerHTML = '🎤 Đang lắng nghe...';
     } else if (state === 'awake') {
-        wakeDot.classList.remove('listening');
-        wakeDot.style.background = '#f39c12';
-        wakeText.innerHTML = '💬 Đang thức';
+        if (wakeDot) {
+            wakeDot.classList.remove('listening');
+            wakeDot.style.background = '#f39c12';
+        }
+        if (wakeText) wakeText.innerHTML = '💬 Đang thức';
     } else {
-        wakeDot.classList.remove('listening');
-        wakeDot.style.background = '#2ecc71';
-        wakeText.innerHTML = '😴 Đang ngủ';
+        if (wakeDot) {
+            wakeDot.classList.remove('listening');
+            wakeDot.style.background = '#2ecc71';
+        }
+        if (wakeText) wakeText.innerHTML = '😴 Đang ngủ';
     }
 }
 
 function addMessage(type, text) {
     const chatBox = document.getElementById('chatBox');
+    if (!chatBox) return;
+    
     const messageDiv = document.createElement('div');
     messageDiv.className = `message ${type}`;
     messageDiv.innerHTML = `<div class="bubble">${escapeHtml(text)}</div>`;
@@ -912,7 +1034,8 @@ function startInactivityCountdown() {
     inactivityInterval = setInterval(() => {
         if (!isAwake || isSpeaking || isAIProcessing || isTranslatorMode) {
             inactivitySeconds = 60;
-            document.getElementById('sleepTimer').innerHTML = '😴 Sẽ ngủ sau 60s';
+            const timerElem = document.getElementById('sleepTimer');
+            if (timerElem) timerElem.innerHTML = '😴 Sẽ ngủ sau 60s';
             return;
         }
         
@@ -920,7 +1043,8 @@ function startInactivityCountdown() {
             clearInterval(inactivityInterval);
             goToSleep();
         } else {
-            document.getElementById('sleepTimer').innerHTML = `😴 Sẽ ngủ sau ${inactivitySeconds}s`;
+            const timerElem = document.getElementById('sleepTimer');
+            if (timerElem) timerElem.innerHTML = `😴 Sẽ ngủ sau ${inactivitySeconds}s`;
             inactivitySeconds--;
         }
     }, 1000);
@@ -938,8 +1062,11 @@ function startDriveCommand(e) {
     driveStartTime = Date.now();
     
     e.currentTarget.classList.add('active');
-    document.getElementById('driveStatus').innerHTML = `🚗 ĐANG ${getCommandName(cmd)}...`;
-    document.getElementById('driveStatus').style.background = '#4caf50';
+    const driveStatus = document.getElementById('driveStatus');
+    if (driveStatus) {
+        driveStatus.innerHTML = `🚗 ĐANG ${getCommandName(cmd)}...`;
+        driveStatus.style.background = '#4caf50';
+    }
     
     if (ws && ws.readyState === WebSocket.OPEN) {
         ws.send(JSON.stringify({ type: 'drive_command', command: cmd, duration: 0 }));
@@ -955,14 +1082,17 @@ function stopDriveCommand(e) {
     if (!currentDriveCommand) return;
     
     const duration = Date.now() - driveStartTime;
-    document.getElementById('driveStatus').innerHTML = `⏸️ Đã dừng sau ${Math.round(duration/1000)}s`;
-    document.getElementById('driveStatus').style.background = '#666';
+    const driveStatus = document.getElementById('driveStatus');
+    if (driveStatus) {
+        driveStatus.innerHTML = `⏸️ Đã dừng sau ${Math.round(duration/1000)}s`;
+        driveStatus.style.background = '#666';
+    }
     
     if (ws && ws.readyState === WebSocket.OPEN) {
         ws.send(JSON.stringify({ type: 'drive_command', command: 'STOP', duration: 0 }));
     }
     
-    document.querySelectorAll('.drive-arrow').forEach(btn => {
+    document.querySelectorAll('.drive-arrow, .drive-btn-gaming').forEach(btn => {
         btn.classList.remove('active');
     });
     
@@ -982,17 +1112,25 @@ function toggleDriveMode() {
     }
     
     driveControlMode = !driveControlMode;
+    const driveBtn = document.getElementById('driveModeBtn');
+    const driveControls = document.getElementById('driveControls');
+    
     if (driveControlMode) {
-        document.getElementById('driveModeBtn').innerHTML = '🚗 TẮT CHẾ ĐỘ ĐIỀU KHIỂN XE';
-        document.getElementById('driveModeBtn').classList.add('active');
-        document.getElementById('driveControls').style.display = 'block';
-        document.getElementById('chatModeBtn').classList.remove('active');
+        if (driveBtn) {
+            driveBtn.innerHTML = '🚗 TẮT CHẾ ĐỘ ĐIỀU KHIỂN XE';
+            driveBtn.classList.add('active');
+        }
+        if (driveControls) driveControls.style.display = 'block';
+        const chatBtn = document.getElementById('chatModeBtn');
+        if (chatBtn) chatBtn.classList.remove('active');
         addMessage('ai', 'Đã bật chế độ lái xe! Dùng nút bấm hoặc giọng nói: TIẾN, LÙI, TRÁI, PHẢI, DỪNG');
         if (!isTranslatorMode) speak('Đã bật chế độ lái xe!');
     } else {
-        document.getElementById('driveModeBtn').innerHTML = '🚗 BẬT CHẾ ĐỘ ĐIỀU KHIỂN XE';
-        document.getElementById('driveModeBtn').classList.remove('active');
-        document.getElementById('driveControls').style.display = 'none';
+        if (driveBtn) {
+            driveBtn.innerHTML = '🚗 BẬT CHẾ ĐỘ ĐIỀU KHIỂN XE';
+            driveBtn.classList.remove('active');
+        }
+        if (driveControls) driveControls.style.display = 'none';
         addMessage('ai', 'Đã tắt chế độ lái xe!');
         if (!isTranslatorMode) speak('Đã tắt chế độ lái xe!');
     }
@@ -1006,10 +1144,13 @@ function enableChatMode() {
     
     if (driveControlMode) {
         driveControlMode = false;
-        document.getElementById('driveModeBtn').innerHTML = '🚗 BẬT CHẾ ĐỘ ĐIỀU KHIỂN XE';
-        document.getElementById('driveModeBtn').classList.remove('active');
-        document.getElementById('driveControls').style.display = 'none';
-        document.getElementById('chatModeBtn').classList.add('active');
+        const driveBtn = document.getElementById('driveModeBtn');
+        const driveControls = document.getElementById('driveControls');
+        if (driveBtn) driveBtn.innerHTML = '🚗 BẬT CHẾ ĐỘ ĐIỀU KHIỂN XE';
+        if (driveBtn) driveBtn.classList.remove('active');
+        if (driveControls) driveControls.style.display = 'none';
+        const chatBtn = document.getElementById('chatModeBtn');
+        if (chatBtn) chatBtn.classList.add('active');
         addMessage('ai', 'Đã chuyển sang chế độ trò chuyện! 💬');
         speak('Đã chuyển sang chế độ trò chuyện!');
     }
@@ -1151,20 +1292,41 @@ async function login() {
         if (data.success) {
             currentUser = { username: data.username, name: data.name };
             document.getElementById('loginScreen').style.display = 'none';
-            document.getElementById('mainApp').style.display = 'block';
+            document.getElementById('modeScreen').style.display = 'block';
             document.getElementById('userNameDisplay').innerHTML = `👤 ${data.name}`;
+            
+            // Gắn sự kiện cho các mode card
+            document.querySelectorAll('.mode-card').forEach(card => {
+                card.addEventListener('click', () => {
+                    const mode = card.getAttribute('data-mode');
+                    if (mode === 'chat') showChatMode();
+                    else if (mode === 'drive') showDriveMode();
+                    else if (mode === 'translate') showTranslateMode();
+                    else if (mode === 'camera') showCameraMode();
+                });
+            });
+            
+            // Gắn sự kiện cho các nút back
+            document.querySelectorAll('.back-btn, .back-mode-btn').forEach(btn => {
+                btn.addEventListener('click', showModeScreen);
+            });
+            
+            // Khởi tạo app sau khi đăng nhập
             initApp();
         } else {
             errorDiv.textContent = data.message;
         }
     } catch(e) {
-        errorDiv.textContent = 'Lỗi kết nối!';
+        errorDiv.textContent = 'Lỗi kết nối server!';
     }
 }
 
 async function initApp() {
     console.log('🚀 Chiri AI v11.0 - Real-time Translation + Face ID');
     await loadFaceDatabase();
+    
+    // Đảm bảo mainApp được hiển thị (cho chat mode)
+    document.getElementById('mainApp').style.display = 'block';
     
     updateWakeIndicator('sleeping');
     setExpression('sleepy');
@@ -1189,23 +1351,32 @@ async function initApp() {
     });
     
     // Translator event listeners
-    document.getElementById('translatorModeBtn').addEventListener('click', toggleTranslatorMode);
-    document.getElementById('closeTranslatorBtn').addEventListener('click', toggleTranslatorMode);
-    document.getElementById('sourceLang').addEventListener('change', updateTranslationLanguage);
-    document.getElementById('targetLang').addEventListener('change', updateTranslationLanguage);
-    document.getElementById('swapLangBtn').addEventListener('click', swapLanguages);
-    document.getElementById('voiceToVoiceMode').addEventListener('click', () => setVoiceToVoiceMode(true));
-    document.getElementById('listenOnlyMode').addEventListener('click', () => setVoiceToVoiceMode(false));
-    document.getElementById('speakTranslationBtn').addEventListener('click', () => {
+    const translatorBtn = document.getElementById('translatorModeBtn');
+    if (translatorBtn) translatorBtn.addEventListener('click', toggleTranslatorMode);
+    const closeTranslatorBtn = document.getElementById('closeTranslatorBtn');
+    if (closeTranslatorBtn) closeTranslatorBtn.addEventListener('click', toggleTranslatorMode);
+    const sourceLangSelect = document.getElementById('sourceLang');
+    if (sourceLangSelect) sourceLangSelect.addEventListener('change', updateTranslationLanguage);
+    const targetLangSelect = document.getElementById('targetLang');
+    if (targetLangSelect) targetLangSelect.addEventListener('change', updateTranslationLanguage);
+    const swapBtn = document.getElementById('swapLangBtn');
+    if (swapBtn) swapBtn.addEventListener('click', swapLanguages);
+    const voiceBtn = document.getElementById('voiceToVoiceMode');
+    if (voiceBtn) voiceBtn.addEventListener('click', () => setVoiceToVoiceMode(true));
+    const listenBtn = document.getElementById('listenOnlyMode');
+    if (listenBtn) listenBtn.addEventListener('click', () => setVoiceToVoiceMode(false));
+    const speakTransBtn = document.getElementById('speakTranslationBtn');
+    if (speakTransBtn) speakTransBtn.addEventListener('click', () => {
         const translated = document.getElementById('translatedText').innerText;
         if (translated && translated !== 'Chưa có dữ liệu...') {
             speakTranslation(translated);
         }
     });
-    document.getElementById('clearTranslationBtn').addEventListener('click', clearTranslation);
+    const clearTransBtn = document.getElementById('clearTranslationBtn');
+    if (clearTransBtn) clearTransBtn.addEventListener('click', clearTranslation);
     
     // Modal events
-    const closeModal = document.querySelector('.close-modal');
+    const closeModal = document.querySelector('.close-modal, .close-modal-gaming');
     if (closeModal) closeModal.addEventListener('click', closeRegisterModal);
     const captureBtn = document.getElementById('capturePhotoBtn');
     if (captureBtn) captureBtn.addEventListener('click', capturePhoto);
@@ -1213,7 +1384,7 @@ async function initApp() {
     if (saveBtn) saveBtn.addEventListener('click', saveFaceRegistration);
     
     // Drive control buttons
-    document.querySelectorAll('.drive-arrow').forEach(btn => {
+    document.querySelectorAll('.drive-arrow, .drive-btn-gaming').forEach(btn => {
         btn.addEventListener('mousedown', startDriveCommand);
         btn.addEventListener('mouseup', stopDriveCommand);
         btn.addEventListener('mouseleave', stopDriveCommand);
@@ -1227,6 +1398,7 @@ async function initApp() {
 function logout() {
     if (isTranslatorMode) toggleTranslatorMode();
     currentUser = null;
+    document.getElementById('modeScreen').style.display = 'none';
     document.getElementById('loginScreen').style.display = 'flex';
     document.getElementById('mainApp').style.display = 'none';
     if (ws) ws.close();
@@ -1235,11 +1407,13 @@ function logout() {
     if (inactivityInterval) clearInterval(inactivityInterval);
 }
 
+// Đóng modal khi click outside
 window.onclick = function(event) {
     const modal = document.getElementById('registerModal');
     if (event.target === modal) closeRegisterModal();
 }
 
+// Login event
 document.getElementById('loginBtn').addEventListener('click', login);
 document.getElementById('loginPassword').addEventListener('keypress', (e) => {
     if (e.key === 'Enter') login();
