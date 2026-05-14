@@ -3,124 +3,161 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
-    <title>🐹 Chiri AI - Robot thông minh với Face Mesh</title>
+    <title>🐹 Chiri AI - Robot thông minh với Face ID</title>
     <link rel="stylesheet" href="style.css">
-    <!-- MediaPipe Face Mesh (468 điểm trên khuôn mặt) -->
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
 </head>
 <body>
-    <div class="container">
-        <!-- Wake Badge -->
+    <!-- LOGIN SCREEN -->
+    <div id="loginScreen" class="login-screen">
+        <div class="login-container">
+            <div class="login-header">
+                <div class="login-robot">🐹</div>
+                <h1>CHIRI AI</h1>
+                <p>Đăng nhập để sử dụng robot</p>
+            </div>
+            <div class="login-form">
+                <input type="text" id="loginUsername" placeholder="Tên đăng nhập" autocomplete="off">
+                <input type="password" id="loginPassword" placeholder="Mật khẩu">
+                <button id="loginBtn" class="login-btn">ĐĂNG NHẬP</button>
+                <div class="login-error" id="loginError"></div>
+            </div>
+            <div class="login-hint">
+                <p>🔐 Tài khoản demo:</p>
+                <p>admin / admin123</p>
+                <p>user1 / 123456</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- MAIN APP -->
+    <div id="mainApp" class="container" style="display: none;">
+        <div class="user-info">
+            <span id="userNameDisplay"></span>
+            <button id="logoutBtn" class="logout-btn">🚪 Đăng xuất</button>
+        </div>
+        
         <div class="wake-badge">
             <div class="wake-dot" id="wakeDot"></div>
             <span id="wakeText">😴 Đang ngủ</span>
         </div>
         <div class="sleep-timer" id="sleepTimer">😴 Sẽ ngủ sau 60s</div>
 
-        <!-- Robot Section -->
         <div class="robot-section">
             <div class="robot-avatar">
                 <svg class="robot-svg" viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg">
                     <circle cx="90" cy="100" r="40" fill="#FFB347" stroke="#E67E22" stroke-width="3"/>
-                    <circle cx="90" cy="100" r="20" fill="#FF8C42" opacity="0.5"/>
                     <circle cx="310" cy="100" r="40" fill="#FFB347" stroke="#E67E22" stroke-width="3"/>
-                    <circle cx="310" cy="100" r="20" fill="#FF8C42" opacity="0.5"/>
                     <ellipse cx="200" cy="210" rx="125" ry="135" fill="#FFD699" stroke="#E67E22" stroke-width="4"/>
-                    
-                    <g id="leftEye">
-                        <ellipse cx="145" cy="195" rx="32" ry="36" fill="white" stroke="#333" stroke-width="3" class="robot-eye"/>
-                        <circle cx="152" cy="195" r="16" fill="#2C3E50" class="pupil"/>
-                        <circle cx="147" cy="188" r="6" fill="white" opacity="0.9" class="eye-glow"/>
-                        <circle cx="158" cy="200" r="3" fill="white" opacity="0.5" class="eye-star"/>
-                    </g>
-                    
-                    <g id="rightEye">
-                        <ellipse cx="255" cy="195" rx="32" ry="36" fill="white" stroke="#333" stroke-width="3" class="robot-eye"/>
-                        <circle cx="262" cy="195" r="16" fill="#2C3E50" class="pupil"/>
-                        <circle cx="257" cy="188" r="6" fill="white" opacity="0.9" class="eye-glow"/>
-                        <circle cx="268" cy="200" r="3" fill="white" opacity="0.5" class="eye-star"/>
-                    </g>
-                    
-                    <path id="leftEyebrow" d="M115 155 Q145 140 175 155" stroke="#5D4037" stroke-width="7" fill="none" stroke-linecap="round" class="robot-eyebrow"/>
-                    <path id="rightEyebrow" d="M225 155 Q255 140 285 155" stroke="#5D4037" stroke-width="7" fill="none" stroke-linecap="round" class="robot-eyebrow"/>
-                    
-                    <ellipse cx="200" cy="235" rx="14" ry="10" fill="#E67E22" opacity="0.8"/>
-                    <path id="mouth" d="M165 275 Q200 315 235 275" stroke="#5D4037" stroke-width="5" fill="none" stroke-linecap="round" class="robot-mouth"/>
-                    <path id="tongue" d="M190 295 Q200 310 210 295" fill="#FF6B6B" opacity="0"/>
-                    
-                    <ellipse cx="105" cy="245" rx="20" ry="14" fill="#FF9999" opacity="0.5"/>
-                    <ellipse cx="295" cy="245" rx="20" ry="14" fill="#FF9999" opacity="0.5"/>
-                    
-                    <circle cx="170" cy="265" r="2" fill="#D2691E" opacity="0.4"/>
-                    <circle cx="178" cy="270" r="2" fill="#D2691E" opacity="0.4"/>
-                    <circle cx="220" cy="265" r="2" fill="#D2691E" opacity="0.4"/>
-                    <circle cx="228" cy="270" r="2" fill="#D2691E" opacity="0.4"/>
+                    <ellipse cx="145" cy="195" rx="32" ry="36" fill="white" stroke="#333" stroke-width="3" class="robot-eye"/>
+                    <circle cx="152" cy="195" r="16" fill="#2C3E50" class="pupil"/>
+                    <ellipse cx="255" cy="195" rx="32" ry="36" fill="white" stroke="#333" stroke-width="3" class="robot-eye"/>
+                    <circle cx="262" cy="195" r="16" fill="#2C3E50" class="pupil"/>
+                    <path d="M115 155 Q145 140 175 155" stroke="#5D4037" stroke-width="7" fill="none" stroke-linecap="round"/>
+                    <path d="M225 155 Q255 140 285 155" stroke="#5D4037" stroke-width="7" fill="none" stroke-linecap="round"/>
+                    <path d="M165 275 Q200 315 235 275" stroke="#5D4037" stroke-width="5" fill="none" stroke-linecap="round" class="robot-mouth"/>
                 </svg>
             </div>
             <div class="robot-name">🐹 CHIRI AI</div>
-            <div class="status-text" id="statusText">🎤 Nói "Xin chào" để đánh thức Chiri!</div>
+            <div class="status-text" id="statusText">🎤 Nói "Xin chào" để đánh thức</div>
         </div>
 
-        <!-- Camera Section với Face Mesh -->
-        <div class="camera-section" id="cameraSection">
+        <!-- Camera Section with Face ID -->
+        <div class="camera-section">
             <div class="camera-container">
-                <video id="video" autoplay playsinline style="width: 100%; border-radius: 20px; background: #000;"></video>
-                <canvas id="canvas" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none;"></canvas>
+                <video id="video" autoplay playsinline></video>
+                <canvas id="canvas"></canvas>
             </div>
-            <div class="face-status" id="faceStatus">
+            <div class="face-status">
                 <span id="faceEmoji">🤖</span>
-                <span id="faceText">Nhấn nút bên dưới để bật camera</span>
+                <span id="faceText">Bật camera để nhận diện</span>
             </div>
             <div class="face-details" id="faceDetails">
                 <div class="detail-item" id="glassesStatus">🕶️ --</div>
                 <div class="detail-item" id="hatStatus">🧢 --</div>
-                <div class="detail-item" id="eyeStatus">👁️ --</div>
+                <div class="detail-item" id="recognizedPerson">👤 --</div>
             </div>
-            <button class="camera-toggle" id="cameraToggleBtn">📷 BẬT CAMERA (FACE MESH)</button>
+            <div class="camera-buttons">
+                <button id="cameraToggleBtn" class="camera-toggle">📷 BẬT CAMERA</button>
+                <button id="registerFaceBtn" class="camera-toggle register-btn">💾 ĐĂNG KÝ FACE ID</button>
+                <button id="recognizeFaceBtn" class="camera-toggle recognize-btn">🔍 NHẬN DIỆN FACE ID</button>
+            </div>
         </div>
 
-        <!-- Drive Mode Toggle -->
-        <div class="drive-toggle">
-            <button class="drive-btn" id="driveModeBtn">🚗 BẬT CHẾ ĐỘ ĐIỀU KHIỂN XE</button>
+        <!-- Register Face Modal -->
+        <div id="registerModal" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>📸 ĐĂNG KÝ FACE ID</h3>
+                    <span class="close-modal">&times;</span>
+                </div>
+                <div class="modal-body">
+                    <div class="preview-container">
+                        <canvas id="previewCanvas" width="320" height="240"></canvas>
+                        <div class="preview-status" id="previewStatus">Đang chụp ảnh khuôn mặt...</div>
+                    </div>
+                    <div class="register-form">
+                        <input type="text" id="faceNameInput" placeholder="Nhập tên người dùng (VD: Nguyễn Văn A)" autocomplete="off">
+                        <div class="photo-count" id="photoCount">Đã chụp: 0/3 ảnh</div>
+                        <div class="register-buttons">
+                            <button id="capturePhotoBtn" class="capture-btn">📸 CHỤP ẢNH</button>
+                            <button id="saveFaceBtn" class="save-btn">💾 LƯU FACE ID</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
 
-        <!-- Wake Examples -->
+        <!-- Drive Mode Section -->
+        <div class="drive-section">
+            <button id="driveModeBtn" class="drive-mode-toggle">🚗 BẬT CHẾ ĐỘ ĐIỀU KHIỂN XE</button>
+            <div id="driveControls" class="drive-controls" style="display: none;">
+                <div class="drive-grid">
+                    <div></div>
+                    <button class="drive-arrow up" data-cmd="FORWARD">▲ TIẾN</button>
+                    <div></div>
+                    <button class="drive-arrow left" data-cmd="LEFT">◄ TRÁI</button>
+                    <button class="drive-arrow stop" data-cmd="STOP">● DỪNG</button>
+                    <button class="drive-arrow right" data-cmd="RIGHT">► PHẢI</button>
+                    <div></div>
+                    <button class="drive-arrow down" data-cmd="BACKWARD">▼ LÙI</button>
+                    <div></div>
+                </div>
+                <div class="drive-status" id="driveStatus">⏸️ Chưa có lệnh</div>
+            </div>
+        </div>
+
+        <div class="chat-mode-section">
+            <button id="chatModeBtn" class="chat-mode-btn">💬 CHẾ ĐỘ TRÒ CHUYỆN</button>
+        </div>
+
         <div class="wake-examples">
             <span class="wake-example">🗣️ "Xin chào"</span>
             <span class="wake-example">🗣️ "Hello"</span>
-            <span class="wake-example">🗣️ "Chào Chiri"</span>
-            <span class="wake-example drive-hint">🚗 "Tiến, Lùi, Trái, Phải, Dừng"</span>
             <span class="wake-example">⏰ "Đếm ngược 10 giây"</span>
-            <span class="wake-example">📷 "Bật camera"</span>
+            <span class="wake-example">🔍 "Nhận diện face"</span>
         </div>
 
-        <!-- Chat Section -->
         <div class="chat-section">
             <div class="chat-box" id="chatBox">
                 <div class="message ai">
                     <div class="bubble">🐹 Chào bạn! Mình là Chiri AI. Mình có thể:<br>
-                    • 💬 Trò chuyện thông minh với ChatGPT<br>
-                    • 🚗 Điều khiển xe bằng giọng nói<br>
-                    • ⏰ Đếm ngược thời gian<br>
-                    • 🌍 Nói được cả tiếng Việt và tiếng Anh<br>
-                    • 📷 Nhận diện khuôn mặt với 468 điểm (Face Mesh)<br>
-                    • 👓 Phát hiện kính đeo mắt<br>
-                    • 🧢 Phát hiện mũ bảo hộ<br><br>
-                    Hãy nói "Xin chào" để bắt đầu hoặc nhấn nút bên dưới để bật camera nhé!</div>
+                    • 💬 Trò chuyện thông minh<br>
+                    • 🚗 Điều khiển xe bằng nút bấm hoặc giọng nói<br>
+                    • 📸 Đăng ký Face ID để nhận diện khuôn mặt<br>
+                    • 👋 Chào bạn khi nhận diện được khuôn mặt</div>
                 </div>
             </div>
         </div>
         
-        <div class="tip">💡 Mẹo: Nói "Xin chào" để đánh thức. Sau 60 giây im lặng, Chiri sẽ tự ngủ. Bật camera để Chiri nhìn thấy bạn và phát hiện bạn có đeo kính hay đội mũ không nhé!</div>
+        <div class="tip">💡 Mẹo: Bật camera -> Đăng ký Face ID -> Chụp 3 ảnh khuôn mặt -> Nhập tên -> Lưu. Sau đó bấm "Nhận diện Face ID" để robot nhận ra bạn!</div>
 
-        <!-- Manual Wake Button -->
         <div class="manual-wake" id="manualWake">
-            <svg viewBox="0 0 24 24">
-                <path d="M12 16c-2.21 0-4-1.79-4-4V6c0-2.21 1.79-4 4-4s4 1.79 4 4v6c0 2.21-1.79 4-4 4zm-6-4c0 .66.54 1.2 1.2 1.2h.6c.66 0 1.2-.54 1.2-1.2V6c0-.66-.54-1.2-1.2-1.2h-.6c-.66 0-1.2.54-1.2 1.2v6zm12 0c0 .66.54 1.2 1.2 1.2h.6c.66 0 1.2-.54 1.2-1.2V6c0-.66-.54-1.2-1.2-1.2h-.6c-.66 0-1.2.54-1.2 1.2v6z"/>
-            </svg>
+            <svg viewBox="0 0 24 24"><path d="M12 16c-2.21 0-4-1.79-4-4V6c0-2.21 1.79-4 4-4s4 1.79 4 4v6c0 2.21-1.79 4-4 4z"/></svg>
         </div>
     </div>
+    
     <script src="script.js"></script>
 </body>
 </html>
