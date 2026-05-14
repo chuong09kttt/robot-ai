@@ -3,50 +3,100 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
-    <title>🐹 Chiri AI - Robot thông minh với Phiên dịch Real-time</title>
+    <title>🐹 CHIRI AI - Gaming Edition</title>
     <link rel="stylesheet" href="style.css">
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
 </head>
 <body>
-    <!-- LOGIN SCREEN -->
+    <!-- LOGIN SCREEN - Gaming Style -->
     <div id="loginScreen" class="login-screen">
-        <div class="login-container">
+        <div class="gaming-bg"></div>
+        <div class="login-container gaming-glass">
             <div class="login-header">
-                <div class="login-robot">🐹</div>
-                <h1>CHIRI AI</h1>
-                <p>Đăng nhập để sử dụng robot</p>
+                <div class="login-robot-glow">🐹</div>
+                <h1 class="gaming-title">CHIRI <span class="highlight">AI</span></h1>
+                <div class="gaming-subtitle">INTELLIGENT ROBOT SYSTEM</div>
+                <div class="version-tag">v12.0 | GAMING EDITION</div>
             </div>
             <div class="login-form">
-                <input type="text" id="loginUsername" placeholder="Tên đăng nhập" autocomplete="off">
-                <input type="password" id="loginPassword" placeholder="Mật khẩu">
-                <button id="loginBtn" class="login-btn">ĐĂNG NHẬP</button>
+                <div class="input-group">
+                    <span class="input-icon">👤</span>
+                    <input type="text" id="loginUsername" placeholder="USERNAME" autocomplete="off">
+                </div>
+                <div class="input-group">
+                    <span class="input-icon">🔒</span>
+                    <input type="password" id="loginPassword" placeholder="PASSWORD">
+                </div>
+                <button id="loginBtn" class="gaming-btn">
+                    <span class="btn-text">ĐĂNG NHẬP</span>
+                    <span class="btn-glow"></span>
+                </button>
                 <div class="login-error" id="loginError"></div>
             </div>
-            <div class="login-hint">
-                <p>🔐 Tài khoản demo:</p>
-                <p>admin / admin123</p>
-                <p>user1 / 123456</p>
+            <div class="login-hint gaming-hint">
+                <div class="hint-title">⚡ DEMO ACCOUNTS</div>
+                <div class="hint-item">🎮 admin / admin123</div>
+                <div class="hint-item">🎮 user1 / 123456</div>
             </div>
         </div>
     </div>
 
-    <!-- MAIN APP -->
-    <div id="mainApp" class="container" style="display: none;">
-        <div class="user-info">
-            <span id="userNameDisplay"></span>
-            <button id="logoutBtn" class="logout-btn">🚪 Đăng xuất</button>
+    <!-- MODE SELECTION SCREEN -->
+    <div id="modeScreen" class="mode-screen" style="display: none;">
+        <div class="gaming-bg"></div>
+        <div class="mode-container">
+            <div class="user-header">
+                <span id="userNameDisplay" class="user-name"></span>
+                <button id="logoutBtn" class="logout-gaming">🚪 EXIT</button>
+            </div>
+            <div class="robot-status">
+                <div class="robot-icon">🐹</div>
+                <div class="status-badge" id="wakeDot"></div>
+                <div class="status-text" id="statusText">SYSTEM STANDBY</div>
+            </div>
+            <div class="mode-grid">
+                <div class="mode-card" data-mode="chat">
+                    <div class="mode-icon">💬</div>
+                    <div class="mode-name">CHAT MODE</div>
+                    <div class="mode-desc">Trò chuyện AI thông minh</div>
+                    <div class="mode-badge">CHATGPT</div>
+                </div>
+                <div class="mode-card" data-mode="drive">
+                    <div class="mode-icon">🚗</div>
+                    <div class="mode-name">DRIVE MODE</div>
+                    <div class="mode-desc">Điều khiển xe robot</div>
+                    <div class="mode-badge">ESP32</div>
+                </div>
+                <div class="mode-card" data-mode="translate">
+                    <div class="mode-icon">🌐</div>
+                    <div class="mode-name">TRANSLATE MODE</div>
+                    <div class="mode-desc">Phiên dịch realtime</div>
+                    <div class="mode-badge">8 LANGUAGES</div>
+                </div>
+                <div class="mode-card" data-mode="camera">
+                    <div class="mode-icon">📷</div>
+                    <div class="mode-name">CAMERA MODE</div>
+                    <div class="mode-desc">Face ID & Nhận diện</div>
+                    <div class="mode-badge">FACE MESH</div>
+                </div>
+            </div>
+            <div class="mode-footer">
+                <div class="tip-gaming">💡 Chọn chế độ để bắt đầu trải nghiệm</div>
+            </div>
         </div>
-        
-        <div class="wake-badge">
-            <div class="wake-dot" id="wakeDot"></div>
-            <span id="wakeText">😴 Đang ngủ</span>
-        </div>
-        <div class="sleep-timer" id="sleepTimer">😴 Sẽ ngủ sau 60s</div>
+    </div>
 
-        <div class="robot-section">
-            <div class="robot-avatar">
-                <svg class="robot-svg" viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg">
+    <!-- CHAT MODE PANEL -->
+    <div id="chatPanel" class="mode-panel" style="display: none;">
+        <div class="panel-header">
+            <button class="back-btn" data-back="mode">← BACK</button>
+            <div class="panel-title">💬 CHAT MODE</div>
+            <div class="panel-status" id="chatStatus">🎤 Đang nghe...</div>
+        </div>
+        <div class="robot-display">
+            <div class="robot-svg-container">
+                <svg class="robot-svg" viewBox="0 0 400 400">
                     <circle cx="90" cy="100" r="40" fill="#FFB347" stroke="#E67E22" stroke-width="3"/>
                     <circle cx="310" cy="100" r="40" fill="#FFB347" stroke="#E67E22" stroke-width="3"/>
                     <ellipse cx="200" cy="210" rx="125" ry="135" fill="#FFD699" stroke="#E67E22" stroke-width="4"/>
@@ -54,142 +104,164 @@
                     <circle cx="152" cy="195" r="16" fill="#2C3E50" class="pupil"/>
                     <ellipse cx="255" cy="195" rx="32" ry="36" fill="white" stroke="#333" stroke-width="3" class="robot-eye"/>
                     <circle cx="262" cy="195" r="16" fill="#2C3E50" class="pupil"/>
-                    <path d="M115 155 Q145 140 175 155" stroke="#5D4037" stroke-width="7" fill="none" stroke-linecap="round"/>
-                    <path d="M225 155 Q255 140 285 155" stroke="#5D4037" stroke-width="7" fill="none" stroke-linecap="round"/>
-                    <path d="M165 275 Q200 315 235 275" stroke="#5D4037" stroke-width="5" fill="none" stroke-linecap="round" class="robot-mouth"/>
+                    <path d="M115 155 Q145 140 175 155" stroke="#5D4037" stroke-width="7" fill="none"/>
+                    <path d="M225 155 Q255 140 285 155" stroke="#5D4037" stroke-width="7" fill="none"/>
+                    <path d="M165 275 Q200 315 235 275" stroke="#5D4037" stroke-width="5" fill="none" class="robot-mouth"/>
                 </svg>
             </div>
-            <div class="robot-name">🐹 CHIRI AI</div>
-            <div class="status-text" id="statusText">🎤 Nói "Xin chào" để đánh thức</div>
+            <div class="sleep-timer" id="sleepTimer">😴 Sleep in 60s</div>
         </div>
-
-        <!-- Translator Section -->
-        <div class="translator-section">
-            <button id="translatorModeBtn" class="translator-toggle">🌐 PHIÊN DỊCH REAL-TIME</button>
-            <div id="translatorPanel" class="translator-panel" style="display: none;">
-                <div class="translator-header">
-                    <h3>🌐 Phiên dịch trực tiếp</h3>
-                    <button id="closeTranslatorBtn" class="close-translator">✖</button>
-                </div>
-                <div class="language-selector">
-                    <select id="sourceLang" class="lang-select">
-                        <option value="vi">🇻🇳 Tiếng Việt</option>
-                        <option value="en">🇺🇸 Tiếng Anh</option>
-                        <option value="zh">🇨🇳 Tiếng Trung</option>
-                        <option value="ja">🇯🇵 Tiếng Nhật</option>
-                        <option value="ko">🇰🇷 Tiếng Hàn</option>
-                        <option value="fr">🇫🇷 Tiếng Pháp</option>
-                        <option value="de">🇩🇪 Tiếng Đức</option>
-                        <option value="es">🇪🇸 Tiếng Tây Ban Nha</option>
-                    </select>
-                    <span class="arrow-icon">➡️</span>
-                    <select id="targetLang" class="lang-select">
-                        <option value="en">🇺🇸 Tiếng Anh</option>
-                        <option value="vi">🇻🇳 Tiếng Việt</option>
-                        <option value="zh">🇨🇳 Tiếng Trung</option>
-                        <option value="ja">🇯🇵 Tiếng Nhật</option>
-                        <option value="ko">🇰🇷 Tiếng Hàn</option>
-                        <option value="fr">🇫🇷 Tiếng Pháp</option>
-                        <option value="de">🇩🇪 Tiếng Đức</option>
-                        <option value="es">🇪🇸 Tiếng Tây Ban Nha</option>
-                    </select>
-                    <button id="swapLangBtn" class="swap-btn">🔄</button>
-                </div>
-                <div class="translator-mode">
-                    <button id="voiceToVoiceMode" class="mode-btn active">🎤 Nói → Dịch (Real-time)</button>
-                    <button id="listenOnlyMode" class="mode-btn">👂 Chỉ nghe & Hiển thị</button>
-                </div>
-                <div class="translation-display">
-                    <div class="original-box">
-                        <div class="box-header">🎙️ Nguyên bản</div>
-                        <div id="originalText" class="original-text">Chưa có dữ liệu...</div>
-                    </div>
-                    <div class="translated-box">
-                        <div class="box-header">🌐 Dịch sang</div>
-                        <div id="translatedText" class="translated-text">Chưa có dữ liệu...</div>
-                    </div>
-                </div>
-                <div class="translation-controls">
-                    <button id="speakTranslationBtn" class="speak-btn">🔊 Đọc bản dịch</button>
-                    <button id="clearTranslationBtn" class="clear-btn">🗑️ Xóa</button>
-                    <div class="translation-status" id="translationStatus">⏸️ Chưa kích hoạt</div>
+        <div class="chat-container">
+            <div class="chat-box" id="chatBox">
+                <div class="message ai">
+                    <div class="bubble">🐹 Chào bạn! Mình là Chiri AI. Hãy nói "Xin chào" để bắt đầu!</div>
                 </div>
             </div>
         </div>
+        <div class="chat-controls">
+            <button id="manualWake" class="control-btn">🔊 ĐÁNH THỨC</button>
+            <button id="chatBackBtn" class="control-btn back">🏠 HOME</button>
+        </div>
+    </div>
 
-        <!-- Camera Section with Face ID -->
-        <div class="camera-section">
-            <div class="camera-container">
+    <!-- DRIVE MODE PANEL -->
+    <div id="drivePanel" class="mode-panel" style="display: none;">
+        <div class="panel-header">
+            <button class="back-btn" data-back="mode">← BACK</button>
+            <div class="panel-title">🚗 DRIVE MODE</div>
+            <div class="panel-status" id="driveStatusText">⏸️ READY</div>
+        </div>
+        <div class="drive-container">
+            <div class="drive-robot">
+                <div class="robot-icon-large">🚗</div>
+                <div class="drive-status" id="driveStatus">Chưa có lệnh</div>
+            </div>
+            <div class="drive-grid">
+                <div></div>
+                <button class="drive-btn-gaming up" data-cmd="FORWARD">▲<span>TIẾN</span></button>
+                <div></div>
+                <button class="drive-btn-gaming left" data-cmd="LEFT">◄<span>TRÁI</span></button>
+                <button class="drive-btn-gaming stop" data-cmd="STOP">●<span>DỪNG</span></button>
+                <button class="drive-btn-gaming right" data-cmd="RIGHT">►<span>PHẢI</span></button>
+                <div></div>
+                <button class="drive-btn-gaming down" data-cmd="BACKWARD">▼<span>LÙI</span></button>
+                <div></div>
+            </div>
+            <div class="drive-voice-hint">🎤 Nói: TIẾN, LÙI, TRÁI, PHẢI, DỪNG</div>
+        </div>
+        <div class="chat-controls">
+            <button id="driveBackBtn" class="control-btn back">🏠 HOME</button>
+        </div>
+    </div>
+
+    <!-- TRANSLATE MODE PANEL -->
+    <div id="translatePanel" class="mode-panel" style="display: none;">
+        <div class="panel-header">
+            <button class="back-btn" data-back="mode">← BACK</button>
+            <div class="panel-title">🌐 TRANSLATE MODE</div>
+            <div class="panel-status" id="translateStatus">⏸️ STANDBY</div>
+        </div>
+        <div class="translate-container">
+            <div class="lang-selector">
+                <select id="sourceLang" class="lang-select-gaming">
+                    <option value="vi">🇻🇳 Tiếng Việt</option>
+                    <option value="en">🇺🇸 English</option>
+                    <option value="zh">🇨🇳 中文</option>
+                    <option value="ja">🇯🇵 日本語</option>
+                    <option value="ko">🇰🇷 한국어</option>
+                    <option value="fr">🇫🇷 Français</option>
+                    <option value="de">🇩🇪 Deutsch</option>
+                    <option value="es">🇪🇸 Español</option>
+                </select>
+                <button id="swapLangBtn" class="swap-gaming">⇄</button>
+                <select id="targetLang" class="lang-select-gaming">
+                    <option value="en">🇺🇸 English</option>
+                    <option value="vi">🇻🇳 Tiếng Việt</option>
+                    <option value="zh">🇨🇳 中文</option>
+                    <option value="ja">🇯🇵 日本語</option>
+                    <option value="ko">🇰🇷 한국어</option>
+                    <option value="fr">🇫🇷 Français</option>
+                    <option value="de">🇩🇪 Deutsch</option>
+                    <option value="es">🇪🇸 Español</option>
+                </select>
+            </div>
+            <div class="translation-box">
+                <div class="original-box">
+                    <div class="box-header-gaming">🎙️ ORIGINAL</div>
+                    <div id="originalText" class="original-text">Ready...</div>
+                </div>
+                <div class="translated-box">
+                    <div class="box-header-gaming">🌐 TRANSLATED</div>
+                    <div id="translatedText" class="translated-text">Ready...</div>
+                </div>
+            </div>
+            <div class="translate-controls">
+                <button id="speakTranslationBtn" class="control-gaming">🔊 SPEAK</button>
+                <button id="clearTranslationBtn" class="control-gaming">🗑️ CLEAR</button>
+            </div>
+        </div>
+        <div class="chat-controls">
+            <button id="translateBackBtn" class="control-btn back">🏠 HOME</button>
+        </div>
+    </div>
+
+    <!-- CAMERA MODE PANEL -->
+    <div id="cameraPanel" class="mode-panel" style="display: none;">
+        <div class="panel-header">
+            <button class="back-btn" data-back="mode">← BACK</button>
+            <div class="panel-title">📷 CAMERA MODE</div>
+            <div class="panel-status" id="cameraStatus">⏸️ OFF</div>
+        </div>
+        <div class="camera-container-gaming">
+            <div class="video-wrapper">
                 <video id="video" autoplay playsinline></video>
                 <canvas id="canvas"></canvas>
             </div>
-            <div class="face-status">
-                <span id="faceEmoji">🤖</span>
-                <span id="faceText">Bật camera để nhận diện</span>
-            </div>
-            <div class="face-details" id="faceDetails">
-                <div class="detail-item" id="glassesStatus">🕶️ --</div>
-                <div class="detail-item" id="hatStatus">🧢 --</div>
-                <div class="detail-item" id="recognizedPerson">👤 --</div>
-            </div>
-            <div class="camera-buttons">
-                <button id="cameraToggleBtn" class="camera-toggle">📷 BẬT CAMERA</button>
-                <button id="registerFaceBtn" class="camera-toggle register-btn">💾 ĐĂNG KÝ FACE ID</button>
-                <button id="recognizeFaceBtn" class="camera-toggle recognize-btn">🔍 NHẬN DIỆN FACE ID</button>
-            </div>
-        </div>
-
-        <!-- Drive Mode Section -->
-        <div class="drive-section">
-            <button id="driveModeBtn" class="drive-mode-toggle">🚗 BẬT CHẾ ĐỘ ĐIỀU KHIỂN XE</button>
-            <div id="driveControls" class="drive-controls" style="display: none;">
-                <div class="drive-grid">
-                    <div></div>
-                    <button class="drive-arrow up" data-cmd="FORWARD">▲ TIẾN</button>
-                    <div></div>
-                    <button class="drive-arrow left" data-cmd="LEFT">◄ TRÁI</button>
-                    <button class="drive-arrow stop" data-cmd="STOP">● DỪNG</button>
-                    <button class="drive-arrow right" data-cmd="RIGHT">► PHẢI</button>
-                    <div></div>
-                    <button class="drive-arrow down" data-cmd="BACKWARD">▼ LÙI</button>
-                    <div></div>
+            <div class="face-info">
+                <div class="face-emoji" id="faceEmoji">🤖</div>
+                <div class="face-text" id="faceText">Camera OFF</div>
+                <div class="face-details-gaming">
+                    <span id="glassesStatus">🕶️ --</span>
+                    <span id="hatStatus">🧢 --</span>
+                    <span id="recognizedPerson">👤 --</span>
                 </div>
-                <div class="drive-status" id="driveStatus">⏸️ Chưa có lệnh</div>
+            </div>
+            <div class="camera-buttons-gaming">
+                <button id="cameraToggleBtn" class="cam-gaming">📷 BẬT CAMERA</button>
+                <button id="registerFaceBtn" class="cam-gaming register">💾 ĐĂNG KÝ FACE ID</button>
+                <button id="recognizeFaceBtn" class="cam-gaming recognize">🔍 NHẬN DIỆN</button>
             </div>
         </div>
-
-        <div class="chat-mode-section">
-            <button id="chatModeBtn" class="chat-mode-btn">💬 CHẾ ĐỘ TRÒ CHUYỆN</button>
-        </div>
-
-        <div class="wake-examples">
-            <span class="wake-example">🗣️ "Xin chào"</span>
-            <span class="wake-example">🗣️ "Hello"</span>
-            <span class="wake-example">⏰ "Đếm ngược 10 giây"</span>
-            <span class="wake-example">🌐 "Bật phiên dịch"</span>
-            <span class="wake-example">🔍 "Nhận diện face"</span>
-        </div>
-
-        <div class="chat-section">
-            <div class="chat-box" id="chatBox">
-                <div class="message ai">
-                    <div class="bubble">🐹 Chào bạn! Mình là Chiri AI. Mình có thể:<br>
-                    • 💬 Trò chuyện thông minh<br>
-                    • 🌐 Phiên dịch real-time đa ngôn ngữ<br>
-                    • 🚗 Điều khiển xe bằng nút bấm hoặc giọng nói<br>
-                    • 📸 Đăng ký Face ID để nhận diện khuôn mặt<br>
-                    • 👋 Chào bạn khi nhận diện được khuôn mặt</div>
+        
+        <!-- Register Modal -->
+        <div id="registerModal" class="modal-gaming">
+            <div class="modal-content-gaming">
+                <div class="modal-header-gaming">
+                    <h3>📸 REGISTER FACE ID</h3>
+                    <button class="close-modal-gaming">&times;</button>
+                </div>
+                <div class="modal-body-gaming">
+                    <div class="preview-area">
+                        <canvas id="previewCanvas" width="320" height="240"></canvas>
+                        <div class="preview-status" id="previewStatus">📷 Đang khởi tạo camera...</div>
+                    </div>
+                    <div class="register-form-gaming">
+                        <input type="text" id="faceNameInput" placeholder="Nhập tên người dùng">
+                        <div class="photo-counter" id="photoCount">📸 0/3 ảnh</div>
+                        <div class="register-actions">
+                            <button id="capturePhotoBtn" class="action-gaming">📸 CHỤP ẢNH</button>
+                            <button id="saveFaceBtn" class="action-gaming save">💾 LƯU FACE ID</button>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
         
-        <div class="tip">💡 Mẹo: Nhấn "PHIÊN DỊCH REAL-TIME" để bắt đầu dịch trực tiếp. Chọn ngôn ngữ nguồn và đích, sau đó nói để Chiri dịch ngay lập tức!</div>
-
-        <div class="manual-wake" id="manualWake">
-            <svg viewBox="0 0 24 24"><path d="M12 16c-2.21 0-4-1.79-4-4V6c0-2.21 1.79-4 4-4s4 1.79 4 4v6c0 2.21-1.79 4-4 4z"/></svg>
+        <div class="chat-controls">
+            <button id="cameraBackBtn" class="control-btn back">🏠 HOME</button>
         </div>
     </div>
-    
+
     <script src="script.js"></script>
 </body>
 </html>
