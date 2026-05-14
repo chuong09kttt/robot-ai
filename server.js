@@ -5,8 +5,16 @@ const path = require('path');
 const fs = require('fs');
 const NodeCache = require('node-cache');
 
+// ========== AUTHENTICATION ==========
+const USERS = {
+    'admin': { password: 'admin123', name: 'Quản trị viên' },
+    'user1': { password: '123456', name: 'Nguyễn Văn A' },
+    'user2': { password: '123456', name: 'Trần Thị B' }
+};
+
 // ========== CACHE ==========
 const responseCache = new NodeCache({ stdTTL: 3600, checkperiod: 120 });
+const ttsCache = new NodeCache({ stdTTL: 3600, checkperiod: 120 });
 
 // ========== KHAI BÁO BIẾN TOÀN CỤC ==========
 const esp32Clients = new Map();
@@ -54,6 +62,7 @@ const wss = new WebSocket.Server({ server });
 
 app.use(express.static(path.join(__dirname, '/')));
 app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: true }));
 
 // ========== KHỞI TẠO OPENAI ==========
 let openai = null;
@@ -531,12 +540,12 @@ function getDriveCommand(text) {
     return null;
 }
 
-function sendToESP32(command) {
+function sendToESP32(command, duration = 0) {
     let sent = false;
     for (const [id, client] of esp32Clients) {
         if (client.readyState === WebSocket.OPEN) {
-            client.send(JSON.stringify({ type: 'command', command: command }));
-            console.log(`📤 Send to ESP32: ${command}`);
+            client.send(JSON.stringify({ type: 'command', command: command, duration: duration }));
+            console.log(`📤 Send to ESP32: ${command} (duration: ${duration}ms)`);
             sent = true;
         }
     }
@@ -559,6 +568,28 @@ function handleCountdownCommand(text) {
     return { isCountdown: false };
 }
 
+// ========== TRANSLATION API ==========
+async function translateText(text, source, target) {
+    if (!text || text.trim() === '') return '';
+    
+    try {
+        // Sử dụng API dịch MyMemory (miễn phí)
+        const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=${source}|${target}`;
+        const response = await axios.get(url, { timeout: 5000 });
+        
+        if (response.data && response.data.responseData && response.data.responseData.translatedText) {
+            let translated = response.data.responseData.translatedText;
+            translated = translated.replace(/^\[ERROR\]\s*/, '');
+            return translated;
+        }
+        return text;
+    } catch (error) {
+        console.error('Translation error:', error.message);
+        return text;
+    }
+}
+
+// ========== PROCESS USER MESSAGE ==========
 async function processUserMessage(userText, driveMode, sessionId, ws) {
     if (!processingQueue.has(sessionId)) {
         processingQueue.set(sessionId, Promise.resolve());
@@ -572,11 +603,20 @@ async function processUserMessage(userText, driveMode, sessionId, ws) {
             const lang = detectLanguage(userText);
             console.log(`🌐 Detected language: ${lang === 'en' ? 'ENGLISH' : 'VIETNAMESE'}`);
             
+            // Check for translation commands
+            const lower = userText.toLowerCase();
+            if (lower.includes('bật phiên dịch') || lower.includes('bật dịch realtime')) {
+                return "🌐 Đã bật chế độ phiên dịch real-time! Vui lòng chọn ngôn ngữ trên màn hình và bắt đầu nói.";
+            }
+            if (lower.includes('tắt phiên dịch') || lower.includes('tắt dịch')) {
+                return "🌐 Đã tắt chế độ phiên dịch real-time.";
+            }
+            
             // DRIVE MODE
             if (driveMode === true) {
                 const command = getDriveCommand(userText);
                 if (command) {
-                    sendToESP32(command);
+                    sendToESP32(command, 0);
                     const replies = {
                         'FORWARD': lang === 'en' ? '🚗 Moving forward!' : '🚗 Xe tiến lên!',
                         'BACKWARD': lang === 'en' ? '🚗 Moving backward!' : '🚗 Xe lùi lại!',
@@ -609,7 +649,6 @@ async function processUserMessage(userText, driveMode, sessionId, ws) {
             }
             
             // REAL-TIME
-            const lower = userText.toLowerCase();
             if (lower.includes('what time') || lower.includes('current time') || lower.includes('time now') ||
                 lower.includes('mấy giờ') || (lower.includes('giờ') && lower.includes('bao nhiêu'))) {
                 return getCurrentTime(lang);
@@ -642,7 +681,7 @@ async function processUserMessage(userText, driveMode, sessionId, ws) {
                 }
             }
             
-            // CHAT MODE - KHÔNG CÓ DÒNG CHÚ THÍCH
+            // CHAT MODE
             if (!conversationHistory[sessionId]) {
                 conversationHistory[sessionId] = [];
             }
@@ -677,6 +716,10 @@ async function processUserMessage(userText, driveMode, sessionId, ws) {
 }
 
 async function generateHighQualityTTS(text, lang = 'vi') {
+    const cacheKey = text.slice(0, 200) + lang;
+    const cached = ttsCache.get(cacheKey);
+    if (cached) return cached;
+    
     try {
         const ttsUrl = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodeURIComponent(text.slice(0, 200))}&tl=${lang}&client=tw-ob`;
         const response = await axios({
@@ -686,6 +729,7 @@ async function generateHighQualityTTS(text, lang = 'vi') {
             timeout: 10000,
             headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' }
         });
+        ttsCache.set(cacheKey, response.data);
         return response.data;
     } catch (error) {
         return null;
@@ -693,19 +737,83 @@ async function generateHighQualityTTS(text, lang = 'vi') {
 }
 
 // ========== API ENDPOINTS ==========
+
+// LOGIN endpoint
+app.post('/api/login', (req, res) => {
+    console.log('📝 Login request:', req.body);
+    const { username, password } = req.body;
+    
+    if (!username || !password) {
+        return res.json({ success: false, message: 'Vui lòng nhập đầy đủ thông tin!' });
+    }
+    
+    const user = USERS[username];
+    if (user && user.password === password) {
+        console.log(`✅ User logged in: ${username}`);
+        res.json({ success: true, name: user.name, username: username });
+    } else {
+        console.log(`❌ Login failed: ${username}`);
+        res.json({ success: false, message: 'Sai tên đăng nhập hoặc mật khẩu!' });
+    }
+});
+
+// Face registration
+app.post('/api/register-face', (req, res) => {
+    const { username, faceDescriptor } = req.body;
+    // Lưu face descriptor vào file (có thể mở rộng)
+    const faceFile = 'face-data.json';
+    let faceData = {};
+    try {
+        if (fs.existsSync(faceFile)) {
+            faceData = JSON.parse(fs.readFileSync(faceFile, 'utf8'));
+        }
+    } catch(e) {}
+    
+    if (!faceData[username]) faceData[username] = [];
+    faceData[username].push(faceDescriptor);
+    fs.writeFileSync(faceFile, JSON.stringify(faceData, null, 2));
+    
+    res.json({ success: true, message: `Đã lưu khuôn mặt cho ${username}` });
+});
+
+app.get('/api/face-database', (req, res) => {
+    const faceFile = 'face-data.json';
+    let users = [];
+    try {
+        if (fs.existsSync(faceFile)) {
+            const faceData = JSON.parse(fs.readFileSync(faceFile, 'utf8'));
+            users = Object.keys(faceData);
+        }
+    } catch(e) {}
+    res.json({ users: users.length ? users : ['admin', 'user1', 'user2'] });
+});
+
+// TTS endpoint
 app.get('/tts', async (req, res) => {
     const text = req.query.text;
     if (!text) return res.status(400).send('Missing text');
     const lang = detectLanguage(text);
-    const audioStream = await generateHighQualityTTS(text, lang);
+    const ttsLang = lang === 'en' ? 'en' : 'vi';
+    const audioStream = await generateHighQualityTTS(text, ttsLang);
     if (audioStream) {
         res.setHeader('Content-Type', 'audio/mpeg');
+        res.setHeader('Cache-Control', 'public, max-age=3600');
         audioStream.pipe(res);
     } else {
         res.status(404).send('TTS unavailable');
     }
 });
 
+// Translation endpoint
+app.post('/api/translate', async (req, res) => {
+    const { text, source, target } = req.body;
+    if (!text) return res.json({ success: false, translated: '' });
+    
+    const translated = await translateText(text, source, target);
+    res.json({ success: true, original: text, translated: translated });
+});
+
+// Upload PDF
 app.post('/api/upload-pdf', async (req, res) => {
     try {
         const { fileContent, fileName } = req.body;
@@ -735,6 +843,7 @@ app.post('/api/upload-pdf', async (req, res) => {
     }
 });
 
+// Add website
 app.post('/api/add-website', async (req, res) => {
     try {
         const { url } = req.body;
@@ -761,6 +870,7 @@ app.post('/api/add-website', async (req, res) => {
     }
 });
 
+// Add Google Drive
 app.post('/api/add-drive', async (req, res) => {
     try {
         const { fileId } = req.body;
@@ -787,6 +897,7 @@ app.post('/api/add-drive', async (req, res) => {
     }
 });
 
+// Knowledge stats
 app.get('/api/knowledge-stats', (req, res) => {
     const sources = {};
     for (const item of customKnowledge) {
@@ -800,11 +911,18 @@ app.get('/api/knowledge-stats', (req, res) => {
     });
 });
 
+// Clear knowledge
 app.post('/api/clear-knowledge', (req, res) => {
     customKnowledge = [];
     res.json({ success: true, message: 'Đã xóa toàn bộ dữ liệu đã học!' });
 });
 
+// Test endpoint
+app.get('/api/test', (req, res) => {
+    res.json({ message: 'Server is running!', time: new Date().toISOString() });
+});
+
+// Health check
 app.get('/health', (req, res) => {
     res.json({
         status: 'ok',
@@ -814,7 +932,8 @@ app.get('/health', (req, res) => {
         esp32Count: esp32Clients.size,
         chatGPTReady: !!(openai && process.env.OPENAI_API_KEY),
         pdfReady: !!pdfParse,
-        crawlerReady: !!(axios && cheerio)
+        crawlerReady: !!(axios && cheerio),
+        ttsCacheSize: ttsCache.keys().length
     });
 });
 
@@ -843,12 +962,29 @@ wss.on('connection', (ws, req) => {
     ws.on('message', async (message) => {
         try {
             const data = JSON.parse(message);
+            
             if (data.type === 'voice') {
                 const reply = await processUserMessage(data.text, data.driveMode === true, sessionId, ws);
                 if (ws.readyState === WebSocket.OPEN) {
                     ws.send(JSON.stringify({ type: 'ai', text: reply }));
                 }
             }
+            
+            if (data.type === 'drive_command') {
+                console.log(`🚗 Drive command: ${data.command} (duration: ${data.duration}ms)`);
+                sendToESP32(data.command, data.duration);
+                if (ws.readyState === WebSocket.OPEN) {
+                    ws.send(JSON.stringify({ type: 'drive_response', command: data.command, status: 'executed' }));
+                }
+            }
+            
+            if (data.type === 'translate') {
+                const translated = await translateText(data.text, data.source, data.target);
+                if (ws.readyState === WebSocket.OPEN) {
+                    ws.send(JSON.stringify({ type: 'translation', original: data.text, translated: translated }));
+                }
+            }
+            
             if (data.type === 'ping') {
                 ws.send(JSON.stringify({ type: 'pong', time: Date.now() }));
             }
@@ -892,27 +1028,32 @@ async function startServer() {
     await loadCustomKnowledge();
     
     server.listen(PORT, '0.0.0.0', () => {
-        console.log(`\n╔═══════════════════════════════════════════════════════════════════╗`);
-        console.log(`║                    🚀 CHIRI AI - FULL FEATURE MODE                ║`);
-        console.log(`╠═══════════════════════════════════════════════════════════════════╣`);
-        console.log(`║  📍 Server URL: http://localhost:${PORT}                                      ║`);
-        console.log(`║  📚 Knowledge chunks: ${customKnowledge.length.toString().padEnd(40)}║`);
-        console.log(`║  🤖 ChatGPT: ${(openai && process.env.OPENAI_API_KEY ? 'READY ✅' : 'NOT AVAILABLE ⚠️').padEnd(40)}║`);
-        console.log(`║  📄 PDF Reader: ${(pdfParse ? 'READY ✅' : 'NOT AVAILABLE ⚠️').padEnd(40)}║`);
-        console.log(`║  🕷️ Web Crawler: ${(axios && cheerio ? 'READY ✅' : 'NOT AVAILABLE ⚠️').padEnd(40)}║`);
-        console.log(`║  🌐 Language: Auto-detect (VI/EN) ✅                                 ║`);
-        console.log(`║  🎤 Voice Control: READY ✅                                          ║`);
-        console.log(`║  ⏰ Countdown Timer: READY ✅                                        ║`);
-        console.log(`║  📅 Real-time Clock: READY ✅                                       ║`);
-        console.log(`║  🚗 Drive Control: READY ✅ (Single command mode)                   ║`);
-        console.log(`║  🚗 ESP32 Clients: ${esp32Clients.size.toString().padEnd(40)}║`);
-        console.log(`║  💤 Auto-sleep: 60 seconds inactivity                              ║`);
-        console.log(`║  📄 PDF Source: Google Drive (sáp nhập tỉnh)                        ║`);
-        console.log(`║  🌐 Website Sources: vard.com/vungtau, dantri.com.vn (VinFast)     ║`);
-        console.log(`╠═══════════════════════════════════════════════════════════════════╣`);
-        console.log(`║  💡 RULE: Vietnamese question → Vietnamese answer                  ║`);
-        console.log(`║         English question → English answer                         ║`);
-        console.log(`╚═══════════════════════════════════════════════════════════════════╝`);
+        console.log(`\n╔══════════════════════════════════════════════════════════════════════════════╗`);
+        console.log(`║                         🚀 CHIRI AI - FULL FEATURE MODE v12.0                ║`);
+        console.log(`╠══════════════════════════════════════════════════════════════════════════════╣`);
+        console.log(`║  📍 Server URL: http://localhost:${PORT}                                                    ║`);
+        console.log(`║  🔐 Login: admin / admin123                                                      ║`);
+        console.log(`║  📚 Knowledge chunks: ${customKnowledge.length.toString().padEnd(46)}║`);
+        console.log(`║  🤖 ChatGPT: ${(openai && process.env.OPENAI_API_KEY ? 'READY ✅' : 'NOT AVAILABLE ⚠️').padEnd(46)}║`);
+        console.log(`║  📄 PDF Reader: ${(pdfParse ? 'READY ✅' : 'NOT AVAILABLE ⚠️').padEnd(46)}║`);
+        console.log(`║  🕷️ Web Crawler: ${(axios && cheerio ? 'READY ✅' : 'NOT AVAILABLE ⚠️').padEnd(46)}║`);
+        console.log(`║  🌐 Language: Auto-detect (VI/EN) ✅                                               ║`);
+        console.log(`║  🌐 Real-time Translation: READY ✅ (8 languages)                                  ║`);
+        console.log(`║  🎤 Voice Control: READY ✅                                                        ║`);
+        console.log(`║  ⏰ Countdown Timer: READY ✅                                                      ║`);
+        console.log(`║  📅 Real-time Clock: READY ✅                                                     ║`);
+        console.log(`║  🚗 Drive Control: READY ✅ (Button + Voice)                                       ║`);
+        console.log(`║  📷 Face Detection: READY ✅ (Face Mesh)                                           ║`);
+        console.log(`║  👤 Face Recognition: READY ✅ (Register + Recognize)                              ║`);
+        console.log(`║  🚗 ESP32 Clients: ${esp32Clients.size.toString().padEnd(46)}║`);
+        console.log(`║  💤 Auto-sleep: 60 seconds inactivity                                            ║`);
+        console.log(`║  📄 PDF Source: Google Drive (sáp nhập tỉnh)                                      ║`);
+        console.log(`║  🌐 Website Sources: vard.com/vungtau, dantri.com.vn (VinFast)                   ║`);
+        console.log(`╠══════════════════════════════════════════════════════════════════════════════╣`);
+        console.log(`║  💡 RULE: Vietnamese question → Vietnamese answer | English → English         ║`);
+        console.log(`║  🌐 TRANSLATION: Hỗ trợ VI, EN, ZH, JA, KO, FR, DE, ES                         ║`);
+        console.log(`║  📷 FACE ID: Đăng ký 3 ảnh → Nhập tên → Lưu → Nhận diện                        ║`);
+        console.log(`╚══════════════════════════════════════════════════════════════════════════════╝`);
         console.log(``);
     });
 }
