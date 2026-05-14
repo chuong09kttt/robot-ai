@@ -3,22 +3,21 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
-    <title>🐹 CHIRI AI - Gaming Edition</title>
+    <title>🐹 CHIRI AI - Cyberpunk Edition</title>
     <link rel="stylesheet" href="style.css">
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
 </head>
 <body>
-    <!-- LOGIN SCREEN - Gaming Style -->
+    <!-- LOGIN SCREEN -->
     <div id="loginScreen" class="login-screen">
         <div class="gaming-bg"></div>
-        <div class="login-container gaming-glass">
-            <div class="login-header">
-                <div class="login-robot-glow">🐹</div>
-                <h1 class="gaming-title">CHIRI <span class="highlight">AI</span></h1>
-                <div class="gaming-subtitle">INTELLIGENT ROBOT SYSTEM</div>
-                <div class="version-tag">v12.0 | GAMING EDITION</div>
-            </div>
+        <div class="login-container">
+            <div class="login-robot-glow">🐹</div>
+            <h1 class="gaming-title">CHIRI <span class="highlight">AI</span></h1>
+            <div class="gaming-subtitle">CYBERPUNK EDITION</div>
+            <div class="version-tag">v12.0 | NEURAL INTERFACE</div>
+            
             <div class="login-form">
                 <div class="input-group">
                     <span class="input-icon">👤</span>
@@ -34,10 +33,11 @@
                 </button>
                 <div class="login-error" id="loginError"></div>
             </div>
-            <div class="login-hint gaming-hint">
-                <div class="hint-title">⚡ DEMO ACCOUNTS</div>
-                <div class="hint-item">🎮 admin / admin123</div>
-                <div class="hint-item">🎮 user1 / 123456</div>
+            
+            <div class="login-hint">
+                <div class="hint-title">⚡ ACCESS CODE</div>
+                <div class="hint-item">admin / admin123</div>
+                <div class="hint-item">user1 / 123456</div>
             </div>
         </div>
     </div>
@@ -47,14 +47,16 @@
         <div class="gaming-bg"></div>
         <div class="mode-container">
             <div class="user-header">
-                <span id="userNameDisplay" class="user-name"></span>
-                <button id="logoutBtn" class="logout-gaming">🚪 EXIT</button>
+                <span id="userNameDisplay" class="user-name">👤 USER</span>
+                <button id="logoutBtn" class="logout-gaming">⏻ EXIT</button>
             </div>
+            
             <div class="robot-status">
                 <div class="robot-icon">🐹</div>
                 <div class="status-badge" id="wakeDot"></div>
-                <div class="status-text" id="statusText">SYSTEM STANDBY</div>
+                <div class="status-text" id="globalStatusText">SYSTEM STANDBY</div>
             </div>
+            
             <div class="mode-grid">
                 <div class="mode-card" data-mode="chat">
                     <div class="mode-icon">💬</div>
@@ -81,8 +83,9 @@
                     <div class="mode-badge">FACE MESH</div>
                 </div>
             </div>
+            
             <div class="mode-footer">
-                <div class="tip-gaming">💡 Chọn chế độ để bắt đầu trải nghiệm</div>
+                <div class="tip-gaming">⚡ SELECT MODE TO INITIATE ⚡</div>
             </div>
         </div>
     </div>
@@ -90,77 +93,85 @@
     <!-- CHAT MODE PANEL -->
     <div id="chatPanel" class="mode-panel" style="display: none;">
         <div class="panel-header">
-            <button class="back-btn" data-back="mode">← BACK</button>
+            <button class="back-btn" data-back="mode">⌂ HOME</button>
             <div class="panel-title">💬 CHAT MODE</div>
-            <div class="panel-status" id="chatStatus">🎤 Đang nghe...</div>
+            <div class="panel-status" id="chatStatusText">🎤 ONLINE</div>
         </div>
+        
         <div class="robot-display">
             <div class="robot-svg-container">
                 <svg class="robot-svg" viewBox="0 0 400 400">
-                    <circle cx="90" cy="100" r="40" fill="#FFB347" stroke="#E67E22" stroke-width="3"/>
-                    <circle cx="310" cy="100" r="40" fill="#FFB347" stroke="#E67E22" stroke-width="3"/>
-                    <ellipse cx="200" cy="210" rx="125" ry="135" fill="#FFD699" stroke="#E67E22" stroke-width="4"/>
-                    <ellipse cx="145" cy="195" rx="32" ry="36" fill="white" stroke="#333" stroke-width="3" class="robot-eye"/>
+                    <circle cx="90" cy="100" r="40" fill="#FFB347" stroke="#00ffff" stroke-width="3"/>
+                    <circle cx="310" cy="100" r="40" fill="#FFB347" stroke="#00ffff" stroke-width="3"/>
+                    <ellipse cx="200" cy="210" rx="125" ry="135" fill="#FFD699" stroke="#00ffff" stroke-width="4"/>
+                    <ellipse cx="145" cy="195" rx="32" ry="36" fill="white" stroke="#00ffff" stroke-width="3" class="robot-eye"/>
                     <circle cx="152" cy="195" r="16" fill="#2C3E50" class="pupil"/>
-                    <ellipse cx="255" cy="195" rx="32" ry="36" fill="white" stroke="#333" stroke-width="3" class="robot-eye"/>
+                    <ellipse cx="255" cy="195" rx="32" ry="36" fill="white" stroke="#00ffff" stroke-width="3" class="robot-eye"/>
                     <circle cx="262" cy="195" r="16" fill="#2C3E50" class="pupil"/>
-                    <path d="M115 155 Q145 140 175 155" stroke="#5D4037" stroke-width="7" fill="none"/>
-                    <path d="M225 155 Q255 140 285 155" stroke="#5D4037" stroke-width="7" fill="none"/>
-                    <path d="M165 275 Q200 315 235 275" stroke="#5D4037" stroke-width="5" fill="none" class="robot-mouth"/>
+                    <path d="M115 155 Q145 140 175 155" stroke="#ff00ff" stroke-width="7" fill="none"/>
+                    <path d="M225 155 Q255 140 285 155" stroke="#ff00ff" stroke-width="7" fill="none"/>
+                    <path d="M165 275 Q200 315 235 275" stroke="#00ffff" stroke-width="5" fill="none" class="robot-mouth"/>
                 </svg>
             </div>
-            <div class="sleep-timer" id="sleepTimer">😴 Sleep in 60s</div>
+            <div class="sleep-timer" id="sleepTimer">😴 SLEEP IN 60s</div>
         </div>
+        
         <div class="chat-container">
             <div class="chat-box" id="chatBox">
                 <div class="message ai">
-                    <div class="bubble">🐹 Chào bạn! Mình là Chiri AI. Hãy nói "Xin chào" để bắt đầu!</div>
+                    <div class="bubble">🐹 SYSTEM ONLINE. SAY "XIN CHÀO" TO ACTIVATE.</div>
                 </div>
             </div>
         </div>
+        
         <div class="chat-controls">
-            <button id="manualWake" class="control-btn">🔊 ĐÁNH THỨC</button>
-            <button id="chatBackBtn" class="control-btn back">🏠 HOME</button>
+            <button id="manualWakeBtn" class="control-btn">🔊 ACTIVATE</button>
+            <button class="control-btn back" data-back="mode">⌂ HOME</button>
         </div>
     </div>
 
     <!-- DRIVE MODE PANEL -->
     <div id="drivePanel" class="mode-panel" style="display: none;">
         <div class="panel-header">
-            <button class="back-btn" data-back="mode">← BACK</button>
+            <button class="back-btn" data-back="mode">⌂ HOME</button>
             <div class="panel-title">🚗 DRIVE MODE</div>
-            <div class="panel-status" id="driveStatusText">⏸️ READY</div>
+            <div class="panel-status" id="driveStatusText">⏸ READY</div>
         </div>
+        
         <div class="drive-container">
             <div class="drive-robot">
                 <div class="robot-icon-large">🚗</div>
-                <div class="drive-status" id="driveStatus">Chưa có lệnh</div>
+                <div class="drive-status" id="driveStatusDisplay">STANDING BY</div>
             </div>
+            
             <div class="drive-grid">
                 <div></div>
-                <button class="drive-btn-gaming up" data-cmd="FORWARD">▲<span>TIẾN</span></button>
+                <button class="drive-btn-gaming up" data-cmd="FORWARD">▲<span>FORWARD</span></button>
                 <div></div>
-                <button class="drive-btn-gaming left" data-cmd="LEFT">◄<span>TRÁI</span></button>
-                <button class="drive-btn-gaming stop" data-cmd="STOP">●<span>DỪNG</span></button>
-                <button class="drive-btn-gaming right" data-cmd="RIGHT">►<span>PHẢI</span></button>
+                <button class="drive-btn-gaming left" data-cmd="LEFT">◄<span>LEFT</span></button>
+                <button class="drive-btn-gaming stop" data-cmd="STOP">●<span>STOP</span></button>
+                <button class="drive-btn-gaming right" data-cmd="RIGHT">►<span>RIGHT</span></button>
                 <div></div>
-                <button class="drive-btn-gaming down" data-cmd="BACKWARD">▼<span>LÙI</span></button>
+                <button class="drive-btn-gaming down" data-cmd="BACKWARD">▼<span>BACK</span></button>
                 <div></div>
             </div>
-            <div class="drive-voice-hint">🎤 Nói: TIẾN, LÙI, TRÁI, PHẢI, DỪNG</div>
+            
+            <div class="drive-voice-hint">🎤 VOICE: TIẾN, LÙI, TRÁI, PHẢI, DỪNG</div>
         </div>
+        
         <div class="chat-controls">
-            <button id="driveBackBtn" class="control-btn back">🏠 HOME</button>
+            <button class="control-btn back" data-back="mode">⌂ HOME</button>
         </div>
     </div>
 
     <!-- TRANSLATE MODE PANEL -->
     <div id="translatePanel" class="mode-panel" style="display: none;">
         <div class="panel-header">
-            <button class="back-btn" data-back="mode">← BACK</button>
+            <button class="back-btn" data-back="mode">⌂ HOME</button>
             <div class="panel-title">🌐 TRANSLATE MODE</div>
-            <div class="panel-status" id="translateStatus">⏸️ STANDBY</div>
+            <div class="panel-status" id="translateStatusText">⏸ STANDBY</div>
         </div>
+        
         <div class="translate-container">
             <div class="lang-selector">
                 <select id="sourceLang" class="lang-select-gaming">
@@ -185,80 +196,86 @@
                     <option value="es">🇪🇸 Español</option>
                 </select>
             </div>
+            
             <div class="translation-box">
                 <div class="original-box">
                     <div class="box-header-gaming">🎙️ ORIGINAL</div>
-                    <div id="originalText" class="original-text">Ready...</div>
+                    <div id="originalText" class="original-text">AWAITING INPUT...</div>
                 </div>
                 <div class="translated-box">
                     <div class="box-header-gaming">🌐 TRANSLATED</div>
-                    <div id="translatedText" class="translated-text">Ready...</div>
+                    <div id="translatedText" class="translated-text">AWAITING INPUT...</div>
                 </div>
             </div>
+            
             <div class="translate-controls">
                 <button id="speakTranslationBtn" class="control-gaming">🔊 SPEAK</button>
-                <button id="clearTranslationBtn" class="control-gaming">🗑️ CLEAR</button>
+                <button id="clearTranslationBtn" class="control-gaming">🗑 CLEAR</button>
             </div>
         </div>
+        
         <div class="chat-controls">
-            <button id="translateBackBtn" class="control-btn back">🏠 HOME</button>
+            <button class="control-btn back" data-back="mode">⌂ HOME</button>
         </div>
     </div>
 
     <!-- CAMERA MODE PANEL -->
     <div id="cameraPanel" class="mode-panel" style="display: none;">
         <div class="panel-header">
-            <button class="back-btn" data-back="mode">← BACK</button>
+            <button class="back-btn" data-back="mode">⌂ HOME</button>
             <div class="panel-title">📷 CAMERA MODE</div>
-            <div class="panel-status" id="cameraStatus">⏸️ OFF</div>
+            <div class="panel-status" id="cameraStatusText">⏸ OFFLINE</div>
         </div>
+        
         <div class="camera-container-gaming">
             <div class="video-wrapper">
                 <video id="video" autoplay playsinline></video>
                 <canvas id="canvas"></canvas>
             </div>
+            
             <div class="face-info">
                 <div class="face-emoji" id="faceEmoji">🤖</div>
-                <div class="face-text" id="faceText">Camera OFF</div>
+                <div class="face-text" id="faceText">CAMERA OFFLINE</div>
                 <div class="face-details-gaming">
                     <span id="glassesStatus">🕶️ --</span>
                     <span id="hatStatus">🧢 --</span>
                     <span id="recognizedPerson">👤 --</span>
                 </div>
             </div>
+            
             <div class="camera-buttons-gaming">
-                <button id="cameraToggleBtn" class="cam-gaming">📷 BẬT CAMERA</button>
-                <button id="registerFaceBtn" class="cam-gaming register">💾 ĐĂNG KÝ FACE ID</button>
-                <button id="recognizeFaceBtn" class="cam-gaming recognize">🔍 NHẬN DIỆN</button>
-            </div>
-        </div>
-        
-        <!-- Register Modal -->
-        <div id="registerModal" class="modal-gaming">
-            <div class="modal-content-gaming">
-                <div class="modal-header-gaming">
-                    <h3>📸 REGISTER FACE ID</h3>
-                    <button class="close-modal-gaming">&times;</button>
-                </div>
-                <div class="modal-body-gaming">
-                    <div class="preview-area">
-                        <canvas id="previewCanvas" width="320" height="240"></canvas>
-                        <div class="preview-status" id="previewStatus">📷 Đang khởi tạo camera...</div>
-                    </div>
-                    <div class="register-form-gaming">
-                        <input type="text" id="faceNameInput" placeholder="Nhập tên người dùng">
-                        <div class="photo-counter" id="photoCount">📸 0/3 ảnh</div>
-                        <div class="register-actions">
-                            <button id="capturePhotoBtn" class="action-gaming">📸 CHỤP ẢNH</button>
-                            <button id="saveFaceBtn" class="action-gaming save">💾 LƯU FACE ID</button>
-                        </div>
-                    </div>
-                </div>
+                <button id="cameraToggleBtn" class="cam-gaming">📷 ACTIVATE CAMERA</button>
+                <button id="registerFaceBtn" class="cam-gaming register">💾 REGISTER FACE ID</button>
+                <button id="recognizeFaceBtn" class="cam-gaming recognize">🔍 RECOGNIZE FACE</button>
             </div>
         </div>
         
         <div class="chat-controls">
-            <button id="cameraBackBtn" class="control-btn back">🏠 HOME</button>
+            <button class="control-btn back" data-back="mode">⌂ HOME</button>
+        </div>
+    </div>
+
+    <!-- REGISTER MODAL -->
+    <div id="registerModal" class="modal-gaming" style="display: none;">
+        <div class="modal-content-gaming">
+            <div class="modal-header-gaming">
+                <h3>📸 REGISTER FACE ID</h3>
+                <button class="close-modal-gaming" id="closeModalBtn">&times;</button>
+            </div>
+            <div class="modal-body-gaming">
+                <div class="preview-area">
+                    <canvas id="previewCanvas" width="320" height="240"></canvas>
+                    <div class="preview-status" id="previewStatus">📷 INITIALIZING...</div>
+                </div>
+                <div class="register-form-gaming">
+                    <input type="text" id="faceNameInput" placeholder="ENTER USERNAME">
+                    <div class="photo-counter" id="photoCount">📸 0/3 CAPTURED</div>
+                    <div class="register-actions">
+                        <button id="capturePhotoBtn" class="action-gaming">📸 CAPTURE</button>
+                        <button id="saveFaceBtn" class="action-gaming save">💾 SAVE</button>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 
