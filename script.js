@@ -17,64 +17,52 @@ function showModeScreen() {
     if (cameraPanel) cameraPanel.style.display = 'none';
     
     // Dừng các chế độ đang chạy
-    if (typeof isTranslatorMode !== 'undefined' && isTranslatorMode && typeof stopTranslationMode === 'function') {
-        stopTranslationMode();
-    }
-    if (typeof isCameraActive !== 'undefined' && isCameraActive && typeof stopCamera === 'function') {
-        stopCamera();
-    }
-    if (recognition) {
-        try { recognition.stop(); } catch(e) {}
+    if (typeof window.stopTranslationMode === 'function') window.stopTranslationMode();
+    if (typeof window.stopCamera === 'function') window.stopCamera();
+    if (window.recognition) {
+        try { window.recognition.stop(); } catch(e) {}
     }
 }
 
 function showChatMode() {
     console.log('showChatMode called');
     
-    const modeScreen = document.getElementById('modeScreen');
-    const chatPanel = document.getElementById('chatPanel');
-    
-    if (modeScreen) modeScreen.style.display = 'none';
-    if (chatPanel) chatPanel.style.display = 'block';
+    document.getElementById('modeScreen').style.display = 'none';
+    document.getElementById('chatPanel').style.display = 'block';
     
     // Khởi tạo chat mode
-    initChatMode();
+    if (typeof window.initChatMode === 'function') window.initChatMode();
+    else console.error('initChatMode not found');
 }
 
 function showDriveMode() {
     console.log('showDriveMode called');
     
-    const modeScreen = document.getElementById('modeScreen');
-    const drivePanel = document.getElementById('drivePanel');
+    document.getElementById('modeScreen').style.display = 'none';
+    document.getElementById('drivePanel').style.display = 'block';
     
-    if (modeScreen) modeScreen.style.display = 'none';
-    if (drivePanel) drivePanel.style.display = 'block';
-    
-    initDriveMode();
+    if (typeof window.initDriveMode === 'function') window.initDriveMode();
+    else console.error('initDriveMode not found');
 }
 
 function showTranslateMode() {
     console.log('showTranslateMode called');
     
-    const modeScreen = document.getElementById('modeScreen');
-    const translatePanel = document.getElementById('translatePanel');
+    document.getElementById('modeScreen').style.display = 'none';
+    document.getElementById('translatePanel').style.display = 'block';
     
-    if (modeScreen) modeScreen.style.display = 'none';
-    if (translatePanel) translatePanel.style.display = 'block';
-    
-    initTranslateMode();
+    if (typeof window.initTranslateMode === 'function') window.initTranslateMode();
+    else console.error('initTranslateMode not found');
 }
 
 function showCameraMode() {
     console.log('showCameraMode called');
     
-    const modeScreen = document.getElementById('modeScreen');
-    const cameraPanel = document.getElementById('cameraPanel');
+    document.getElementById('modeScreen').style.display = 'none';
+    document.getElementById('cameraPanel').style.display = 'block';
     
-    if (modeScreen) modeScreen.style.display = 'none';
-    if (cameraPanel) cameraPanel.style.display = 'block';
-    
-    initCameraMode();
+    if (typeof window.initCameraMode === 'function') window.initCameraMode();
+    else console.error('initCameraMode not found');
 }
 
 // ========== GLOBAL VARIABLES ==========
@@ -111,8 +99,6 @@ let lastRecognizedTime = new Map();
 // Register mode
 let capturedPhotos = [];
 let registerVideoStream = null;
-
-// Face Recognition state
 let isRecognizing = false;
 
 const WAKE_WORDS = ['xin chào', 'hello', 'hi', 'chào chiri', 'chiri ơi'];
@@ -634,6 +620,14 @@ async function initCameraMode() {
         return;
     }
     
+    // Kiểm tra thư viện FaceMesh đã load chưa
+    if (typeof FaceMesh === 'undefined') {
+        console.error('FaceMesh library not loaded yet');
+        const statusText = document.getElementById('cameraStatusText');
+        if (statusText) statusText.innerHTML = 'ERROR: LIBRARY NOT LOADED';
+        return;
+    }
+    
     faceMesh = new FaceMesh({
         locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`
     });
@@ -668,6 +662,11 @@ async function startCamera() {
     if (!videoElement) return;
     
     try {
+        if (typeof Camera === 'undefined') {
+            console.error('Camera library not loaded');
+            return;
+        }
+        
         camera = new Camera(videoElement, {
             onFrame: async () => {
                 if (isCameraActive && faceMesh) {
@@ -719,12 +718,16 @@ function detectGlasses(landmarks) {
     const rightEyeInner = landmarks[362];
     const rightEyeOuter = landmarks[263];
     
+    if (!leftEyeInner || !leftEyeOuter || !rightEyeInner || !rightEyeOuter) return false;
+    
     const leftWidth = Math.hypot(leftEyeInner.x - leftEyeOuter.x, leftEyeInner.y - leftEyeOuter.y);
     const rightWidth = Math.hypot(rightEyeInner.x - rightEyeOuter.x, rightEyeInner.y - rightEyeOuter.y);
     const avgWidth = (leftWidth + rightWidth) / 2;
     
     const noseBridge = landmarks[168];
     const noseTip = landmarks[1];
+    if (!noseBridge || !noseTip) return false;
+    
     const noseHeight = Math.hypot(noseTip.x - noseBridge.x, noseTip.y - noseBridge.y);
     
     return avgWidth / noseHeight > 1.3;
@@ -734,6 +737,8 @@ function detectHat(landmarks) {
     const foreheadTop = landmarks[10];
     const leftCheek = landmarks[234];
     const chin = landmarks[152];
+    
+    if (!foreheadTop || !leftCheek || !chin) return false;
     
     const foreheadY = foreheadTop.y;
     const chinY = chin.y;
@@ -822,6 +827,7 @@ function drawLandmarks(ctx, landmarks, index) {
 
 function drawTextOnCanvas(ctx, landmarks, text, color, yOffset = 0) {
     const nose = landmarks[1];
+    if (!nose) return;
     const x = nose.x * canvasElement.width - 40;
     const y = nose.y * canvasElement.height - 50 + yOffset;
     
@@ -1143,7 +1149,7 @@ async function login() {
             const logoutBtn = document.getElementById('logoutBtn');
             if (logoutBtn) {
                 logoutBtn.onclick = () => {
-                    if (isTranslatorMode) toggleTranslatorMode();
+                    if (isTranslatorMode) stopTranslationMode();
                     if (isCameraActive) stopCamera();
                     if (ws) ws.close();
                     if (recognition) recognition.stop();
@@ -1189,3 +1195,12 @@ window.onclick = function(event) {
     const modal = document.getElementById('registerModal');
     if (event.target === modal) closeRegisterModal();
 }
+
+// Export functions to window for global access
+window.initChatMode = initChatMode;
+window.initDriveMode = initDriveMode;
+window.initTranslateMode = initTranslateMode;
+window.initCameraMode = initCameraMode;
+window.stopTranslationMode = stopTranslationMode;
+window.stopCamera = stopCamera;
+window.recognition = recognition;
