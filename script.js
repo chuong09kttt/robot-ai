@@ -1,7 +1,5 @@
 // ========== MODE SELECTION & NAVIGATION ==========
 function showModeScreen() {
-    console.log('showModeScreen called');
-    
     const modeScreen = document.getElementById('modeScreen');
     const loginScreen = document.getElementById('loginScreen');
     const chatPanel = document.getElementById('chatPanel');
@@ -74,12 +72,13 @@ let camera = null;
 let videoElement = null;
 let canvasElement = null;
 
-// Face Recognition
-let faceDatabase = new Map();
+// Face Recognition - LƯU TRỮ THỰC TẾ
+let faceDatabase = new Map();  // key: tên, value: [descriptor1, descriptor2, ...]
 let lastRecognizedTime = new Map();
-let capturedPhotos = [];
+let capturedDescriptors = [];   // Lưu descriptor trong quá trình đăng ký
 let registerVideoStream = null;
 let isRecognizing = false;
+let registerFaceMesh = null;    // FaceMesh riêng cho đăng ký
 
 const WAKE_WORDS = ['xin chào', 'hello', 'hi', 'chào chiri', 'chiri ơi'];
 
@@ -121,6 +120,8 @@ function setExpression(expression) {
         case 'sleepy':
             mouth.style.transform = 'scaleY(0.3)';
             break;
+        default:
+            mouth.style.transform = 'scaleY(0.5)';
     }
 }
 
@@ -185,7 +186,7 @@ function detectLanguage(text) {
     return vietnamesePattern.test(text) ? 'vi' : 'en';
 }
 
-// ========== CẢI THIỆN GIỌNG NÓI TỰ NHIÊN ==========
+// ========== GIỌNG NÓI TỰ NHIÊN ==========
 async function speak(text) {
     if (!text) return;
     if (isTranslatorMode) return;
@@ -201,10 +202,16 @@ async function speak(text) {
     try {
         const utterance = new SpeechSynthesisUtterance(text);
         
-        // Lấy danh sách giọng nói
-        const voices = window.speechSynthesis.getVoices();
+        let voices = window.speechSynthesis.getVoices();
+        if (voices.length === 0) {
+            await new Promise(resolve => {
+                window.speechSynthesis.onvoiceschanged = () => {
+                    voices = window.speechSynthesis.getVoices();
+                    resolve();
+                };
+            });
+        }
         
-        // Ưu tiên giọng nói tiếng Việt tự nhiên
         const preferredVoices = [
             'Google Tiếng Việt',
             'Google Vietnamese',
@@ -221,12 +228,11 @@ async function speak(text) {
         }
         
         if (!selectedVoice) {
-            selectedVoice = voices.find(v => v.lang === 'vi-VN');
+            selectedVoice = voices.find(v => v.lang === 'vi-VN') ||
+                           voices.find(v => v.lang === 'en-US');
         }
         
-        if (selectedVoice) {
-            utterance.voice = selectedVoice;
-        }
+        if (selectedVoice) utterance.voice = selectedVoice;
         
         utterance.lang = detectLanguage(text) === 'en' ? 'en-US' : 'vi-VN';
         utterance.rate = 0.95;
@@ -244,17 +250,8 @@ async function speak(text) {
         
     } catch (error) {
         console.error('TTS error:', error);
-        fallbackSpeak(text);
+        finishSpeaking();
     }
-}
-
-function fallbackSpeak(text) {
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = detectLanguage(text) === 'en' ? 'en-US' : 'vi-VN';
-    utterance.rate = 0.9;
-    utterance.onend = () => finishSpeaking();
-    utterance.onerror = () => finishSpeaking();
-    window.speechSynthesis.speak(utterance);
 }
 
 function finishSpeaking() {
@@ -297,7 +294,7 @@ function startInactivityCountdown() {
         if (!isAwake || isSpeaking || isAIProcessing || isTranslatorMode) {
             inactivitySeconds = 60;
             const timerElem = document.getElementById('sleepTimer');
-            if (timerElem) timerElem.innerHTML = 'SLEEP IN 60s';
+            if (timerElem) timerElem.innerHTML = '😴 SLEEP IN 60s';
             return;
         }
         
@@ -306,7 +303,7 @@ function startInactivityCountdown() {
             goToSleep();
         } else {
             const timerElem = document.getElementById('sleepTimer');
-            if (timerElem) timerElem.innerHTML = `SLEEP IN ${inactivitySeconds}s`;
+            if (timerElem) timerElem.innerHTML = `😴 SLEEP IN ${inactivitySeconds}s`;
             inactivitySeconds--;
         }
     }, 1000);
@@ -389,7 +386,6 @@ async function processCommand(text) {
         return;
     }
     
-    // Fallback local
     const lower = text.toLowerCase();
     let reply = '';
     
@@ -776,6 +772,126 @@ function stopCamera() {
     if (faceText) faceText.textContent = 'CAMERA OFFLINE';
 }
 
+// ========== FACE RECOGNITION CỐT LÕI ==========
+
+// Trích xuất face descriptor từ landmarks (dùng nhiều điểm để tăng độ chính xác)
+function extractFaceDescriptor(landmarks) {
+    const keyIndices = [
+        10,  // Trán trên
+        33,  // Mắt trái ngoài
+        61,  // Mắt trái trong
+        133, // Mắt trái dưới
+        152, // Cằm
+        168, // Sống mũi
+        199, // Má phải
+        263, // Mắt phải trong
+        291, // Mắt phải ngoài
+        362, // Mắt phải dưới
+        454, // Má trái
+        468  // Đỉnh mũi
+    ];
+    
+    const descriptor = [];
+    for (const idx of keyIndices) {
+        if (landmarks[idx]) {
+            descriptor.push(landmarks[idx].x, landmarks[idx].y, landmarks[idx].z || 0);
+        } else {
+            descriptor.push(0, 0, 0);
+        }
+    }
+    return descriptor;
+}
+
+// So sánh 2 face descriptors
+function compareFaces(desc1, desc2, threshold = 0.12) {
+    if (!desc1 || !desc2 || desc1.length !== desc2.length) return false;
+    
+    let sumSquaredDiff = 0;
+    let validCount = 0;
+    
+    for (let i = 0; i < desc1.length; i++) {
+        if (desc1[i] !== 0 || desc2[i] !== 0) {
+            sumSquaredDiff += Math.pow(desc1[i] - desc2[i], 2);
+            validCount++;
+        }
+    }
+    
+    if (validCount === 0) return false;
+    const distance = Math.sqrt(sumSquaredDiff / validCount);
+    return distance < threshold;
+}
+
+// Tìm khuôn mặt khớp trong database
+function findMatchingFace(descriptor) {
+    if (!descriptor || faceDatabase.size === 0) return null;
+    
+    let bestMatch = null;
+    let bestDistance = 1;
+    
+    for (const [name, descriptors] of faceDatabase) {
+        for (const savedDesc of descriptors) {
+            if (compareFaces(descriptor, savedDesc, 0.15)) {
+                let distance = 0;
+                let validCount = 0;
+                for (let i = 0; i < descriptor.length; i++) {
+                    if (descriptor[i] !== 0 || savedDesc[i] !== 0) {
+                        distance += Math.abs(descriptor[i] - savedDesc[i]);
+                        validCount++;
+                    }
+                }
+                distance = validCount > 0 ? distance / validCount : 1;
+                if (distance < bestDistance) {
+                    bestDistance = distance;
+                    bestMatch = name;
+                }
+            }
+        }
+    }
+    
+    if (bestMatch) console.log(`✅ Recognized: ${bestMatch} (distance: ${bestDistance.toFixed(4)})`);
+    return bestMatch;
+}
+
+// Lưu database vào localStorage
+function saveFaceDatabase() {
+    const data = {};
+    for (const [name, descriptors] of faceDatabase) {
+        data[name] = descriptors;
+    }
+    localStorage.setItem('chiri_face_database', JSON.stringify(data));
+    console.log(`💾 Saved ${faceDatabase.size} faces to database`);
+}
+
+// Tải database từ localStorage
+async function loadFaceDatabase() {
+    try {
+        const saved = localStorage.getItem('chiri_face_database');
+        if (saved) {
+            const data = JSON.parse(saved);
+            for (const [name, descriptors] of Object.entries(data)) {
+                faceDatabase.set(name, descriptors);
+            }
+            console.log(`📚 Loaded ${faceDatabase.size} faces from database`);
+        } else {
+            console.log('📚 No existing face database');
+        }
+    } catch(e) { console.log('No saved face data'); }
+}
+
+// Bật/tắt chế độ nhận diện
+function startFaceRecognition() {
+    if (isRecognizing) {
+        isRecognizing = false;
+        addMessage('ai', 'Đã tắt nhận diện khuôn mặt.');
+        speak('Đã tắt nhận diện');
+    } else {
+        isRecognizing = true;
+        addMessage('ai', 'Bắt đầu nhận diện khuôn mặt...');
+        speak('Bắt đầu nhận diện khuôn mặt');
+    }
+}
+
+// ========== DETECT GLASSES AND HAT ==========
 function detectGlasses(landmarks) {
     const leftEyeInner = landmarks[133];
     const leftEyeOuter = landmarks[33];
@@ -810,78 +926,7 @@ function detectHat(landmarks) {
     return foreheadRatio < 0.25;
 }
 
-function extractFaceDescriptor(landmarks) {
-    const keyIndices = [10, 33, 61, 133, 152, 168, 199, 263, 291, 362, 454, 468];
-    const descriptor = [];
-    for (const idx of keyIndices) {
-        if (landmarks[idx]) {
-            descriptor.push(landmarks[idx].x, landmarks[idx].y, landmarks[idx].z || 0);
-        } else {
-            descriptor.push(0, 0, 0);
-        }
-    }
-    return descriptor;
-}
-
-function compareFaces(desc1, desc2, threshold = 0.12) {
-    if (!desc1 || !desc2 || desc1.length !== desc2.length) return false;
-    
-    let sumSquaredDiff = 0;
-    let validCount = 0;
-    
-    for (let i = 0; i < desc1.length; i++) {
-        if (desc1[i] !== 0 || desc2[i] !== 0) {
-            sumSquaredDiff += Math.pow(desc1[i] - desc2[i], 2);
-            validCount++;
-        }
-    }
-    
-    if (validCount === 0) return false;
-    const distance = Math.sqrt(sumSquaredDiff / validCount);
-    return distance < threshold;
-}
-
-function findMatchingFace(descriptor) {
-    if (!descriptor || faceDatabase.size === 0) return null;
-    
-    let bestMatch = null;
-    let bestDistance = 1;
-    
-    for (const [name, descriptors] of faceDatabase) {
-        for (const savedDesc of descriptors) {
-            if (compareFaces(descriptor, savedDesc, 0.15)) {
-                let distance = 0;
-                let validCount = 0;
-                for (let i = 0; i < descriptor.length; i++) {
-                    if (descriptor[i] !== 0 || savedDesc[i] !== 0) {
-                        distance += Math.abs(descriptor[i] - savedDesc[i]);
-                        validCount++;
-                    }
-                }
-                distance = validCount > 0 ? distance / validCount : 1;
-                if (distance < bestDistance) {
-                    bestDistance = distance;
-                    bestMatch = name;
-                }
-            }
-        }
-    }
-    
-    if (bestMatch) console.log(`✅ Recognized: ${bestMatch}`);
-    return bestMatch;
-}
-
-function startFaceRecognition() {
-    if (isRecognizing) {
-        addMessage('ai', 'Đang nhận diện rồi!');
-        return;
-    }
-    
-    isRecognizing = true;
-    addMessage('ai', 'Bắt đầu nhận diện khuôn mặt...');
-    speak('Bắt đầu nhận diện khuôn mặt');
-}
-
+// ========== FACE MESH RESULTS HANDLER ==========
 function onFaceMeshResults(results) {
     if (!isCameraActive || !canvasElement) return;
     
@@ -902,7 +947,7 @@ function onFaceMeshResults(results) {
             const landmarks = results.multiFaceLandmarks[i];
             const descriptor = extractFaceDescriptor(landmarks);
             
-            // Draw landmarks
+            // Vẽ các điểm landmark
             const colors = ['#00ff00', '#ff00ff', '#00ffff', '#ffff00'];
             const color = colors[i % colors.length];
             canvasCtx.fillStyle = color;
@@ -914,48 +959,58 @@ function onFaceMeshResults(results) {
                 canvasCtx.fill();
             }
             
+            // Phát hiện kính và mũ
             const glasses = detectGlasses(landmarks);
             const hat = detectHat(landmarks);
             if (glasses) hasGlasses = true;
             if (hat) hasHat = true;
             
+            // NHẬN DIỆN KHUÔN MẶT - LẤY TÊN THỰC TẾ
             let recognizedName = null;
             if (isRecognizing) {
                 recognizedName = findMatchingFace(descriptor);
             }
             
+            // Vẽ TÊN trên đầu mỗi người
             const nose = landmarks[1];
             if (nose) {
                 const x = nose.x * canvasElement.width - 40;
-                let y = nose.y * canvasElement.height - 50;
+                let y = nose.y * canvasElement.height - 70;
                 
-                canvasCtx.font = 'bold 12px monospace';
+                canvasCtx.font = 'bold 14px "Orbitron", monospace';
+                canvasCtx.shadowBlur = 4;
+                canvasCtx.shadowColor = 'black';
                 
                 if (recognizedName) {
                     recognizedNames.push(recognizedName);
-                    canvasCtx.fillStyle = '#00ff00';
-                    canvasCtx.fillText(recognizedName, x, y - 40);
+                    canvasCtx.fillStyle = '#00ff88';
+                    canvasCtx.fillText(`👤 ${recognizedName}`, x, y);
                     
+                    // CHÀO KHI PHÁT HIỆN KHUÔN MẶT MỚI (30 giây 1 lần)
                     const now = Date.now();
                     const lastTime = lastRecognizedTime.get(recognizedName) || 0;
                     if (now - lastTime > 30000) {
                         lastRecognizedTime.set(recognizedName, now);
                         const greeting = `Xin chào ${recognizedName}!`;
                         addMessage('ai', greeting);
-                        if (isAwake && !isSpeaking && !isTranslatorMode) speak(greeting);
+                        if (isAwake && !isSpeaking && !isTranslatorMode) {
+                            speak(greeting);
+                        }
                     }
                 } else if (isRecognizing) {
                     canvasCtx.fillStyle = '#ffaa00';
-                    canvasCtx.fillText('Người lạ', x, y - 40);
+                    canvasCtx.fillText('❓ Người lạ', x, y);
                 }
                 
+                // Hiển thị kính/mũ
                 if (glasses) {
                     canvasCtx.fillStyle = '#ffff00';
-                    canvasCtx.fillText('🕶️ Kính', x, y - 60);
+                    canvasCtx.font = 'bold 10px monospace';
+                    canvasCtx.fillText('🕶️', x, y + 20);
                 }
                 if (hat) {
                     canvasCtx.fillStyle = '#ff8800';
-                    canvasCtx.fillText('🧢 Mũ', x, y - 80);
+                    canvasCtx.fillText('🧢', x + 25, y + 20);
                 }
             }
         }
@@ -1009,31 +1064,13 @@ function updateFaceUI(faceCount, hasGlasses, hasHat, recognizedNames) {
     }
 }
 
-async function loadFaceDatabase() {
-    try {
-        const saved = localStorage.getItem('chiri_face_database');
-        if (saved) {
-            const data = JSON.parse(saved);
-            for (const [name, descriptors] of Object.entries(data)) {
-                faceDatabase.set(name, descriptors);
-            }
-            console.log(`Loaded ${faceDatabase.size} faces`);
-        }
-    } catch(e) { console.log('No saved face data'); }
-}
+// ========== FACE REGISTRATION (ĐĂNG KÝ KHUÔN MẶT) ==========
 
-function saveFaceDatabase() {
-    const data = {};
-    for (const [name, descriptors] of faceDatabase) {
-        data[name] = descriptors;
-    }
-    localStorage.setItem('chiri_face_database', JSON.stringify(data));
-}
-
+// Mở modal đăng ký
 function openRegisterModal() {
     const modal = document.getElementById('registerModal');
     if (modal) modal.style.display = 'flex';
-    capturedPhotos = [];
+    capturedDescriptors = [];
     updatePhotoCount();
     
     if (camera) {
@@ -1043,6 +1080,7 @@ function openRegisterModal() {
     startRegisterCamera();
 }
 
+// Đóng modal đăng ký
 function closeRegisterModal() {
     const modal = document.getElementById('registerModal');
     if (modal) modal.style.display = 'none';
@@ -1052,11 +1090,16 @@ function closeRegisterModal() {
         registerVideoStream = null;
     }
     
+    if (registerFaceMesh) {
+        registerFaceMesh = null;
+    }
+    
     if (isCameraActive) {
         setTimeout(() => startCamera(), 500);
     }
 }
 
+// Khởi tạo camera cho đăng ký
 async function startRegisterCamera() {
     try {
         const stream = await navigator.mediaDevices.getUserMedia({ video: true });
@@ -1069,25 +1112,52 @@ async function startRegisterCamera() {
         video.srcObject = stream;
         video.autoplay = true;
         
+        // Khởi tạo FaceMesh riêng cho đăng ký
+        if (typeof FaceMesh !== 'undefined') {
+            registerFaceMesh = new FaceMesh({
+                locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`
+            });
+            
+            registerFaceMesh.setOptions({
+                maxNumFaces: 1,
+                refineLandmarks: true,
+                minDetectionConfidence: 0.5,
+                minTrackingConfidence: 0.5
+            });
+            
+            registerFaceMesh.onResults((results) => {
+                if (results.multiFaceLandmarks && results.multiFaceLandmarks.length > 0) {
+                    const descriptor = extractFaceDescriptor(results.multiFaceLandmarks[0]);
+                    window.currentRegisterDescriptor = descriptor;
+                }
+            });
+        }
+        
         const ctx = previewCanvas.getContext('2d');
         
-        const processFrame = () => {
+        const processFrame = async () => {
             if (video.videoWidth > 0) {
                 previewCanvas.width = video.videoWidth;
                 previewCanvas.height = video.videoHeight;
                 ctx.drawImage(video, 0, 0, previewCanvas.width, previewCanvas.height);
                 
+                // Vẽ khung hướng dẫn
                 ctx.strokeStyle = '#00ffff';
                 ctx.lineWidth = 3;
                 ctx.strokeRect(
-                    previewCanvas.width * 0.2,
-                    previewCanvas.height * 0.2,
-                    previewCanvas.width * 0.6,
-                    previewCanvas.height * 0.6
+                    previewCanvas.width * 0.15,
+                    previewCanvas.height * 0.15,
+                    previewCanvas.width * 0.7,
+                    previewCanvas.height * 0.7
                 );
                 ctx.fillStyle = '#00ffff';
-                ctx.font = '10px monospace';
-                ctx.fillText('Đặt mặt trong khung', previewCanvas.width * 0.35, previewCanvas.height * 0.15);
+                ctx.font = '12px monospace';
+                ctx.fillText('Đặt mặt trong khung và nhìn thẳng', previewCanvas.width * 0.25, previewCanvas.height * 0.1);
+                
+                // Gửi frame để lấy descriptor
+                if (registerFaceMesh && video.videoWidth > 0) {
+                    await registerFaceMesh.send({ image: video });
+                }
             }
             requestAnimationFrame(processFrame);
         };
@@ -1097,7 +1167,7 @@ async function startRegisterCamera() {
         
         const statusElem = document.getElementById('previewStatus');
         if (statusElem) {
-            statusElem.innerHTML = 'Camera sẵn sàng';
+            statusElem.innerHTML = '📷 Camera sẵn sàng - Nhìn thẳng vào camera';
             statusElem.style.color = '#00ffff';
         }
         
@@ -1105,25 +1175,33 @@ async function startRegisterCamera() {
         console.error('Register camera error:', error);
         const statusElem = document.getElementById('previewStatus');
         if (statusElem) {
-            statusElem.innerHTML = 'Lỗi camera!';
+            statusElem.innerHTML = '❌ Lỗi camera!';
             statusElem.style.color = '#ff4444';
         }
     }
 }
 
+// Chụp ảnh (lưu descriptor hiện tại)
 function capturePhoto() {
-    if (capturedPhotos.length >= 3) {
-        alert('Đã chụp đủ 3 ảnh!');
+    if (capturedDescriptors.length >= 3) {
+        alert('Đã chụp đủ 3 ảnh! Nhấn LƯU để hoàn tất.');
         return;
     }
     
-    capturedPhotos.push([Date.now()]);
+    if (!window.currentRegisterDescriptor) {
+        alert('❌ Không tìm thấy khuôn mặt! Vui lòng nhìn thẳng vào camera.');
+        return;
+    }
+    
+    // Lưu descriptor hiện tại
+    capturedDescriptors.push([...window.currentRegisterDescriptor]);
     updatePhotoCount();
     
+    // Hiệu ứng flash
     const previewCanvas = document.getElementById('previewCanvas');
     if (previewCanvas) {
         const ctx = previewCanvas.getContext('2d');
-        ctx.fillStyle = 'rgba(0, 255, 255, 0.3)';
+        ctx.fillStyle = 'rgba(0, 255, 255, 0.4)';
         ctx.fillRect(0, 0, previewCanvas.width, previewCanvas.height);
         setTimeout(() => {
             ctx.clearRect(0, 0, previewCanvas.width, previewCanvas.height);
@@ -1132,43 +1210,58 @@ function capturePhoto() {
     
     const statusElem = document.getElementById('previewStatus');
     if (statusElem) {
-        statusElem.innerHTML = `Đã chụp ${capturedPhotos.length}/3`;
+        statusElem.innerHTML = `✅ Đã chụp ${capturedDescriptors.length}/3 - Hãy đổi góc nhẹ rồi chụp tiếp`;
+        statusElem.style.color = '#00ff88';
     }
+    
+    // Reset descriptor để chụp ảnh tiếp theo
+    window.currentRegisterDescriptor = null;
 }
 
 function updatePhotoCount() {
     const countElem = document.getElementById('photoCount');
-    if (countElem) countElem.innerHTML = `📸 ${capturedPhotos.length}/3 ĐÃ CHỤP`;
+    if (countElem) countElem.innerHTML = `📸 ${capturedDescriptors.length}/3 ĐÃ CHỤP`;
 }
 
+// Lưu đăng ký khuôn mặt
 function saveFaceRegistration() {
     const name = document.getElementById('faceNameInput').value.trim();
     if (!name) {
-        alert('Vui lòng nhập tên!');
+        alert('❌ Vui lòng nhập tên!');
         return;
     }
-    if (capturedPhotos.length < 3) {
-        alert('Vui lòng chụp đủ 3 ảnh trước khi lưu!');
+    if (capturedDescriptors.length < 3) {
+        alert(`❌ Cần chụp đủ 3 ảnh! Hiện mới có ${capturedDescriptors.length}/3`);
         return;
     }
     
-    const mockDescriptor = Array(36).fill(0).map(() => Math.random() * 0.5);
-    
+    // Lưu các descriptor vào database
     if (!faceDatabase.has(name)) {
         faceDatabase.set(name, []);
     }
     
-    for (let i = 0; i < capturedPhotos.length; i++) {
-        faceDatabase.get(name).push([...mockDescriptor]);
+    for (const descriptor of capturedDescriptors) {
+        faceDatabase.get(name).push(descriptor);
     }
     
     saveFaceDatabase();
     
-    addMessage('ai', `✅ Đã đăng ký khuôn mặt cho ${name} với ${capturedPhotos.length} ảnh!`);
-    speak(`Đã đăng ký xong cho ${name}`);
+    addMessage('ai', `✅ Đã đăng ký khuôn mặt cho ${name} với ${capturedDescriptors.length} ảnh!`);
+    speak(`Đã đăng ký thành công cho ${name}`);
     
+    // Reset và đóng modal
+    capturedDescriptors = [];
     closeRegisterModal();
     document.getElementById('faceNameInput').value = '';
+    
+    // Thông báo UI
+    const statusElem = document.getElementById('previewStatus');
+    if (statusElem) {
+        statusElem.innerHTML = '✅ Đăng ký thành công!';
+        setTimeout(() => {
+            statusElem.innerHTML = '📷 Đóng modal để bắt đầu nhận diện';
+        }, 2000);
+    }
 }
 
 // ========== LOGIN ==========
@@ -1197,7 +1290,7 @@ async function login() {
             document.getElementById('modeScreen').style.display = 'block';
             document.getElementById('userNameDisplay').innerHTML = `👤 ${data.name}`;
             
-            loadFaceDatabase();
+            await loadFaceDatabase();
             connectWebSocket();
             
             document.querySelectorAll('.mode-card').forEach(card => {
