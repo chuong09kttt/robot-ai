@@ -21,7 +21,7 @@ let invincibleFrames = 0;
 let gameOverFlag = false;
 let wavesMesh = null;
 let restartButton = null;
-let debugSteering = 0;
+let gameLoopRunning = false;
 
 // DOM elements
 const gameCanvas = document.getElementById("gameCanvas");
@@ -206,49 +206,106 @@ function createDetailedShip() {
     return ship;
 }
 
+// Tạo nút chơi lại
 function createRestartButton() {
+    // Xóa nút cũ nếu có
     if (restartButton) {
         restartButton.remove();
         restartButton = null;
     }
     
+    // Tạo overlay nền mờ
+    const overlay = document.createElement("div");
+    overlay.id = "gameOverlay";
+    overlay.style.position = "absolute";
+    overlay.style.top = "0";
+    overlay.style.left = "0";
+    overlay.style.width = "100%";
+    overlay.style.height = "100%";
+    overlay.style.backgroundColor = "rgba(0,0,0,0.7)";
+    overlay.style.zIndex = "99";
+    overlay.style.display = "flex";
+    overlay.style.justifyContent = "center";
+    overlay.style.alignItems = "center";
+    overlay.style.flexDirection = "column";
+    document.body.appendChild(overlay);
+    
+    // Tạo nút chơi lại
     restartButton = document.createElement("button");
     restartButton.innerHTML = "🔄 CHƠI LẠI";
-    restartButton.style.position = "absolute";
-    restartButton.style.top = "60%";
-    restartButton.style.left = "50%";
-    restartButton.style.transform = "translate(-50%, -50%)";
-    restartButton.style.padding = "15px 40px";
-    restartButton.style.fontSize = "24px";
+    restartButton.style.padding = "18px 50px";
+    restartButton.style.fontSize = "28px";
     restartButton.style.fontFamily = "Orbitron, monospace";
     restartButton.style.fontWeight = "bold";
     restartButton.style.color = "#00ffff";
-    restartButton.style.backgroundColor = "rgba(0,0,0,0.8)";
-    restartButton.style.border = "2px solid #00ffff";
-    restartButton.style.borderRadius = "10px";
+    restartButton.style.backgroundColor = "rgba(0,0,0,0.9)";
+    restartButton.style.border = "3px solid #00ffff";
+    restartButton.style.borderRadius = "15px";
     restartButton.style.cursor = "pointer";
     restartButton.style.zIndex = "100";
-    restartButton.style.boxShadow = "0 0 20px rgba(0,255,255,0.5)";
+    restartButton.style.boxShadow = "0 0 30px rgba(0,255,255,0.5)";
+    restartButton.style.transition = "all 0.3s ease";
+    
+    restartButton.onmouseover = () => {
+        restartButton.style.backgroundColor = "#00ffff";
+        restartButton.style.color = "#000";
+        restartButton.style.transform = "scale(1.05)";
+        restartButton.style.boxShadow = "0 0 50px rgba(0,255,255,0.8)";
+    };
+    restartButton.onmouseout = () => {
+        restartButton.style.backgroundColor = "rgba(0,0,0,0.9)";
+        restartButton.style.color = "#00ffff";
+        restartButton.style.transform = "scale(1)";
+        restartButton.style.boxShadow = "0 0 30px rgba(0,255,255,0.5)";
+    };
     
     restartButton.onclick = () => {
         console.log("🔄 Restarting game...");
+        // Xóa overlay và nút
+        const overlayEl = document.getElementById("gameOverlay");
+        if (overlayEl) overlayEl.remove();
         restartButton.remove();
         restartButton = null;
         resetGame();
     };
     
-    document.body.appendChild(restartButton);
+    overlay.appendChild(restartButton);
+    
+    // Thêm text điểm số
+    const scoreText = document.createElement("div");
+    scoreText.innerHTML = `🎯 ĐIỂM CỦA BẠN: ${gameScore}`;
+    scoreText.style.color = "#ffff00";
+    scoreText.style.fontSize = "24px";
+    scoreText.style.fontFamily = "Orbitron, monospace";
+    scoreText.style.marginBottom = "20px";
+    scoreText.style.textShadow = "0 0 10px #ff00ff";
+    overlay.appendChild(scoreText);
 }
 
 function resetGame() {
-    if (obstacleInterval) clearInterval(obstacleInterval);
-    if (gameAnimationId) cancelAnimationFrame(gameAnimationId);
+    console.log("🔄 Resetting game...");
     
-    if (gameScene && gameShip) {
-        gameBullets.forEach(bullet => gameScene.remove(bullet));
-        gameObstacles.forEach(obstacle => gameScene.remove(obstacle));
+    // Dừng các interval và animation cũ
+    if (obstacleInterval) {
+        clearInterval(obstacleInterval);
+        obstacleInterval = null;
+    }
+    if (gameAnimationId) {
+        cancelAnimationFrame(gameAnimationId);
+        gameAnimationId = null;
     }
     
+    // Xóa tất cả vật cản và đạn cũ
+    if (gameScene) {
+        gameBullets.forEach(bullet => {
+            if (bullet.parent) gameScene.remove(bullet);
+        });
+        gameObstacles.forEach(obstacle => {
+            if (obstacle.parent) gameScene.remove(obstacle);
+        });
+    }
+    
+    // Reset biến
     gameActive = true;
     gameOverFlag = false;
     gameScore = 0;
@@ -258,33 +315,56 @@ function resetGame() {
     gameObstacles = [];
     gameShootCooldown = 0;
     
+    // Reset vị trí thuyền
     if (gameShip) {
         gameShip.position.set(0, 0, 0);
         gameShip.rotation.set(0, 0, 0);
     }
     
+    // Reset camera
     if (gameCamera) {
         gameCamera.position.set(0, 5, 10);
+        gameCamera.lookAt(0, 0, 0);
     }
     
+    // Reset UI
     const statusElem = document.getElementById("gameStatus");
     if (statusElem) {
         statusElem.innerHTML = "🎮 GAME RESTARTED!";
         statusElem.style.color = "#ff00ff";
+        statusElem.style.fontSize = "14px";
+        setTimeout(() => {
+            if (statusElem && !gameOverFlag) {
+                statusElem.innerHTML = "🎮 READY";
+                statusElem.style.color = "#ff00ff";
+            }
+        }, 2000);
     }
     
     updateGameUI();
     
+    // Tạo lại interval tạo vật cản
     obstacleInterval = setInterval(() => {
-        if (gameActive && !gameOverFlag) createGameObstacle();
-    }, 1000);
+        if (gameActive && !gameOverFlag && gameShip) {
+            createGameObstacle();
+        }
+    }, 800);
     
-    startGameLoop();
+    // Khởi động lại game loop nếu chưa chạy
+    if (!gameLoopRunning) {
+        startGameLoop();
+    }
+    
+    console.log("🎮 Game reset complete!");
 }
 
 export function initGame() {
     if (gameInitialized) {
         console.log("Game already initialized");
+        // Nếu game đã khởi tạo nhưng đang game over, reset
+        if (gameOverFlag) {
+            resetGame();
+        }
         return;
     }
     
@@ -317,13 +397,15 @@ export function initGame() {
         antialias: true 
     });
     gameRenderer.setSize(window.innerWidth, window.innerHeight);
+    gameRenderer.setClearColor(0x1b6ca8);
     
     gameScene = new THREE.Scene();
     gameScene.fog = new THREE.FogExp2(0x1b6ca8, 0.008);
     gameScene.background = new THREE.Color(0x1b6ca8);
     
     gameCamera = new THREE.PerspectiveCamera(65, window.innerWidth / window.innerHeight, 0.1, 1000);
-    gameCamera.position.set(0, 5, 10);
+    gameCamera.position.set(0, 6, 12);
+    gameCamera.lookAt(0, 0, 0);
     
     // Ánh sáng
     const ambient = new THREE.AmbientLight(0x404060, 0.8);
@@ -332,6 +414,10 @@ export function initGame() {
     const sun = new THREE.DirectionalLight(0xfff5e6, 1.2);
     sun.position.set(10, 20, 5);
     gameScene.add(sun);
+    
+    const backLight = new THREE.PointLight(0x4466cc, 0.5);
+    backLight.position.set(0, 5, -10);
+    gameScene.add(backLight);
     
     // Đại dương
     const oceanGeometry = new THREE.PlaneGeometry(400, 400, 100, 100);
@@ -349,6 +435,20 @@ export function initGame() {
     wavesMesh.position.y = -0.6;
     gameScene.add(wavesMesh);
     
+    // Thêm các hạt nước (hiệu ứng)
+    const particleGeometry = new THREE.BufferGeometry();
+    const particleCount = 500;
+    const particlePositions = new Float32Array(particleCount * 3);
+    for (let i = 0; i < particleCount; i++) {
+        particlePositions[i*3] = (Math.random() - 0.5) * 200;
+        particlePositions[i*3+1] = Math.random() * 2 - 1;
+        particlePositions[i*3+2] = (Math.random() - 0.5) * 100 - 50;
+    }
+    particleGeometry.setAttribute('position', new THREE.BufferAttribute(particlePositions, 3));
+    const particleMaterial = new THREE.PointsMaterial({ color: 0x88ccff, size: 0.05 });
+    const particles = new THREE.Points(particleGeometry, particleMaterial);
+    gameScene.add(particles);
+    
     // Tàu
     gameShip = createDetailedShip();
     gameScene.add(gameShip);
@@ -358,8 +458,10 @@ export function initGame() {
     
     // Tạo vật cản
     obstacleInterval = setInterval(() => {
-        if (gameActive && !gameOverFlag) createGameObstacle();
-    }, 1000);
+        if (gameActive && !gameOverFlag && gameShip) {
+            createGameObstacle();
+        }
+    }, 800);
     
     // Tạo UI lives
     const hud = document.getElementById("gameHud");
@@ -386,19 +488,62 @@ export function initGame() {
     console.log("🎮 Game initialized!");
 }
 
+// Tạo vật cản - DÀN ĐỀU SANG HAI BÊN
 function createGameObstacle() {
     if (!gameActive || !gameShip || gameOverFlag) return;
     
-    const geometry = new THREE.DodecahedronGeometry(0.6);
+    // Chọn loại vật cản
+    const types = [
+        { color: 0x666666, name: 'rock', size: 0.6 },
+        { color: 0x8B5A2B, name: 'barrel', size: 0.5 },
+        { color: 0x4a6e8a, name: 'iceberg', size: 0.7 },
+        { color: 0x884444, name: 'crate', size: 0.55 }
+    ];
+    const type = types[Math.floor(Math.random() * types.length)];
+    
+    let geometry;
+    if (type.name === 'rock') {
+        geometry = new THREE.DodecahedronGeometry(type.size);
+    } else if (type.name === 'barrel') {
+        geometry = new THREE.CylinderGeometry(type.size, type.size, 0.8, 8);
+    } else if (type.name === 'iceberg') {
+        geometry = new THREE.ConeGeometry(type.size, type.size * 1.2, 6);
+    } else {
+        geometry = new THREE.BoxGeometry(type.size, type.size, type.size);
+    }
+    
     const obstacle = new THREE.Mesh(
         geometry,
-        new THREE.MeshPhongMaterial({ color: 0x666666 })
+        new THREE.MeshPhongMaterial({ color: type.color, shininess: 30 })
     );
+    
+    // DÀN ĐỀU VẬT CẢN SANG HAI BÊN
+    // 40% bên trái, 40% bên phải, 20% ở giữa
+    let randomX;
+    const rand = Math.random();
+    if (rand < 0.4) {
+        // Bên trái
+        randomX = -6 - Math.random() * 3;
+    } else if (rand < 0.8) {
+        // Bên phải
+        randomX = 6 + Math.random() * 3;
+    } else {
+        // Ở giữa
+        randomX = (Math.random() - 0.5) * 4;
+    }
+    
     obstacle.position.set(
-        (Math.random() - 0.5) * 14,
+        randomX,
         0.3,
-        gameShip.position.z - 80
+        gameShip.position.z - 100
     );
+    
+    // Lưu thông tin về vật cản
+    obstacle.userData = {
+        speed: 0.5 + Math.random() * 0.3,
+        type: type.name
+    };
+    
     gameScene.add(obstacle);
     gameObstacles.push(obstacle);
 }
@@ -407,14 +552,14 @@ function fireGameBullet() {
     if (!gameActive || gameOverFlag) return;
     
     const bullet = new THREE.Mesh(
-        new THREE.SphereGeometry(0.15),
+        new THREE.SphereGeometry(0.12),
         new THREE.MeshBasicMaterial({ color: 0xff6600 })
     );
     
     bullet.position.copy(gameShip.position);
     bullet.position.z += 1.8;
-    bullet.position.y = 0.8;
-    bullet.userData = { velocityZ: -3 };
+    bullet.position.y = 0.7;
+    bullet.userData = { velocityZ: -3.5 };
     
     gameScene.add(bullet);
     gameBullets.push(bullet);
@@ -427,21 +572,12 @@ function updateGameUI() {
     const livesElem = document.getElementById("gameLives");
     
     if (speedElem && trackingData) {
-        speedElem.innerHTML = `🚤 Speed: ${(trackingData.speed * 2).toFixed(1)}`;
+        let displaySpeed = (trackingData.speed * 2).toFixed(1);
+        if (displaySpeed < 0.1) displaySpeed = "0.0";
+        speedElem.innerHTML = `🚤 Speed: ${displaySpeed}`;
     }
     if (scoreElem) scoreElem.innerHTML = `💥 Score: ${gameScore}`;
     if (livesElem) livesElem.innerHTML = `❤️ Lives: ${lives}`;
-    
-    if (gameScore >= 100 && !gameOverFlag) {
-        gameActive = false;
-        gameOverFlag = true;
-        const statusElem = document.getElementById("gameStatus");
-        if (statusElem) {
-            statusElem.innerHTML = "🎉 VICTORY! YOU WIN! 🎉";
-            statusElem.style.color = "#00ff88";
-        }
-        createRestartButton();
-    }
 }
 
 function gameOver() {
@@ -454,8 +590,10 @@ function gameOver() {
     if (statusElem) {
         statusElem.innerHTML = "💀 GAME OVER! 💀";
         statusElem.style.color = "#ff4444";
+        statusElem.style.fontSize = "24px";
     }
     
+    console.log("💀 GAME OVER! Final score:", gameScore);
     createRestartButton();
 }
 
@@ -474,10 +612,14 @@ function handleShipCollision(obstacle) {
     
     updateGameUI();
     
-    if (lives <= 0) gameOver();
+    if (lives <= 0) {
+        gameOver();
+    }
 }
 
 function startGameLoop() {
+    gameLoopRunning = true;
+    
     function animate() {
         if (!gameActive) {
             if (gameRenderer && gameScene && gameCamera) {
@@ -491,41 +633,32 @@ function startGameLoop() {
         
         if (invincibleFrames > 0) invincibleFrames--;
         
-        // ========== LẤY DỮ LIỆU TỪ TRACKING ==========
+        // Lấy dữ liệu từ tracking
         let steeringAngle = trackingData.steeringAngle || 0;
         let speed = (trackingData.speed || 0) * 1.2;
         
-        // DEBUG: Hiển thị góc lái lên màn hình
-        debugSteering = steeringAngle;
-        const debugElem = document.getElementById("gameStatus");
-        if (debugElem && Math.random() < 0.05) {
-            debugElem.innerHTML = `🎮 LÁI: ${steeringAngle.toFixed(2)} | TỐC ĐỘ: ${speed.toFixed(2)}`;
-        }
+        // Đảm bảo tốc độ tối thiểu
+        if (speed < 0.1) speed = 0.15;
         
-        // ========== DI CHUYỂN THUYỀN THEO VÔ LĂNG ==========
-        // Xoay thuyền theo góc vô lăng
-        gameShip.rotation.z = -steeringAngle * 0.8;
+        // Di chuyển thuyền theo vô lăng
+        const targetX = steeringAngle * 9;
+        gameShip.position.x += (targetX - gameShip.position.x) * 0.12;
+        gameShip.position.x = Math.min(9, Math.max(-9, gameShip.position.x));
         
-        // Di chuyển thuyền sang trái/phải theo góc vô lăng
-        // steeringAngle > 0 (xoay phải) -> di chuyển sang phải
-        // steeringAngle < 0 (xoay trái) -> di chuyển sang trái
-        const targetX = steeringAngle * 8;
-        gameShip.position.x += (targetX - gameShip.position.x) * 0.1;
+        // Xoay thuyền
+        gameShip.rotation.z = -steeringAngle * 0.7;
         
-        // Giới hạn vị trí
-        gameShip.position.x = Math.min(8, Math.max(-8, gameShip.position.x));
+        // Di chuyển tàu tiến lên
+        gameShip.position.z -= speed * 0.4;
         
-        // Di chuyển tàu tiến lên (theo trục Z)
-        gameShip.position.z -= Math.max(0.1, speed * 0.4);
-        
-        // ========== BẮN ĐẠN ==========
+        // Bắn đạn
         if (trackingData.shooting && gameShootCooldown <= 0 && !gameOverFlag) {
             fireGameBullet();
-            gameShootCooldown = 10;
+            gameShootCooldown = 8;
         }
         if (gameShootCooldown > 0) gameShootCooldown--;
         
-        // ========== DI CHUYỂN ĐẠN ==========
+        // Di chuyển đạn
         for (let i = gameBullets.length - 1; i >= 0; i--) {
             const bullet = gameBullets[i];
             bullet.position.z += bullet.userData.velocityZ;
@@ -535,12 +668,14 @@ function startGameLoop() {
             }
         }
         
-        // ========== DI CHUYỂN VẬT CẢN ==========
+        // Di chuyển vật cản và kiểm tra va chạm
         for (let i = gameObstacles.length - 1; i >= 0; i--) {
             const obstacle = gameObstacles[i];
-            obstacle.position.z += Math.max(0.3, speed * 0.4 + 0.5);
+            const moveSpeed = (speed * 0.4 + 0.6) * (obstacle.userData.speed || 1);
+            obstacle.position.z += moveSpeed;
             obstacle.rotation.x += 0.03;
             obstacle.rotation.y += 0.04;
+            obstacle.rotation.z += 0.02;
             
             // Kiểm tra va chạm với mũi thuyền
             const shipFrontZ = gameShip.position.z + 1.5;
@@ -548,7 +683,7 @@ function startGameLoop() {
             const dz = obstacle.position.z - shipFrontZ;
             const distance = Math.sqrt(dx*dx + dz*dz);
             
-            if (distance < 0.9) {
+            if (distance < 1.0) {
                 handleShipCollision(obstacle);
                 continue;
             }
@@ -559,14 +694,14 @@ function startGameLoop() {
             }
         }
         
-        // ========== VA CHẠM ĐẠN VỚI VẬT CẢN ==========
+        // Va chạm đạn với vật cản
         for (let oi = gameObstacles.length - 1; oi >= 0; oi--) {
             const obstacle = gameObstacles[oi];
             let hit = false;
             
             for (let bi = gameBullets.length - 1; bi >= 0; bi--) {
                 const bullet = gameBullets[bi];
-                if (obstacle.position.distanceTo(bullet.position) < 0.9) {
+                if (obstacle.position.distanceTo(bullet.position) < 0.8) {
                     gameScene.remove(obstacle);
                     gameScene.remove(bullet);
                     gameObstacles.splice(oi, 1);
@@ -581,9 +716,10 @@ function startGameLoop() {
             if (hit) continue;
         }
         
-        // ========== CẬP NHẬT CAMERA ==========
-        gameCamera.position.x += (gameShip.position.x - gameCamera.position.x) * 0.06;
-        gameCamera.position.z = gameShip.position.z + 8;
+        // Cập nhật camera
+        gameCamera.position.x += (gameShip.position.x - gameCamera.position.x) * 0.08;
+        gameCamera.position.z = gameShip.position.z + 10;
+        gameCamera.position.y = 6 + Math.abs(gameShip.position.x) * 0.1;
         gameCamera.lookAt(gameShip.position);
         
         // Sóng động
@@ -592,6 +728,19 @@ function startGameLoop() {
         }
         
         updateGameUI();
+        
+        // Kiểm tra chiến thắng
+        if (gameScore >= 100 && !gameOverFlag) {
+            gameActive = false;
+            gameOverFlag = true;
+            const statusElem = document.getElementById("gameStatus");
+            if (statusElem) {
+                statusElem.innerHTML = "🎉 VICTORY! YOU WIN! 🎉";
+                statusElem.style.color = "#00ff88";
+                statusElem.style.fontSize = "24px";
+            }
+            createRestartButton();
+        }
         
         if (gameRenderer && gameScene && gameCamera) {
             gameRenderer.render(gameScene, gameCamera);
@@ -612,13 +761,17 @@ function handleGameResize() {
 export function stopGame() {
     console.log("🎮 Stopping game...");
     gameActive = false;
+    gameLoopRunning = false;
     
     if (gameAnimationId) cancelAnimationFrame(gameAnimationId);
     if (obstacleInterval) clearInterval(obstacleInterval);
-    if (restartButton) restartButton.remove();
+    if (restartButton) {
+        const overlay = document.getElementById("gameOverlay");
+        if (overlay) overlay.remove();
+        restartButton = null;
+    }
     
     stopGameTracking();
-    
     gameInitialized = false;
 }
 
