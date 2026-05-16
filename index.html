@@ -7,6 +7,10 @@
     <link rel="stylesheet" href="/style.css">
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.158.0/build/three.min.js"></script>
 </head>
 <body>
     <!-- LOGIN SCREEN -->
@@ -81,6 +85,13 @@
                     <div class="mode-name">CAMERA MODE</div>
                     <div class="mode-desc">Face ID & Nhận diện</div>
                     <div class="mode-badge">FACE MESH</div>
+                </div>
+                <!-- THÊM CARD GAME MODE MỚI -->
+                <div class="mode-card" data-mode="game">
+                    <div class="mode-icon">🎮</div>
+                    <div class="mode-name">GAME MODE</div>
+                    <div class="mode-desc">Ocean Rush - Bắn tàu</div>
+                    <div class="mode-badge">BODY TRACKING</div>
                 </div>
             </div>
             
@@ -279,7 +290,7 @@
         </div>
     </div>
 
-        <!-- GAME MODE PANEL - OCEAN RUSH -->
+    <!-- GAME MODE PANEL - OCEAN RUSH -->
     <div id="gamePanel" class="mode-panel" style="display: none;">
         <div class="panel-header">
             <button class="back-btn" data-back="mode">⌂ HOME</button>
@@ -296,6 +307,9 @@
                 <div id="gamePlayers">👥 Players: 1</div>
                 <div id="gameStatus">🎮 READY</div>
             </div>
+            <div class="game-instruction">
+                🎮 <span>ĐIỀU KHIỂN:</span> Nghiêng đầu trái/phải → di chuyển | Giơ tay lên → bắn | Cúi người → tăng tốc
+            </div>
         </div>
         
         <div class="chat-controls">
@@ -303,8 +317,7 @@
         </div>
     </div>
 
-
-    
+    <script type="module" src="/game.js"></script>
     <script src="/script.js"></script>
 </body>
 </html>
