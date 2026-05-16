@@ -14,7 +14,7 @@ let gameOtherPlayers = {};
 let gameShootCooldown = 0;
 let gameScore = 0;
 let gameAnimationId = null;
-let gameSocket = null;
+let obstacleInterval = null;
 
 // DOM elements
 const gameCanvas = document.getElementById("gameCanvas");
@@ -39,6 +39,12 @@ export function initGame() {
     // Kiểm tra canvas tồn tại
     if (!gameCanvas) {
         console.error("Game canvas not found!");
+        return;
+    }
+    
+    // Kiểm tra THREE đã load
+    if (typeof THREE === 'undefined') {
+        console.error("THREE.js not loaded!");
         return;
     }
     
@@ -82,14 +88,6 @@ export function initGame() {
     ocean.position.y = -0.5;
     gameScene.add(ocean);
     
-    // Thêm sóng nước
-    const waveGeometry = new THREE.PlaneGeometry(400, 400, 100, 100);
-    const waveMaterial = new THREE.MeshPhongMaterial({ color: 0x2a8cbf, transparent: true, opacity: 0.5 });
-    const waves = new THREE.Mesh(waveGeometry, waveMaterial);
-    waves.rotation.x = -Math.PI / 2;
-    waves.position.y = -0.2;
-    gameScene.add(waves);
-    
     // Tàu của người chơi
     gameShip = new THREE.Group();
     
@@ -116,13 +114,6 @@ export function initGame() {
     gameShip.add(cannon);
     gameShip.cannon = cannon;
     
-    // Thêm hiệu ứng glow cho tàu
-    const glowGeometry = new THREE.SphereGeometry(0.8, 16, 16);
-    const glowMaterial = new THREE.MeshBasicMaterial({ color: 0xff6600, transparent: true, opacity: 0.3 });
-    const glow = new THREE.Mesh(glowGeometry, glowMaterial);
-    glow.position.set(0, 0.5, -1.5);
-    gameShip.add(glow);
-    
     gameScene.add(gameShip);
     
     // Bắt đầu tracking
@@ -136,7 +127,7 @@ export function initGame() {
         updateGamePlayersUI(players);
         
         Object.entries(players).forEach(([id, data]) => {
-            if (id !== socket.id && !gameOtherPlayers[id]) {
+            if (!gameOtherPlayers[id]) {
                 const mesh = new THREE.Mesh(
                     new THREE.BoxGeometry(1.5, 1, 4),
                     new THREE.MeshPhongMaterial({ color: 0x00ffcc })
@@ -162,7 +153,7 @@ export function initGame() {
     });
     
     // Tạo chướng ngại vật định kỳ
-    const obstacleInterval = setInterval(() => {
+    obstacleInterval = setInterval(() => {
         if (gameActive) createGameObstacle();
     }, 800);
     
@@ -211,14 +202,6 @@ function fireGameBullet() {
     bullet.userData = { velocityZ: -2 };
     gameScene.add(bullet);
     gameBullets.push(bullet);
-    
-    // Hiệu ứng âm thanh giả (flash)
-    if (gameShip.cannon) {
-        gameShip.cannon.material.emissive = { r: 1, g: 0.5, b: 0 };
-        setTimeout(() => {
-            if (gameShip.cannon) gameShip.cannon.material.emissive = { r: 0, g: 0, b: 0 };
-        }, 100);
-    }
 }
 
 // Cập nhật UI game
@@ -295,15 +278,6 @@ function startGameLoop() {
                     gameBullets.splice(bi, 1);
                     gameScore += 10;
                     updateGameUI(speed, gameScore, "🎯 HIT! +10");
-                    
-                    // Hiệu ứng nổ
-                    const explosion = new THREE.Mesh(
-                        new THREE.SphereGeometry(0.5),
-                        new THREE.MeshBasicMaterial({ color: 0xff6600, transparent: true })
-                    );
-                    explosion.position.copy(obstacle.position);
-                    gameScene.add(explosion);
-                    setTimeout(() => gameScene.remove(explosion), 200);
                 }
             });
         });
@@ -352,6 +326,11 @@ export function stopGame() {
         gameAnimationId = null;
     }
     
+    if (obstacleInterval) {
+        clearInterval(obstacleInterval);
+        obstacleInterval = null;
+    }
+    
     stopGameTracking();
     
     // Dọn dẹp scene
@@ -369,6 +348,6 @@ export function stopGame() {
     gameInitialized = false;
 }
 
-// Xuất các hàm
+// Xuất các hàm ra window
 window.initGame = initGame;
 window.stopGame = stopGame;
