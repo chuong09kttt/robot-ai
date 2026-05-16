@@ -1021,6 +1021,56 @@ setInterval(() => {
     }
 }, 30000);
 
+
+// ========== GAME MULTIPLAYER ==========
+let gamePlayers = {};
+
+// Thêm vào phần WebSocket handling
+wss.on('connection', (ws, req) => {
+    // ... existing code ...
+    
+    ws.on('message', async (message) => {
+        try {
+            const data = JSON.parse(message);
+            
+            // ... existing code ...
+            
+            // GAME: Xử lý di chuyển người chơi
+            if (data.type === 'game_move') {
+                gamePlayers[clientId] = {
+                    x: data.x,
+                    z: data.z,
+                    rotation: data.rotation,
+                    lastUpdate: Date.now()
+                };
+                
+                // Gửi danh sách người chơi đến tất cả
+                const playersList = {};
+                for (const [id, player] of Object.entries(gamePlayers)) {
+                    if (Date.now() - player.lastUpdate < 5000) {
+                        playersList[id] = { x: player.x, z: player.z, rotation: player.rotation };
+                    }
+                }
+                
+                // Broadcast to all game clients
+                for (const [id, client] of wss.clients) {
+                    if (client.readyState === WebSocket.OPEN && gamePlayers[id]) {
+                        client.send(JSON.stringify({ type: 'game_players', players: playersList }));
+                    }
+                }
+            }
+            
+        } catch(e) {
+            console.error('WebSocket error:', e.message);
+        }
+    });
+    
+    ws.on('close', () => {
+        delete gamePlayers[clientId];
+        // ... existing code ...
+    });
+});
+
 // ========== START SERVER ==========
 const PORT = process.env.PORT || 8080;
 
