@@ -5,12 +5,16 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
     <title>🐹 CHIRI AI - Cyberpunk Edition</title>
     <link rel="stylesheet" href="/style.css">
+    
+    <!-- MediaPipe cho Face Mesh -->
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    
+    <!-- Thư viện cho Game -->
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
-    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.158.0/build/three.min.js"></script>
 </head>
 <body>
     <!-- LOGIN SCREEN -->
@@ -86,7 +90,6 @@
                     <div class="mode-desc">Face ID & Nhận diện</div>
                     <div class="mode-badge">FACE MESH</div>
                 </div>
-                <!-- THÊM CARD GAME MODE MỚI -->
                 <div class="mode-card" data-mode="game">
                     <div class="mode-icon">🎮</div>
                     <div class="mode-name">GAME MODE</div>
@@ -317,7 +320,8 @@
         </div>
     </div>
 
+    <!-- Scripts - quan trọng: script.js phải là type="module" -->
     <script type="module" src="/game.js"></script>
-    <script src="/script.js"></script>
+    <script type="module" src="/script.js"></script>
 </body>
 </html>
