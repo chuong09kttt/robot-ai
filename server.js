@@ -9,6 +9,7 @@ const NodeCache = require('node-cache');
 const USERS = {
     'admin': { password: 'admin123', name: 'Quản trị viên' },
     'user1': { password: '123', name: 'ch' }
+    'ch': { password: '123', name: 'Chí Hào' }
 };
 
 // ========== CACHE ==========
