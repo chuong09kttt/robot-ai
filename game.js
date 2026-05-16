@@ -1,4 +1,4 @@
-// ========== OCEAN RUSH GAME - TÍCH HỢP VÀO CHIRI AI ==========
+// ========== OCEAN RUSH GAME ==========
 import { trackingData, startGameTracking, stopGameTracking } from "./tracking.js";
 import { sendPlayer, listenPlayers, initGameSocket } from "./networking.js";
 
@@ -20,6 +20,48 @@ let obstacleInterval = null;
 const gameCanvas = document.getElementById("gameCanvas");
 const gameHud = document.getElementById("gameHud");
 
+// Test mode - cho phép test bằng bàn phím nếu tracking không hoạt động
+let testMode = true;  // Bật test mode để debug
+
+// Điều khiển test bằng bàn phím
+function setupKeyboardControls() {
+  window.addEventListener('keydown', (e) => {
+    if (!testMode) return;
+    
+    switch(e.key) {
+      case 'ArrowLeft':
+        trackingData.headX = Math.max(0, trackingData.headX - 0.1);
+        console.log(`← Left pressed: headX=${trackingData.headX}`);
+        break;
+      case 'ArrowRight':
+        trackingData.headX = Math.min(1, trackingData.headX + 0.1);
+        console.log(`→ Right pressed: headX=${trackingData.headX}`);
+        break;
+      case 'ArrowUp':
+        trackingData.speed = Math.min(1.2, trackingData.speed + 0.2);
+        console.log(`↑ Speed up: speed=${trackingData.speed}`);
+        break;
+      case 'ArrowDown':
+        trackingData.speed = Math.max(0, trackingData.speed - 0.2);
+        console.log(`↓ Speed down: speed=${trackingData.speed}`);
+        break;
+      case ' ':
+      case 'Space':
+        trackingData.shooting = true;
+        console.log(`🔫 SPACE: Shooting!`);
+        setTimeout(() => { trackingData.shooting = false; }, 100);
+        break;
+      case 't':
+      case 'T':
+        testMode = !testMode;
+        console.log(`Test mode: ${testMode ? 'ON' : 'OFF'}`);
+        break;
+    }
+  });
+  
+  console.log("🎮 Keyboard controls enabled: ←→ move, ↑↓ speed, SPACE shoot, T toggle test mode");
+}
+
 // Khởi tạo game
 export function initGame() {
     if (gameInitialized) {
@@ -36,13 +78,15 @@ export function initGame() {
     gameObstacles = [];
     gameOtherPlayers = {};
     
-    // Kiểm tra canvas tồn tại
+    // Setup keyboard controls
+    setupKeyboardControls();
+    
+    // Kiểm tra canvas
     if (!gameCanvas) {
         console.error("Game canvas not found!");
         return;
     }
     
-    // Kiểm tra THREE đã load
     if (typeof THREE === 'undefined') {
         console.error("THREE.js not loaded!");
         return;
@@ -116,43 +160,10 @@ export function initGame() {
     
     gameScene.add(gameShip);
     
-    // Bắt đầu tracking
+    // Bắt đầu tracking (vẫn chạy nhưng có test mode)
     startGameTracking();
     
-    // Kết nối socket cho game
-    initGameSocket();
-    
-    // Lắng nghe người chơi khác
-    listenPlayers((players) => {
-        updateGamePlayersUI(players);
-        
-        Object.entries(players).forEach(([id, data]) => {
-            if (!gameOtherPlayers[id]) {
-                const mesh = new THREE.Mesh(
-                    new THREE.BoxGeometry(1.5, 1, 4),
-                    new THREE.MeshPhongMaterial({ color: 0x00ffcc })
-                );
-                mesh.position.y = 0.5;
-                gameScene.add(mesh);
-                gameOtherPlayers[id] = mesh;
-            }
-            if (gameOtherPlayers[id]) {
-                gameOtherPlayers[id].position.x = data.x;
-                gameOtherPlayers[id].position.z = data.z;
-                gameOtherPlayers[id].rotation.z = data.rotation;
-            }
-        });
-        
-        // Xóa người chơi đã rời
-        Object.keys(gameOtherPlayers).forEach(id => {
-            if (!players[id]) {
-                gameScene.remove(gameOtherPlayers[id]);
-                delete gameOtherPlayers[id];
-            }
-        });
-    });
-    
-    // Tạo chướng ngại vật định kỳ
+    // Tạo chướng ngại vật
     obstacleInterval = setInterval(() => {
         if (gameActive) createGameObstacle();
     }, 800);
@@ -164,26 +175,24 @@ export function initGame() {
     window.addEventListener("resize", handleGameResize);
     
     // Cập nhật UI
-    updateGameUI(0, 0, "🎮 GAME STARTED!");
+    updateGameUI(0, 0, "🎮 GAME STARTED! (Press T for test mode)");
     
     console.log("🎮 Game initialized successfully!");
+    console.log("🎮 TEST MODE: Use arrow keys to move, SPACE to shoot!");
 }
 
 // Tạo chướng ngại vật
 function createGameObstacle() {
     if (!gameActive || !gameShip) return;
     
-    const colors = [0x333333, 0x552222, 0x225522];
-    const color = colors[Math.floor(Math.random() * colors.length)];
-    
     const obstacle = new THREE.Mesh(
         new THREE.BoxGeometry(1.5, 1.5, 1.5),
-        new THREE.MeshPhongMaterial({ color: color })
+        new THREE.MeshPhongMaterial({ color: 0x333333 })
     );
     obstacle.position.set(
         (Math.random() - 0.5) * 16,
         0.8,
-        gameShip.position.z - 120
+        gameShip.position.z - 100
     );
     gameScene.add(obstacle);
     gameObstacles.push(obstacle);
@@ -202,12 +211,8 @@ function fireGameBullet() {
     bullet.userData = { velocityZ: -2 };
     gameScene.add(bullet);
     gameBullets.push(bullet);
-}
-
-// Cập nhật UI game
-function updateGamePlayersUI(players) {
-    const playersElem = document.getElementById("gamePlayers");
-    if (playersElem) playersElem.innerHTML = `👥 Players: ${Object.keys(players).length}`;
+    
+    console.log(`🔫 Bullet fired! Total bullets: ${gameBullets.length}`);
 }
 
 function updateGameUI(speed, score, status) {
@@ -227,23 +232,33 @@ function startGameLoop() {
         
         gameAnimationId = requestAnimationFrame(animate);
         
-        // Lấy dữ liệu tracking
-        const targetX = (trackingData.headX - 0.5) * 18;
-        gameShip.position.x += (targetX - gameShip.position.x) * 0.08;
+        // Lấy dữ liệu tracking (hoặc từ test mode)
+        let headX = trackingData.headX;
+        let speed = trackingData.speed;
+        let shooting = trackingData.shooting;
         
-        const speed = trackingData.speed * 0.8;
-        gameShip.position.z -= speed;
-        gameShip.rotation.z = -(trackingData.headX - 0.5) * 0.8;
+        // Giới hạn giá trị
+        headX = Math.min(0.9, Math.max(0.1, headX));
         
-        if (gameShip.cannon) {
-            gameShip.cannon.rotation.y = -trackingData.cannonAngle;
-        }
+        // Di chuyển tàu theo đầu
+        const targetX = (headX - 0.5) * 18;
+        gameShip.position.x += (targetX - gameShip.position.x) * 0.1;
+        
+        // Giới hạn vị trí tàu
+        gameShip.position.x = Math.min(8, Math.max(-8, gameShip.position.x));
+        
+        // Di chuyển tàu theo trục Z (tốc độ)
+        gameShip.position.z -= speed * 0.5;
+        
+        // Xoay tàu
+        gameShip.rotation.z = -(headX - 0.5) * 0.8;
         
         // Bắn đạn
-        if (trackingData.shooting && gameShootCooldown <= 0) {
+        if (shooting && gameShootCooldown <= 0) {
             fireGameBullet();
             updateGameUI(speed, gameScore, "💥 FIRE!");
             gameShootCooldown = 15;
+            trackingData.shooting = false; // Reset shooting flag
         }
         gameShootCooldown--;
         
@@ -258,7 +273,7 @@ function startGameLoop() {
         
         // Di chuyển chướng ngại vật
         gameObstacles.forEach((obstacle, i) => {
-            obstacle.position.z += speed + 0.7;
+            obstacle.position.z += speed * 0.5 + 0.3;
             obstacle.rotation.x += 0.02;
             obstacle.rotation.y += 0.03;
             
@@ -278,15 +293,9 @@ function startGameLoop() {
                     gameBullets.splice(bi, 1);
                     gameScore += 10;
                     updateGameUI(speed, gameScore, "🎯 HIT! +10");
+                    console.log(`💥 HIT! Score: ${gameScore}`);
                 }
             });
-        });
-        
-        // Gửi vị trí đến server
-        sendPlayer({
-            x: gameShip.position.x,
-            z: gameShip.position.z,
-            rotation: gameShip.rotation.z
         });
         
         // Cập nhật camera
@@ -294,7 +303,7 @@ function startGameLoop() {
         gameCamera.position.z = gameShip.position.z + 12;
         gameCamera.lookAt(gameShip.position);
         
-        // Cập nhật UI tốc độ
+        // Cập nhật UI
         updateGameUI(speed, gameScore, null);
         
         // Render scene
@@ -306,7 +315,6 @@ function startGameLoop() {
     animate();
 }
 
-// Xử lý resize
 function handleGameResize() {
     if (!gameActive) return;
     if (gameRenderer) gameRenderer.setSize(window.innerWidth, window.innerHeight);
@@ -316,7 +324,6 @@ function handleGameResize() {
     }
 }
 
-// Dừng game
 export function stopGame() {
     console.log("🎮 Stopping game...");
     gameActive = false;
@@ -333,7 +340,6 @@ export function stopGame() {
     
     stopGameTracking();
     
-    // Dọn dẹp scene
     if (gameScene) {
         gameBullets.forEach(bullet => gameScene.remove(bullet));
         gameObstacles.forEach(obstacle => gameScene.remove(obstacle));
@@ -348,6 +354,5 @@ export function stopGame() {
     gameInitialized = false;
 }
 
-// Xuất các hàm ra window
 window.initGame = initGame;
 window.stopGame = stopGame;
