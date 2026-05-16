@@ -1,5 +1,5 @@
 // ========== BODY TRACKING CHO GAME ==========
-export const trackingData = {
+let trackingData = {
   headX: 0.5,
   headY: 0.5,
   speed: 0,
@@ -60,12 +60,10 @@ function initPose() {
       trackingData.headY = Math.min(1, Math.max(0, nose.y));
     }
     
-    // Tốc độ dựa trên vị trí đầu (cúi người = tăng tốc)
     if (nose) {
       trackingData.speed = Math.max(0, Math.min(1, 1 - nose.y)) * 1.5;
     }
     
-    // Góc pháo dựa trên tay
     if (shoulder && wrist) {
       const dx = wrist.x - shoulder.x;
       const dy = wrist.y - shoulder.y;
@@ -101,7 +99,6 @@ function initHands() {
     if (hand && hand[8] && hand[6]) {
       const tip = hand[8];
       const pip = hand[6];
-      // Giơ tay lên = bắn
       if (tip.y < pip.y) {
         trackingData.shooting = true;
       }
