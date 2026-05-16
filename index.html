@@ -279,6 +279,32 @@
         </div>
     </div>
 
+        <!-- GAME MODE PANEL - OCEAN RUSH -->
+    <div id="gamePanel" class="mode-panel" style="display: none;">
+        <div class="panel-header">
+            <button class="back-btn" data-back="mode">⌂ HOME</button>
+            <div class="panel-title">🎮 OCEAN RUSH</div>
+            <div class="panel-status" id="gameStatusText">🎮 GAMING</div>
+        </div>
+        
+        <div class="game-container">
+            <canvas id="gameCanvas"></canvas>
+            <video id="webcam" autoplay playsinline muted></video>
+            <div id="gameHud">
+                <div id="gameSpeed">🚤 Speed: 0</div>
+                <div id="gameScore">💥 Score: 0</div>
+                <div id="gamePlayers">👥 Players: 1</div>
+                <div id="gameStatus">🎮 READY</div>
+            </div>
+        </div>
+        
+        <div class="chat-controls">
+            <button class="control-btn back" data-back="mode">⌂ HOME</button>
+        </div>
+    </div>
+
+
+    
     <script src="/script.js"></script>
 </body>
 </html>
