@@ -45,6 +45,29 @@ function showCameraMode() {
     if (typeof window.initCameraMode === 'function') window.initCameraMode();
 }
 
+
+// Thêm vào phần MODE SELECTION (trong hàm showModeScreen)
+function showGameMode() {
+    document.getElementById('modeScreen').style.display = 'none';
+    document.getElementById('gamePanel').style.display = 'block';
+    
+    // Khởi tạo game
+    if (typeof window.initGame === 'function') {
+        window.initGame();
+    } else {
+        console.error('Game module not loaded');
+        // Load game module dynamically
+        import('./game.js').then(module => {
+            module.initGame();
+        });
+    }
+}
+
+// Thêm vào phần MODE CARD (trong hàm login, thêm card game)
+// Thêm vào mode-grid trong HTML hoặc thêm card mới
+
+
+
 // ========== GLOBAL VARIABLES ==========
 let currentUser = null;
 let ws = null;
