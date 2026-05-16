@@ -1,10 +1,9 @@
-// ========== BODY TRACKING CHO GAME ==========
+// ========== BODY TRACKING CHO GAME - VÔ LĂNG ==========
 
 const gameTrackingData = {
-  headX: 0.5,
-  headY: 0.5,
-  speed: 0,
-  cannonAngle: 0,
+  steeringAngle: 0,    // Góc vô lăng (-1 đến 1, 0 là thẳng)
+  headY: 0.5,          // Vị trí đầu theo chiều dọc
+  speed: 0,            // Tốc độ (0-1.2)
   shooting: false
 };
 
@@ -61,26 +60,57 @@ function initPose() {
     const rightShoulder = landmarks[12];
     const leftWrist = landmarks[15];
     const rightWrist = landmarks[16];
+    const leftElbow = landmarks[13];
+    const rightElbow = landmarks[14];
     
     if (nose) {
-      // Head X từ 0-1 (0: trái, 1: phải)
-      gameTrackingData.headX = Math.min(0.95, Math.max(0.05, nose.x));
-      
-      // Tốc độ dựa vào vị trí đầu theo Y (cúi xuống = tăng tốc)
-      let speedRaw = (nose.y - 0.25) * 2.5;
-      gameTrackingData.speed = Math.max(0, Math.min(1.2, speedRaw));
+      // Vị trí đầu theo chiều dọc (để điều khiển tốc độ)
+      // Đầu nâng cao (y nhỏ) -> tăng tốc
+      // Đầu hạ thấp (y lớn) -> giảm tốc
+      let headYNormalized = nose.y;
+      // Đảo ngược: y càng nhỏ (đầu cao) thì speed càng lớn
+      let rawSpeed = (0.3 - headYNormalized) * 3;
+      gameTrackingData.speed = Math.max(0, Math.min(1.2, rawSpeed));
+      gameTrackingData.headY = headYNormalized;
     }
     
-    // Tính góc pháo
-    if (rightWrist && rightShoulder) {
-      gameTrackingData.cannonAngle = (rightWrist.x - rightShoulder.x) * 1.5;
-    } else if (leftWrist && leftShoulder) {
-      gameTrackingData.cannonAngle = (leftWrist.x - leftShoulder.x) * 1.5;
+    // NHẬN DIỆN VÔ LĂNG - Dùng 2 tay để tạo thành vô lăng
+    // Khi người dùng giơ 2 tay lên ngang vai và xoay, góc giữa 2 tay xác định hướng
+    
+    if (leftWrist && rightWrist && leftShoulder && rightShoulder) {
+      // Tính góc giữa 2 tay (vô lăng)
+      const dx = rightWrist.x - leftWrist.x;
+      const dy = rightWrist.y - leftWrist.y;
+      let angle = Math.atan2(dy, dx);
+      
+      // Chuyển đổi góc thành giá trị từ -1 đến 1
+      // angle ~ -0.5 (trái) đến 0.5 (phải)
+      let steeringRaw = angle * 2;
+      gameTrackingData.steeringAngle = Math.max(-0.9, Math.min(0.9, steeringRaw));
+      
+      // Debug log
+      if (Math.abs(gameTrackingData.steeringAngle) > 0.3) {
+        console.log(`🎮 Steering: ${gameTrackingData.steeringAngle.toFixed(2)}, Speed: ${gameTrackingData.speed.toFixed(2)}`);
+      }
+    } else {
+      // Fallback dùng 1 tay nếu không thấy 2 tay
+      if (rightWrist && rightShoulder) {
+        let armAngle = (rightWrist.x - rightShoulder.x) * 1.5;
+        gameTrackingData.steeringAngle = Math.max(-0.9, Math.min(0.9, armAngle));
+      } else if (leftWrist && leftShoulder) {
+        let armAngle = (leftWrist.x - leftShoulder.x) * 1.5;
+        gameTrackingData.steeringAngle = Math.max(-0.9, Math.min(0.9, armAngle));
+      } else {
+        // Không thấy tay, giữ nguyên góc
+        if (Math.abs(gameTrackingData.steeringAngle) > 0.01) {
+          gameTrackingData.steeringAngle *= 0.95;
+        }
+      }
     }
   });
 }
 
-// Khởi tạo Hands detection
+// Khởi tạo Hands detection cho bắn đạn
 function initHands() {
   if (hands) return;
   
@@ -110,6 +140,7 @@ function initHands() {
         const tip = hand[8];
         const mcp = hand[5];
         
+        // Nắm tay hoặc giơ ngón trỏ = bắn
         if (tip.y < mcp.y - 0.05) {
           gameTrackingData.shooting = true;
           break;
@@ -141,7 +172,7 @@ function initCamera() {
 }
 
 export async function startGameTracking() {
-  console.log("🎮 Starting game tracking...");
+  console.log("🎮 Starting game tracking with steering wheel...");
   isTrackingActive = true;
   
   if (!video) {
@@ -157,7 +188,7 @@ export async function startGameTracking() {
     console.log("🎮 Camera started!");
   }
   
-  console.log("🎮 Game tracking started!");
+  console.log("🎮 Game tracking started! Hold your hands like a steering wheel!");
 }
 
 export function stopGameTracking() {
