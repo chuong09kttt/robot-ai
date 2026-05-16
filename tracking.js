@@ -14,14 +14,6 @@ let hands = null;
 let camera = null;
 let isTrackingActive = false;
 
-// Debug function
-function logTrackingStatus() {
-    const statusDiv = document.getElementById('gameStatus');
-    if (statusDiv) {
-        statusDiv.innerHTML = `🎮 Head: ${gameTrackingData.headX.toFixed(2)} | Speed: ${gameTrackingData.speed.toFixed(2)} | Shoot: ${gameTrackingData.shooting ? 'YES' : 'NO'}`;
-    }
-}
-
 // Khởi tạo camera
 async function setupCamera() {
   try {
@@ -37,7 +29,7 @@ async function setupCamera() {
     if (video) {
       video.srcObject = stream;
       await video.play();
-      console.log("📷 Camera setup complete - video playing");
+      console.log("📷 Camera setup complete");
     }
   } catch (error) {
     console.error("Camera error:", error);
@@ -53,65 +45,42 @@ function initPose() {
   });
   
   pose.setOptions({
-    modelComplexity: 1,  // Tăng độ chính xác
+    modelComplexity: 1,
     smoothLandmarks: true,
-    enableSegmentation: false,
-    smoothSegmentation: false,
-    minDetectionConfidence: 0.3,  // Giảm ngưỡng để dễ nhận diện
-    minTrackingConfidence: 0.3    // Giảm ngưỡng để dễ nhận diện
+    minDetectionConfidence: 0.3,
+    minTrackingConfidence: 0.3
   });
   
   pose.onResults((results) => {
     if (!isTrackingActive) return;
-    
-    if (!results.poseLandmarks || results.poseLandmarks.length === 0) {
-      console.log("No pose detected");
-      return;
-    }
+    if (!results.poseLandmarks || results.poseLandmarks.length === 0) return;
     
     const landmarks = results.poseLandmarks;
-    
-    // Lấy các điểm quan trọng
     const nose = landmarks[0];
     const leftShoulder = landmarks[11];
     const rightShoulder = landmarks[12];
     const leftWrist = landmarks[15];
     const rightWrist = landmarks[16];
-    const leftHip = landmarks[23];
-    const rightHip = landmarks[24];
     
     if (nose) {
-      // Head X từ -1 đến 1, chuyển về 0-1
-      gameTrackingData.headX = Math.min(0.9, Math.max(0.1, nose.x));
+      // Head X từ 0-1 (0: trái, 1: phải)
+      gameTrackingData.headX = Math.min(0.95, Math.max(0.05, nose.x));
       
       // Tốc độ dựa vào vị trí đầu theo Y (cúi xuống = tăng tốc)
-      // nose.y: 0=đỉnh đầu, 1=cằm (khi cúi, nose.y tăng)
-      let speedRaw = (nose.y - 0.3) * 2;  // Cúi xuống làm tăng speed
+      let speedRaw = (nose.y - 0.25) * 2.5;
       gameTrackingData.speed = Math.max(0, Math.min(1.2, speedRaw));
-      
-      console.log(`Pose: headX=${gameTrackingData.headX.toFixed(2)}, noseY=${nose.y.toFixed(2)}, speed=${gameTrackingData.speed.toFixed(2)}`);
     }
     
-    // Tính góc pháo dựa vào tay phải hoặc tay trái (bên nào cao hơn)
-    let wristY = 1;
-    let shoulderY = 0.5;
-    
+    // Tính góc pháo
     if (rightWrist && rightShoulder) {
-      wristY = rightWrist.y;
-      shoulderY = rightShoulder.y;
-      gameTrackingData.cannonAngle = (rightWrist.x - rightShoulder.x) * 2;
+      gameTrackingData.cannonAngle = (rightWrist.x - rightShoulder.x) * 1.5;
     } else if (leftWrist && leftShoulder) {
-      wristY = leftWrist.y;
-      shoulderY = leftShoulder.y;
-      gameTrackingData.cannonAngle = (leftWrist.x - leftShoulder.x) * 2;
+      gameTrackingData.cannonAngle = (leftWrist.x - leftShoulder.x) * 1.5;
     }
-    
-    // Debug
-    logTrackingStatus();
   });
 }
 
-// Khởi tạo Hands detection - CẢI TIẾN
+// Khởi tạo Hands detection
 function initHands() {
   if (hands) return;
   
@@ -122,8 +91,8 @@ function initHands() {
   hands.setOptions({
     maxNumHands: 2,
     modelComplexity: 1,
-    minDetectionConfidence: 0.3,  // Giảm ngưỡng
-    minTrackingConfidence: 0.3    // Giảm ngưỡng
+    minDetectionConfidence: 0.3,
+    minTrackingConfidence: 0.3
   });
   
   hands.onResults((results) => {
@@ -134,20 +103,15 @@ function initHands() {
     
     gameTrackingData.shooting = false;
     
-    if (!results.multiHandLandmarks || results.multiHandLandmarks.length === 0) {
-      return;
-    }
+    if (!results.multiHandLandmarks || results.multiHandLandmarks.length === 0) return;
     
-    // Kiểm tra cả 2 tay
     for (const hand of results.multiHandLandmarks) {
       if (hand && hand[8] && hand[5]) {
-        const tip = hand[8];      // Đầu ngón tay
-        const mcp = hand[5];      // Khớp đốt bàn tay
+        const tip = hand[8];
+        const mcp = hand[5];
         
-        // Nếu ngón tay cao hơn khớp bàn tay (giơ tay lên)
-        if (tip.y < mcp.y - 0.05) {  // Giảm ngưỡng để dễ kích hoạt
+        if (tip.y < mcp.y - 0.05) {
           gameTrackingData.shooting = true;
-          console.log("🔫 SHOOTING DETECTED!");
           break;
         }
       }
@@ -176,7 +140,6 @@ function initCamera() {
   }
 }
 
-// Bắt đầu tracking cho game
 export async function startGameTracking() {
   console.log("🎮 Starting game tracking...");
   isTrackingActive = true;
@@ -197,7 +160,6 @@ export async function startGameTracking() {
   console.log("🎮 Game tracking started!");
 }
 
-// Dừng tracking
 export function stopGameTracking() {
   console.log("🎮 Stopping game tracking...");
   isTrackingActive = false;
@@ -207,5 +169,4 @@ export function stopGameTracking() {
   }
 }
 
-// Xuất trackingData
 export { gameTrackingData as trackingData };
