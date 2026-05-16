@@ -15,14 +15,20 @@ let isTrackingActive = false;
 
 // Khởi tạo camera
 async function setupCamera() {
-  const stream = await navigator.mediaDevices.getUserMedia({
-    video: { width: 640, height: 480 }
-  });
-  
-  if (!video) {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { width: 640, height: 480 }
+    });
+    
     video = document.getElementById("webcam");
+    if (video) {
+      video.srcObject = stream;
+      await video.play();
+    }
+    console.log("📷 Camera setup complete");
+  } catch (error) {
+    console.error("Camera error:", error);
   }
-  video.srcObject = stream;
 }
 
 // Khởi tạo Pose detection
@@ -49,13 +55,22 @@ function initPose() {
     const shoulder = landmarks[12];
     const wrist = landmarks[16];
     
-    trackingData.headX = nose.x;
-    trackingData.headY = nose.y;
-    trackingData.speed = Math.max(0, 1 - nose.y);
+    if (nose) {
+      trackingData.headX = Math.min(1, Math.max(0, nose.x));
+      trackingData.headY = Math.min(1, Math.max(0, nose.y));
+    }
     
-    const dx = wrist.x - shoulder.x;
-    const dy = wrist.y - shoulder.y;
-    trackingData.cannonAngle = Math.atan2(dy, dx);
+    // Tốc độ dựa trên vị trí đầu (cúi người = tăng tốc)
+    if (nose) {
+      trackingData.speed = Math.max(0, Math.min(1, 1 - nose.y)) * 1.5;
+    }
+    
+    // Góc pháo dựa trên tay
+    if (shoulder && wrist) {
+      const dx = wrist.x - shoulder.x;
+      const dy = wrist.y - shoulder.y;
+      trackingData.cannonAngle = Math.atan2(dy, dx);
+    }
   });
 }
 
@@ -83,11 +98,13 @@ function initHands() {
     if (!results.multiHandLandmarks) return;
     
     const hand = results.multiHandLandmarks[0];
-    const tip = hand[8];
-    const pip = hand[6];
-    
-    if (tip.y < pip.y) {
-      trackingData.shooting = true;
+    if (hand && hand[8] && hand[6]) {
+      const tip = hand[8];
+      const pip = hand[6];
+      // Giơ tay lên = bắn
+      if (tip.y < pip.y) {
+        trackingData.shooting = true;
+      }
     }
   });
 }
@@ -100,15 +117,17 @@ function initCamera() {
     video = document.getElementById("webcam");
   }
   
-  camera = new Camera(video, {
-    onFrame: async () => {
-      if (!isTrackingActive) return;
-      if (pose) await pose.send({ image: video });
-      if (hands) await hands.send({ image: video });
-    },
-    width: 640,
-    height: 480
-  });
+  if (video && typeof Camera !== 'undefined') {
+    camera = new Camera(video, {
+      onFrame: async () => {
+        if (!isTrackingActive) return;
+        if (pose) await pose.send({ image: video });
+        if (hands) await hands.send({ image: video });
+      },
+      width: 640,
+      height: 480
+    });
+  }
 }
 
 // Bắt đầu tracking cho game
