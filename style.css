@@ -788,6 +788,7 @@ body, .gaming-bg {
     border-radius: 4px;
 }
 
+
 /* ========== GAME MODE STYLES ========== */
 .game-container {
     position: fixed;
@@ -841,7 +842,6 @@ body, .gaming-bg {
 #gamePlayers { color: #00ff88; }
 #gameStatus { color: #ff00ff; }
 
-/* Game instruction */
 .game-instruction {
     position: absolute;
     bottom: 20px;
@@ -860,7 +860,6 @@ body, .gaming-bg {
     color: #00ffff;
 }
 
-/* Responsive cho game */
 @media (max-width: 768px) {
     #webcam {
         width: 150px;
