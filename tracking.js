@@ -1,5 +1,7 @@
 // ========== BODY TRACKING CHO GAME ==========
-let trackingData = {
+
+// Khai báo trackingData một lần duy nhất
+const gameTrackingData = {
   headX: 0.5,
   headY: 0.5,
   speed: 0,
@@ -56,18 +58,18 @@ function initPose() {
     const wrist = landmarks[16];
     
     if (nose) {
-      trackingData.headX = Math.min(1, Math.max(0, nose.x));
-      trackingData.headY = Math.min(1, Math.max(0, nose.y));
+      gameTrackingData.headX = Math.min(1, Math.max(0, nose.x));
+      gameTrackingData.headY = Math.min(1, Math.max(0, nose.y));
     }
     
     if (nose) {
-      trackingData.speed = Math.max(0, Math.min(1, 1 - nose.y)) * 1.5;
+      gameTrackingData.speed = Math.max(0, Math.min(1, 1 - nose.y)) * 1.5;
     }
     
     if (shoulder && wrist) {
       const dx = wrist.x - shoulder.x;
       const dy = wrist.y - shoulder.y;
-      trackingData.cannonAngle = Math.atan2(dy, dx);
+      gameTrackingData.cannonAngle = Math.atan2(dy, dx);
     }
   });
 }
@@ -88,11 +90,11 @@ function initHands() {
   
   hands.onResults((results) => {
     if (!isTrackingActive) {
-      trackingData.shooting = false;
+      gameTrackingData.shooting = false;
       return;
     }
     
-    trackingData.shooting = false;
+    gameTrackingData.shooting = false;
     if (!results.multiHandLandmarks) return;
     
     const hand = results.multiHandLandmarks[0];
@@ -100,7 +102,7 @@ function initHands() {
       const tip = hand[8];
       const pip = hand[6];
       if (tip.y < pip.y) {
-        trackingData.shooting = true;
+        gameTrackingData.shooting = true;
       }
     }
   });
@@ -157,5 +159,5 @@ export function stopGameTracking() {
   }
 }
 
-// Xuất trackingData
-export { trackingData };
+// Export trackingData với tên duy nhất
+export { gameTrackingData as trackingData };
