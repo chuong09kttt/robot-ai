@@ -1,11 +1,25 @@
 // ========== NETWORKING CHO GAME ==========
 let gameSocket = null;
+let socketId = null;
 
 // Khởi tạo socket cho game
 export function initGameSocket() {
-  if (gameSocket && gameSocket.connected) return;
+  if (gameSocket && gameSocket.connected) {
+    console.log("Game socket already connected");
+    return;
+  }
   
   gameSocket = io();
+  
+  gameSocket.on("connect", () => {
+    socketId = gameSocket.id;
+    console.log("🎮 Game socket connected, ID:", socketId);
+  });
+  
+  gameSocket.on("disconnect", () => {
+    console.log("🎮 Game socket disconnected");
+  });
+  
   console.log("🎮 Game socket initialized");
 }
 
@@ -26,10 +40,16 @@ export function listenPlayers(callback) {
   });
 }
 
+// Lấy socket ID
+export function getSocketId() {
+  return socketId;
+}
+
 // Ngắt kết nối
 export function disconnectGame() {
   if (gameSocket) {
     gameSocket.disconnect();
     gameSocket = null;
+    socketId = null;
   }
 }
