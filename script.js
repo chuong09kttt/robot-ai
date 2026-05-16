@@ -6,6 +6,7 @@ function showModeScreen() {
     const drivePanel = document.getElementById('drivePanel');
     const translatePanel = document.getElementById('translatePanel');
     const cameraPanel = document.getElementById('cameraPanel');
+    const gamePanel = document.getElementById('gamePanel');
     
     if (modeScreen) modeScreen.style.display = 'block';
     if (loginScreen) loginScreen.style.display = 'none';
@@ -13,9 +14,11 @@ function showModeScreen() {
     if (drivePanel) drivePanel.style.display = 'none';
     if (translatePanel) translatePanel.style.display = 'none';
     if (cameraPanel) cameraPanel.style.display = 'none';
+    if (gamePanel) gamePanel.style.display = 'none';
     
     if (typeof window.stopTranslationMode === 'function') window.stopTranslationMode();
     if (typeof window.stopCamera === 'function') window.stopCamera();
+    if (typeof window.stopGame === 'function') window.stopGame();
     if (window.recognition) {
         try { window.recognition.stop(); } catch(e) {}
     }
@@ -45,28 +48,37 @@ function showCameraMode() {
     if (typeof window.initCameraMode === 'function') window.initCameraMode();
 }
 
-
-// Thêm vào phần MODE SELECTION (trong hàm showModeScreen)
+// GAME MODE FUNCTION
 function showGameMode() {
-    document.getElementById('modeScreen').style.display = 'none';
-    document.getElementById('gamePanel').style.display = 'block';
+    console.log('showGameMode called');
+    
+    const modeScreen = document.getElementById('modeScreen');
+    const gamePanel = document.getElementById('gamePanel');
+    
+    if (modeScreen) modeScreen.style.display = 'none';
+    if (gamePanel) gamePanel.style.display = 'block';
+    
+    // Dừng các chế độ khác
+    if (typeof window.stopTranslationMode === 'function') window.stopTranslationMode();
+    if (typeof window.stopCamera === 'function') window.stopCamera();
+    if (window.recognition) {
+        try { window.recognition.stop(); } catch(e) {}
+    }
     
     // Khởi tạo game
     if (typeof window.initGame === 'function') {
         window.initGame();
     } else {
-        console.error('Game module not loaded');
-        // Load game module dynamically
-        import('./game.js').then(module => {
-            module.initGame();
-        });
+        console.log('Waiting for game module to load...');
+        setTimeout(() => {
+            if (typeof window.initGame === 'function') {
+                window.initGame();
+            } else {
+                console.error('Game module not loaded. Please check game.js exists.');
+            }
+        }, 1000);
     }
 }
-
-// Thêm vào phần MODE CARD (trong hàm login, thêm card game)
-// Thêm vào mode-grid trong HTML hoặc thêm card mới
-
-
 
 // ========== GLOBAL VARIABLES ==========
 let currentUser = null;
@@ -1323,6 +1335,7 @@ async function login() {
                     else if (mode === 'drive') showDriveMode();
                     else if (mode === 'translate') showTranslateMode();
                     else if (mode === 'camera') showCameraMode();
+                    else if (mode === 'game') showGameMode();
                 };
             });
             
@@ -1346,6 +1359,7 @@ async function login() {
                 logoutBtn.onclick = () => {
                     if (isTranslatorMode) stopTranslationMode();
                     if (isCameraActive) stopCamera();
+                    if (typeof window.stopGame === 'function') window.stopGame();
                     if (ws) ws.close();
                     if (recognition) recognition.stop();
                     if (inactivityInterval) clearInterval(inactivityInterval);
@@ -1393,6 +1407,7 @@ window.initChatMode = initChatMode;
 window.initDriveMode = initDriveMode;
 window.initTranslateMode = initTranslateMode;
 window.initCameraMode = initCameraMode;
+window.showGameMode = showGameMode;
 window.stopTranslationMode = stopTranslationMode;
 window.stopCamera = stopCamera;
 window.recognition = recognition;
