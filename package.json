@@ -2,15 +2,18 @@
   "name": "chiri-ai-robot",
   "version": "13.0.0",
   "private": true,
+  "description": "CHIRI AI - Secure Robot Assistant",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
     "dev": "nodemon server.js",
-    "build": "npm run build:obfuscate && npm run build:css",
-    "build:obfuscate": "node scripts/obfuscate.js",
+    "build": "node scripts/build.js",
+    "build:wasm": "node scripts/build.js --wasm",
+    "build:js": "node scripts/obfuscate.js",
     "build:css": "cleancss -o public/css/style.min.css public/css/style.css",
-    "prestart": "npm run build",
-    "generate:keys": "node scripts/generate-keys.js"
+    "encrypt": "node scripts/encrypt-config.js",
+    "generate:keys": "node scripts/generate-keys.js",
+    "postinstall": "npm run build"
   },
   "dependencies": {
     "express": "^4.18.2",
