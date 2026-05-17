@@ -1,4 +1,5 @@
-// ========== CHIRI AI - MAIN SCRIPT ==========
+// ========== CHIRI AI - MAIN UI SCRIPT ==========
+// Các tính năng: Login, Chat, Drive, Translate, Camera
 
 // Global variables
 let currentUser = null;
@@ -42,19 +43,12 @@ function showLoginScreen() {
     document.getElementById('cameraPanel').style.display = 'none';
     document.getElementById('gamePanel').style.display = 'none';
     document.getElementById('gameTypeScreen').style.display = 'none';
-    console.log('Show login screen');
 }
 
 function showChatMode() {
     console.log('Showing Chat Mode');
     document.getElementById('modeScreen').style.display = 'none';
     document.getElementById('chatPanel').style.display = 'block';
-    document.getElementById('drivePanel').style.display = 'none';
-    document.getElementById('translatePanel').style.display = 'none';
-    document.getElementById('cameraPanel').style.display = 'none';
-    document.getElementById('gamePanel').style.display = 'none';
-    document.getElementById('gameTypeScreen').style.display = 'none';
-    
     isAwake = false;
     updateWakeIndicator('sleeping');
     setExpression('sleepy');
@@ -63,50 +57,27 @@ function showChatMode() {
 function showDriveMode() {
     console.log('Showing Drive Mode');
     document.getElementById('modeScreen').style.display = 'none';
-    document.getElementById('chatPanel').style.display = 'none';
     document.getElementById('drivePanel').style.display = 'block';
-    document.getElementById('translatePanel').style.display = 'none';
-    document.getElementById('cameraPanel').style.display = 'none';
-    document.getElementById('gamePanel').style.display = 'none';
-    document.getElementById('gameTypeScreen').style.display = 'none';
-    
     initDriveMode();
 }
 
 function showTranslateMode() {
     console.log('Showing Translate Mode');
     document.getElementById('modeScreen').style.display = 'none';
-    document.getElementById('chatPanel').style.display = 'none';
-    document.getElementById('drivePanel').style.display = 'none';
     document.getElementById('translatePanel').style.display = 'block';
-    document.getElementById('cameraPanel').style.display = 'none';
-    document.getElementById('gamePanel').style.display = 'none';
-    document.getElementById('gameTypeScreen').style.display = 'none';
-    
     initTranslateMode();
 }
 
 function showCameraMode() {
     console.log('Showing Camera Mode');
     document.getElementById('modeScreen').style.display = 'none';
-    document.getElementById('chatPanel').style.display = 'none';
-    document.getElementById('drivePanel').style.display = 'none';
-    document.getElementById('translatePanel').style.display = 'none';
     document.getElementById('cameraPanel').style.display = 'block';
-    document.getElementById('gamePanel').style.display = 'none';
-    document.getElementById('gameTypeScreen').style.display = 'none';
-    
     initCameraMode();
 }
 
 function showGameMode() {
     console.log('Showing Game Mode Selection');
     document.getElementById('modeScreen').style.display = 'none';
-    document.getElementById('chatPanel').style.display = 'none';
-    document.getElementById('drivePanel').style.display = 'none';
-    document.getElementById('translatePanel').style.display = 'none';
-    document.getElementById('cameraPanel').style.display = 'none';
-    document.getElementById('gamePanel').style.display = 'none';
     document.getElementById('gameTypeScreen').style.display = 'block';
 }
 
@@ -114,13 +85,11 @@ function showGameTypeScreen() {
     showGameMode();
 }
 
-// ========== LOGIN (QUAN TRỌNG - ĐÃ SỬA) ==========
+// ========== LOGIN ==========
 async function login() {
     const username = document.getElementById('loginUsername').value;
     const password = document.getElementById('loginPassword').value;
     const errorDiv = document.getElementById('loginError');
-    
-    console.log('🔐 Login attempt:', username);
     
     if (!username || !password) {
         errorDiv.textContent = 'Vui lòng nhập đầy đủ thông tin!';
@@ -128,24 +97,20 @@ async function login() {
     }
     
     try {
-        const response = await fetch('/api/login', {
+        const response = await fetch('/api/auth/login', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ username, password }),
-            credentials: 'include'  // ⚠️ QUAN TRỌNG
+            credentials: 'include'
         });
-        
         const data = await response.json();
-        console.log('📥 Login response:', data);
         
         if (data.success) {
             currentUser = { username: data.username, name: data.name };
-            
             document.getElementById('loginScreen').style.display = 'none';
             document.getElementById('modeScreen').style.display = 'block';
             document.getElementById('userNameDisplay').innerHTML = `👤 ${data.name}`;
             
-            // Initialize features
             initWebSocket();
             initSpeechRecognition();
             loadFaceDatabase();
@@ -163,12 +128,10 @@ async function login() {
                 };
             });
             
-            // Back buttons
             document.querySelectorAll('.back-btn').forEach(btn => {
                 btn.onclick = () => showModeScreen();
             });
             
-            // Manual wake button
             const manualWakeBtn = document.getElementById('manualWakeBtn');
             if (manualWakeBtn) {
                 manualWakeBtn.onclick = () => {
@@ -180,21 +143,17 @@ async function login() {
                 };
             }
             
-            // Logout button
             const logoutBtn = document.getElementById('logoutBtn');
             if (logoutBtn) {
                 logoutBtn.onclick = async () => {
-                    await fetch('/api/logout', { method: 'POST', credentials: 'include' });
+                    await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' });
                     if (ws) ws.close();
                     if (recognition) recognition.stop();
                     if (inactivityInterval) clearInterval(inactivityInterval);
                     showLoginScreen();
-                    document.getElementById('loginUsername').value = '';
-                    document.getElementById('loginPassword').value = '';
                 };
             }
             
-            // Modal
             const closeModalBtn = document.getElementById('closeModalBtn');
             if (closeModalBtn) closeModalBtn.onclick = closeRegisterModal;
             
@@ -208,7 +167,6 @@ async function login() {
             errorDiv.textContent = data.message;
         }
     } catch(e) {
-        console.error('Login error:', e);
         errorDiv.textContent = 'Lỗi kết nối server!';
     }
 }
@@ -368,6 +326,7 @@ function initTranslateMode() {
     const swapBtn = document.getElementById('swapLangBtn');
     const speakBtn = document.getElementById('speakTranslationBtn');
     const clearBtn = document.getElementById('clearTranslationBtn');
+    
     if (swapBtn) {
         swapBtn.onclick = () => {
             const source = document.getElementById('sourceLang');
@@ -402,9 +361,11 @@ async function initCameraMode() {
     canvasElement = document.getElementById('canvas');
     if (!videoElement || !canvasElement) return;
     if (typeof FaceMesh === 'undefined') return;
+    
     faceMesh = new FaceMesh({ locateFile: (f) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${f}` });
     faceMesh.setOptions({ maxNumFaces: 4, refineLandmarks: true });
     faceMesh.onResults(onFaceMeshResults);
+    
     document.getElementById('cameraToggleBtn').onclick = toggleCamera;
     document.getElementById('registerFaceBtn').onclick = openRegisterModal;
     document.getElementById('recognizeFaceBtn').onclick = () => {
@@ -492,13 +453,7 @@ function saveFaceRegistration() {
     document.getElementById('photoCount').innerHTML = '📸 0/3 CAPTURED';
 }
 
-// ========== INITIALIZE ==========
-document.getElementById('loginBtn').onclick = login;
-document.getElementById('loginPassword').onkeypress = (e) => {
-    if (e.key === 'Enter') login();
-};
-
-// Export functions
+// ========== EXPORT FUNCTIONS ==========
 window.showModeScreen = showModeScreen;
 window.showChatMode = showChatMode;
 window.showDriveMode = showDriveMode;
@@ -506,3 +461,9 @@ window.showTranslateMode = showTranslateMode;
 window.showCameraMode = showCameraMode;
 window.showGameMode = showGameMode;
 window.showGameTypeScreen = showGameTypeScreen;
+
+// ========== INITIALIZE ==========
+document.getElementById('loginBtn').onclick = login;
+document.getElementById('loginPassword').onkeypress = (e) => {
+    if (e.key === 'Enter') login();
+};
