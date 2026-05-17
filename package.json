@@ -1,15 +1,11 @@
 {
   "name": "chiri-ai-robot",
   "version": "13.0.0",
-  "private": true,
-  "main": "server/main.js",
+  "main": "server.js",
   "scripts": {
-    "start": "node server/main.js"
+    "start": "node server.js"
   },
   "dependencies": {
-    "express": "^4.18.2",
-    "express-session": "^1.17.3",
-    "ws": "^8.14.2",
-    "axios": "^1.6.0"
+    "express": "^4.18.2"
   }
 }
