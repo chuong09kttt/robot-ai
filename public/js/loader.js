@@ -1,178 +1,95 @@
-// ========== CHIRI AI - SECURE LOADER ==========
-// This file is obfuscated in production
-// Below is the development version
+// ========== SECURE LOADER ==========
+// This file will be minified and obfuscated
 
-console.log('🔐 Secure module loading...');
+(async function() {
+    try {
+        // Check authentication
+        const response = await fetch('/api/auth/check', { 
+            credentials: 'include' 
+        });
+        const data = await response.json();
+        
+        if (data.authenticated) {
+            // Load main application
+            loadScript('/protected/js/app.js');
+            loadScript('/protected/js/modules/chat.js');
+            loadScript('/protected/js/modules/drive.js');
+            loadScript('/protected/js/modules/translate.js');
+            loadScript('/protected/js/modules/camera.js');
+            loadScript('/protected/js/modules/game.js');
+        } else {
+            showLoginScreen();
+        }
+    } catch(e) {
+        showLoginScreen();
+    }
+})();
 
-// WebSocket connection
-const socket = io({
-    path: '/ws',
-    transports: ['websocket'],
-    reconnection: true
-});
-
-socket.on('connect', () => {
-    console.log('🔌 Secure WebSocket connected');
-});
-
-// Game state
-let gameActive = false;
-let currentMode = null;
-
-// Initialize main app
-async function initApp() {
-    // Load face detection module
-    await loadFaceDetection();
-    
-    // Load chat module
-    await loadChatModule();
-    
-    // Show mode selection
-    showModeScreen();
-    
-    document.getElementById('loading')?.remove();
+function loadScript(src) {
+    const script = document.createElement('script');
+    script.src = src;
+    script.type = 'text/javascript';
+    document.head.appendChild(script);
 }
 
-async function loadFaceDetection() {
-    return new Promise((resolve) => {
-        const script = document.createElement('script');
-        script.src = 'https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js';
-        script.onload = () => resolve();
-        document.head.appendChild(script);
-    });
-}
-
-async function loadChatModule() {
-    // Chat functionality
-    window.initChat = function() {
-        console.log('Chat mode initialized');
-        // Chat logic here
-    };
-}
-
-function showModeScreen() {
+function showLoginScreen() {
     const app = document.getElementById('app');
     app.innerHTML = `
-        <div class="mode-screen">
-            <div class="gaming-bg"></div>
-            <div class="mode-container">
-                <div class="user-header">
-                    <span class="user-name">👤 USER</span>
-                    <button id="logoutBtn" class="logout-gaming">⏻ EXIT</button>
+        <div class="login-screen">
+            <div class="login-container">
+                <div class="login-robot-glow">🐹</div>
+                <h1 class="gaming-title">CHIRI <span>AI</span></h1>
+                <div class="gaming-subtitle">SECURE EDITION</div>
+                <div class="version-tag">v13.0 | MAX SECURITY</div>
+                
+                <div class="login-form">
+                    <div class="input-group">
+                        <span class="input-icon">👤</span>
+                        <input type="text" id="loginUsername" placeholder="USERNAME">
+                    </div>
+                    <div class="input-group">
+                        <span class="input-icon">🔒</span>
+                        <input type="password" id="loginPassword" placeholder="PASSWORD">
+                    </div>
+                    <button id="loginBtn" class="gaming-btn">ĐĂNG NHẬP</button>
+                    <div class="login-error" id="loginError"></div>
                 </div>
-                <div class="mode-grid">
-                    <div class="mode-card" data-mode="chat">
-                        <div class="mode-icon">💬</div>
-                        <div class="mode-name">CHAT MODE</div>
-                        <div class="mode-badge">AI</div>
-                    </div>
-                    <div class="mode-card" data-mode="game">
-                        <div class="mode-icon">🎮</div>
-                        <div class="mode-name">GAME MODE</div>
-                        <div class="mode-badge">BODY TRACKING</div>
-                    </div>
-                    <div class="mode-card" data-mode="camera">
-                        <div class="mode-icon">📷</div>
-                        <div class="mode-name">CAMERA MODE</div>
-                        <div class="mode-badge">FACE ID</div>
-                    </div>
+                
+                <div class="login-hint">
+                    <div class="hint-title">⚡ ACCESS CODE</div>
+                    <div class="hint-item">admin / admin123</div>
+                    <div class="hint-item">ch / 123</div>
                 </div>
             </div>
         </div>
     `;
     
-    document.querySelectorAll('.mode-card').forEach(card => {
-        card.onclick = () => {
-            const mode = card.dataset.mode;
-            if (mode === 'game') showGameTypeScreen();
-            else if (mode === 'chat') showChatMode();
-            else if (mode === 'camera') showCameraMode();
-        };
-    });
-    
-    document.getElementById('logoutBtn').onclick = async () => {
-        await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' });
-        location.reload();
+    document.getElementById('loginBtn').onclick = login;
+    document.getElementById('loginPassword').onkeypress = (e) => {
+        if (e.key === 'Enter') login();
     };
 }
 
-function showGameTypeScreen() {
-    const app = document.getElementById('app');
-    app.innerHTML = `
-        <div class="mode-screen">
-            <div class="gaming-bg"></div>
-            <div class="mode-container">
-                <div class="user-header">
-                    <span class="user-name">🎮 CHỌN CHẾ ĐỘ</span>
-                    <button id="backBtn" class="logout-gaming">⌂ BACK</button>
-                </div>
-                <div class="mode-grid">
-                    <div class="mode-card" id="selectBoat">
-                        <div class="mode-icon">🚤</div>
-                        <div class="mode-name">CHẾ ĐỘ THUYỀN</div>
-                        <div class="mode-desc">Điều khiển thuyền trên biển</div>
-                    </div>
-                    <div class="mode-card" id="selectPlane">
-                        <div class="mode-icon">✈️</div>
-                        <div class="mode-name">CHẾ ĐỘ MÁY BAY</div>
-                        <div class="mode-desc">Bay trên bầu trời</div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    `;
+async function login() {
+    const username = document.getElementById('loginUsername').value;
+    const password = document.getElementById('loginPassword').value;
+    const errorDiv = document.getElementById('loginError');
     
-    document.getElementById('selectBoat').onclick = () => startGame('boat');
-    document.getElementById('selectPlane').onclick = () => startGame('plane');
-    document.getElementById('backBtn').onclick = showModeScreen;
-}
-
-async function startGame(mode) {
-    currentMode = mode;
-    
-    // Initialize game session on server
-    const res = await fetch('/api/game/init', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mode }),
-        credentials: 'include'
-    });
-    const data = await res.json();
-    
-    if (data.success) {
-        showGameScreen(mode, data.game);
+    try {
+        const response = await fetch('/api/auth/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, password }),
+            credentials: 'include'
+        });
+        const data = await response.json();
+        
+        if (data.success) {
+            location.reload();
+        } else {
+            errorDiv.textContent = data.message;
+        }
+    } catch(e) {
+        errorDiv.textContent = 'Lỗi kết nối server!';
     }
 }
-
-function showGameScreen(mode, gameData) {
-    const app = document.getElementById('app');
-    app.innerHTML = `
-        <div class="game-container">
-            <canvas id="gameCanvas"></canvas>
-            <video id="webcam" autoplay playsinline muted></video>
-            <div id="gameHud">
-                <div id="gameSpeed">🚀 Speed: 0</div>
-                <div id="gameScore">💰 Score: ${gameData.score}</div>
-                <div id="gameLives">❤️ Lives: ${gameData.lives}</div>
-                <div id="gameStatus">🎮 ${mode === 'boat' ? 'OCEAN RACING' : 'SKY RACING'}</div>
-            </div>
-            <div class="game-instruction">
-                🎮 <span>ĐIỀU KHIỂN:</span> ${mode === 'boat' ? 'Giơ 2 tay như vô lăng → xoay để lái' : 'Dang 2 tay sang 2 bên → nghiêng để lượn'} | Đầu cao → tăng tốc | Nắm tay → bắn
-            </div>
-            <button id="backToMenu" class="back-btn-game">🏠 HOME</button>
-        </div>
-    `;
-    
-    document.getElementById('backToMenu').onclick = showModeScreen;
-    
-    // Initialize tracking and game loop
-    initGameTracking(mode);
-}
-
-function initGameTracking(mode) {
-    // Body tracking logic
-    console.log(`🎮 Starting ${mode} mode with secure tracking`);
-    // Game loop here
-}
-
-window.initApp = initApp;
