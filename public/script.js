@@ -30,6 +30,7 @@ function showModeScreen() {
     document.getElementById('gamePanel').style.display = 'none';
     document.getElementById('gameTypeScreen').style.display = 'none';
     document.getElementById('registerModal').style.display = 'none';
+    console.log('Show mode screen');
 }
 
 function showLoginScreen() {
@@ -41,52 +42,76 @@ function showLoginScreen() {
     document.getElementById('cameraPanel').style.display = 'none';
     document.getElementById('gamePanel').style.display = 'none';
     document.getElementById('gameTypeScreen').style.display = 'none';
+    console.log('Show login screen');
 }
 
 function showChatMode() {
-    hideAllPanels();
+    console.log('Showing Chat Mode');
+    document.getElementById('modeScreen').style.display = 'none';
     document.getElementById('chatPanel').style.display = 'block';
+    document.getElementById('drivePanel').style.display = 'none';
+    document.getElementById('translatePanel').style.display = 'none';
+    document.getElementById('cameraPanel').style.display = 'none';
+    document.getElementById('gamePanel').style.display = 'none';
+    document.getElementById('gameTypeScreen').style.display = 'none';
+    
     isAwake = false;
     updateWakeIndicator('sleeping');
     setExpression('sleepy');
 }
 
 function showDriveMode() {
-    hideAllPanels();
+    console.log('Showing Drive Mode');
+    document.getElementById('modeScreen').style.display = 'none';
+    document.getElementById('chatPanel').style.display = 'none';
     document.getElementById('drivePanel').style.display = 'block';
+    document.getElementById('translatePanel').style.display = 'none';
+    document.getElementById('cameraPanel').style.display = 'none';
+    document.getElementById('gamePanel').style.display = 'none';
+    document.getElementById('gameTypeScreen').style.display = 'none';
+    
     initDriveMode();
 }
 
 function showTranslateMode() {
-    hideAllPanels();
+    console.log('Showing Translate Mode');
+    document.getElementById('modeScreen').style.display = 'none';
+    document.getElementById('chatPanel').style.display = 'none';
+    document.getElementById('drivePanel').style.display = 'none';
     document.getElementById('translatePanel').style.display = 'block';
+    document.getElementById('cameraPanel').style.display = 'none';
+    document.getElementById('gamePanel').style.display = 'none';
+    document.getElementById('gameTypeScreen').style.display = 'none';
+    
     initTranslateMode();
 }
 
 function showCameraMode() {
-    hideAllPanels();
+    console.log('Showing Camera Mode');
+    document.getElementById('modeScreen').style.display = 'none';
+    document.getElementById('chatPanel').style.display = 'none';
+    document.getElementById('drivePanel').style.display = 'none';
+    document.getElementById('translatePanel').style.display = 'none';
     document.getElementById('cameraPanel').style.display = 'block';
+    document.getElementById('gamePanel').style.display = 'none';
+    document.getElementById('gameTypeScreen').style.display = 'none';
+    
     initCameraMode();
 }
 
 function showGameMode() {
-    hideAllPanels();
-    document.getElementById('gameTypeScreen').style.display = 'block';
-}
-
-function showGameTypeScreen() {
-    hideAllPanels();
-    document.getElementById('gameTypeScreen').style.display = 'block';
-}
-
-function hideAllPanels() {
+    console.log('Showing Game Mode Selection');
     document.getElementById('modeScreen').style.display = 'none';
     document.getElementById('chatPanel').style.display = 'none';
     document.getElementById('drivePanel').style.display = 'none';
     document.getElementById('translatePanel').style.display = 'none';
     document.getElementById('cameraPanel').style.display = 'none';
     document.getElementById('gamePanel').style.display = 'none';
-    document.getElementById('gameTypeScreen').style.display = 'none';
+    document.getElementById('gameTypeScreen').style.display = 'block';
+}
+
+function showGameTypeScreen() {
+    showGameMode();
 }
 
 // ========== LOGIN ==========
@@ -295,8 +320,10 @@ function startInactivityCountdown() {
     
     inactivityInterval = setInterval(() => {
         const timerElem = document.getElementById('sleepTimer');
+        if (!timerElem) return;
+        
         if (!isAwake) {
-            if (timerElem) timerElem.innerHTML = '😴 SLEEP IN 60s';
+            timerElem.innerHTML = '😴 SLEEP IN 60s';
             return;
         }
         
@@ -304,9 +331,9 @@ function startInactivityCountdown() {
             isAwake = false;
             updateWakeIndicator('sleeping');
             setExpression('sleepy');
-            if (timerElem) timerElem.innerHTML = '😴 SLEEPING';
+            timerElem.innerHTML = '😴 SLEEPING';
         } else {
-            if (timerElem) timerElem.innerHTML = `😴 SLEEP IN ${inactivitySeconds}s`;
+            timerElem.innerHTML = `😴 SLEEP IN ${inactivitySeconds}s`;
             inactivitySeconds--;
         }
     }, 1000);
@@ -352,6 +379,7 @@ function initDriveMode() {
     document.querySelectorAll('.drive-btn-gaming').forEach(btn => {
         btn.onmousedown = () => {
             const cmd = btn.getAttribute('data-cmd');
+            console.log('Drive command:', cmd);
             if (ws) ws.send(JSON.stringify({ type: 'drive_command', command: cmd, duration: 0 }));
         };
         btn.onmouseup = () => {
@@ -364,28 +392,37 @@ function initDriveMode() {
 function initTranslateMode() {
     console.log('Translate mode initialized');
     
-    const sourceLang = document.getElementById('sourceLang').value;
-    const targetLang = document.getElementById('targetLang').value;
+    const swapBtn = document.getElementById('swapLangBtn');
+    const speakBtn = document.getElementById('speakTranslationBtn');
+    const clearBtn = document.getElementById('clearTranslationBtn');
     
-    document.getElementById('swapLangBtn').onclick = () => {
-        const temp = document.getElementById('sourceLang').value;
-        document.getElementById('sourceLang').value = document.getElementById('targetLang').value;
-        document.getElementById('targetLang').value = temp;
-    };
+    if (swapBtn) {
+        swapBtn.onclick = () => {
+            const source = document.getElementById('sourceLang');
+            const target = document.getElementById('targetLang');
+            const temp = source.value;
+            source.value = target.value;
+            target.value = temp;
+        };
+    }
     
-    document.getElementById('speakTranslationBtn').onclick = () => {
-        const text = document.getElementById('translatedText').innerText;
-        if (text && text !== 'AWAITING INPUT...') {
-            const utterance = new SpeechSynthesisUtterance(text);
-            utterance.lang = 'en-US';
-            window.speechSynthesis.speak(utterance);
-        }
-    };
+    if (speakBtn) {
+        speakBtn.onclick = () => {
+            const text = document.getElementById('translatedText').innerText;
+            if (text && text !== 'AWAITING INPUT...') {
+                const utterance = new SpeechSynthesisUtterance(text);
+                utterance.lang = 'en-US';
+                window.speechSynthesis.speak(utterance);
+            }
+        };
+    }
     
-    document.getElementById('clearTranslationBtn').onclick = () => {
-        document.getElementById('originalText').innerHTML = 'AWAITING INPUT...';
-        document.getElementById('translatedText').innerHTML = 'AWAITING INPUT...';
-    };
+    if (clearBtn) {
+        clearBtn.onclick = () => {
+            document.getElementById('originalText').innerHTML = 'AWAITING INPUT...';
+            document.getElementById('translatedText').innerHTML = 'AWAITING INPUT...';
+        };
+    }
 }
 
 // ========== CAMERA MODE ==========
@@ -396,7 +433,10 @@ async function initCameraMode() {
     canvasElement = document.getElementById('canvas');
     
     if (!videoElement || !canvasElement) return;
-    if (typeof FaceMesh === 'undefined') return;
+    if (typeof FaceMesh === 'undefined') {
+        console.log('FaceMesh not loaded');
+        return;
+    }
     
     faceMesh = new FaceMesh({
         locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`
@@ -405,18 +445,27 @@ async function initCameraMode() {
     faceMesh.setOptions({ maxNumFaces: 4, refineLandmarks: true });
     faceMesh.onResults(onFaceMeshResults);
     
-    document.getElementById('cameraToggleBtn').onclick = toggleCamera;
-    document.getElementById('registerFaceBtn').onclick = openRegisterModal;
-    document.getElementById('recognizeFaceBtn').onclick = () => {
-        isRecognizing = !isRecognizing;
-        addMessage('ai', isRecognizing ? 'Bắt đầu nhận diện' : 'Đã tắt nhận diện');
-        speak(isRecognizing ? 'Bắt đầu nhận diện khuôn mặt' : 'Đã tắt nhận diện');
-    };
+    const toggleBtn = document.getElementById('cameraToggleBtn');
+    const registerBtn = document.getElementById('registerFaceBtn');
+    const recognizeBtn = document.getElementById('recognizeFaceBtn');
+    
+    if (toggleBtn) toggleBtn.onclick = toggleCamera;
+    if (registerBtn) registerBtn.onclick = openRegisterModal;
+    if (recognizeBtn) {
+        recognizeBtn.onclick = () => {
+            isRecognizing = !isRecognizing;
+            addMessage('ai', isRecognizing ? 'Bắt đầu nhận diện' : 'Đã tắt nhận diện');
+            speak(isRecognizing ? 'Bắt đầu nhận diện khuôn mặt' : 'Đã tắt nhận diện');
+        };
+    }
 }
 
 async function toggleCamera() {
     if (!isCameraActive) {
-        if (typeof Camera === 'undefined') return;
+        if (typeof Camera === 'undefined') {
+            console.log('Camera library not loaded');
+            return;
+        }
         camera = new Camera(videoElement, {
             onFrame: async () => {
                 if (isCameraActive && faceMesh) await faceMesh.send({ image: videoElement });
@@ -424,13 +473,17 @@ async function toggleCamera() {
         });
         await camera.start();
         isCameraActive = true;
-        document.getElementById('cameraToggleBtn').textContent = 'TẮT CAMERA';
+        const toggleBtn = document.getElementById('cameraToggleBtn');
+        if (toggleBtn) toggleBtn.textContent = 'TẮT CAMERA';
         document.getElementById('cameraStatusText').innerHTML = 'ACTIVE';
+        document.getElementById('faceText').innerHTML = 'CAMERA ACTIVE';
     } else {
         camera.stop();
         isCameraActive = false;
-        document.getElementById('cameraToggleBtn').textContent = 'BẬT CAMERA';
+        const toggleBtn = document.getElementById('cameraToggleBtn');
+        if (toggleBtn) toggleBtn.textContent = 'BẬT CAMERA';
         document.getElementById('cameraStatusText').innerHTML = 'OFFLINE';
+        document.getElementById('faceText').innerHTML = 'CAMERA OFFLINE';
     }
 }
 
@@ -466,25 +519,46 @@ function closeRegisterModal() {
     document.getElementById('registerModal').style.display = 'none';
 }
 
+let photoCount = 0;
 function capturePhoto() {
-    alert('📸 Đã chụp ảnh!');
-    const count = document.getElementById('photoCount');
-    const current = parseInt(count.innerHTML.match(/\d+/)?.[0] || 0);
-    if (current < 3) {
-        count.innerHTML = `📸 ${current + 1}/3 CAPTURED`;
+    if (photoCount < 3) {
+        photoCount++;
+        document.getElementById('photoCount').innerHTML = `📸 ${photoCount}/3 CAPTURED`;
+        const preview = document.getElementById('previewCanvas');
+        if (preview) {
+            const ctx = preview.getContext('2d');
+            ctx.fillStyle = 'rgba(0, 255, 255, 0.3)';
+            ctx.fillRect(0, 0, preview.width, preview.height);
+            setTimeout(() => {
+                ctx.clearRect(0, 0, preview.width, preview.height);
+                const video = document.querySelector('#registerModal video');
+                if (video && video.videoWidth) {
+                    preview.width = video.videoWidth;
+                    preview.height = video.videoHeight;
+                    ctx.drawImage(video, 0, 0, preview.width, preview.height);
+                }
+            }, 200);
+        }
+    } else {
+        alert('Đã chụp đủ 3 ảnh!');
     }
 }
 
 function saveFaceRegistration() {
-    const name = document.getElementById('faceNameInput').value;
-    if (name) {
-        alert(`✅ Đã lưu khuôn mặt cho ${name}`);
-        closeRegisterModal();
-        document.getElementById('faceNameInput').value = '';
-        document.getElementById('photoCount').innerHTML = '📸 0/3 CAPTURED';
-    } else {
+    const name = document.getElementById('faceNameInput').value.trim();
+    if (!name) {
         alert('❌ Vui lòng nhập tên!');
+        return;
     }
+    if (photoCount < 3) {
+        alert(`❌ Cần chụp đủ 3 ảnh! Hiện có ${photoCount}/3`);
+        return;
+    }
+    alert(`✅ Đã đăng ký khuôn mặt cho ${name}!`);
+    closeRegisterModal();
+    document.getElementById('faceNameInput').value = '';
+    photoCount = 0;
+    document.getElementById('photoCount').innerHTML = '📸 0/3 CAPTURED';
 }
 
 // ========== EXPORT FUNCTIONS ==========
