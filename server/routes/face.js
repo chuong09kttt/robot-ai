@@ -1,59 +1,58 @@
 const express = require('express');
-const crypto = require('crypto');
+const fs = require('fs');
+const path = require('path');
 const router = express.Router();
 
-// In-memory face database (encrypted in production)
-let faceDatabase = new Map();
+const faceFile = path.join(__dirname, '../../face-data.json');
 
-// Middleware
-const requireAuth = (req, res, next) => {
+// Đọc database
+function readFaceDB() {
+    try {
+        if (fs.existsSync(faceFile)) {
+            return JSON.parse(fs.readFileSync(faceFile, 'utf8'));
+        }
+    } catch(e) {}
+    return {};
+}
+
+// Ghi database
+function writeFaceDB(data) {
+    fs.writeFileSync(faceFile, JSON.stringify(data, null, 2));
+}
+
+router.post('/register', (req, res) => {
     if (!req.session.user) {
         return res.status(401).json({ error: 'Unauthorized' });
     }
-    next();
-};
-
-router.post('/register', requireAuth, (req, res) => {
-    const { name, descriptors } = req.body;
+    
+    const { name, descriptor } = req.body;
     const username = req.session.user.username;
+    const db = readFaceDB();
     
-    if (!name || !descriptors || descriptors.length === 0) {
-        return res.status(400).json({ error: 'Invalid face data' });
-    }
+    if (!db[username]) db[username] = [];
+    db[username].push({ name, descriptor });
+    writeFaceDB(db);
     
-    const key = `${username}_${name}`;
-    // Encrypt descriptor before storing
-    const encrypted = crypto.createHash('sha256').update(JSON.stringify(descriptors)).digest('hex');
-    
-    if (!faceDatabase.has(username)) {
-        faceDatabase.set(username, []);
-    }
-    faceDatabase.get(username).push({ name, hash: encrypted });
-    
-    res.json({ success: true, message: `Face registered for ${name}` });
+    res.json({ success: true });
 });
 
-router.post('/recognize', requireAuth, (req, res) => {
+router.post('/recognize', (req, res) => {
+    if (!req.session.user) {
+        return res.status(401).json({ error: 'Unauthorized' });
+    }
+    
     const { descriptor } = req.body;
-    const username = req.session.user.username;
-    
-    const userFaces = faceDatabase.get(username) || [];
-    
-    // Simple matching (in production, use proper face matching)
-    const descriptorHash = crypto.createHash('sha256').update(JSON.stringify(descriptor)).digest('hex');
-    
-    const match = userFaces.find(f => f.hash === descriptorHash);
-    
-    if (match) {
-        res.json({ success: true, name: match.name });
-    } else {
-        res.json({ success: false, name: null });
-    }
+    // Logic nhận diện...
+    res.json({ success: true, name: null });
 });
 
-router.get('/list', requireAuth, (req, res) => {
-    const username = req.session.user.username;
-    const userFaces = faceDatabase.get(username) || [];
+router.get('/list', (req, res) => {
+    if (!req.session.user) {
+        return res.status(401).json({ error: 'Unauthorized' });
+    }
+    
+    const db = readFaceDB();
+    const userFaces = db[req.session.user.username] || [];
     res.json({ faces: userFaces.map(f => f.name) });
 });
 
