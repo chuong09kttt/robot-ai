@@ -13,12 +13,83 @@ let videoElement = null;
 let canvasElement = null;
 let faceDatabase = new Map();
 let isRecognizing = false;
-let gameActive = false;
+let inactivityInterval = null;
+let inactivitySeconds = 60;
 
 // WAKE WORDS
 const WAKE_WORDS = ['xin chào', 'hello', 'hi', 'chào chiri', 'chiri ơi'];
 
-// ========== LOGIN FUNCTIONS ==========
+// ========== UI NAVIGATION ==========
+function showModeScreen() {
+    document.getElementById('modeScreen').style.display = 'block';
+    document.getElementById('loginScreen').style.display = 'none';
+    document.getElementById('chatPanel').style.display = 'none';
+    document.getElementById('drivePanel').style.display = 'none';
+    document.getElementById('translatePanel').style.display = 'none';
+    document.getElementById('cameraPanel').style.display = 'none';
+    document.getElementById('gamePanel').style.display = 'none';
+    document.getElementById('gameTypeScreen').style.display = 'none';
+    document.getElementById('registerModal').style.display = 'none';
+}
+
+function showLoginScreen() {
+    document.getElementById('loginScreen').style.display = 'flex';
+    document.getElementById('modeScreen').style.display = 'none';
+    document.getElementById('chatPanel').style.display = 'none';
+    document.getElementById('drivePanel').style.display = 'none';
+    document.getElementById('translatePanel').style.display = 'none';
+    document.getElementById('cameraPanel').style.display = 'none';
+    document.getElementById('gamePanel').style.display = 'none';
+    document.getElementById('gameTypeScreen').style.display = 'none';
+}
+
+function showChatMode() {
+    hideAllPanels();
+    document.getElementById('chatPanel').style.display = 'block';
+    isAwake = false;
+    updateWakeIndicator('sleeping');
+    setExpression('sleepy');
+}
+
+function showDriveMode() {
+    hideAllPanels();
+    document.getElementById('drivePanel').style.display = 'block';
+    initDriveMode();
+}
+
+function showTranslateMode() {
+    hideAllPanels();
+    document.getElementById('translatePanel').style.display = 'block';
+    initTranslateMode();
+}
+
+function showCameraMode() {
+    hideAllPanels();
+    document.getElementById('cameraPanel').style.display = 'block';
+    initCameraMode();
+}
+
+function showGameMode() {
+    hideAllPanels();
+    document.getElementById('gameTypeScreen').style.display = 'block';
+}
+
+function showGameTypeScreen() {
+    hideAllPanels();
+    document.getElementById('gameTypeScreen').style.display = 'block';
+}
+
+function hideAllPanels() {
+    document.getElementById('modeScreen').style.display = 'none';
+    document.getElementById('chatPanel').style.display = 'none';
+    document.getElementById('drivePanel').style.display = 'none';
+    document.getElementById('translatePanel').style.display = 'none';
+    document.getElementById('cameraPanel').style.display = 'none';
+    document.getElementById('gamePanel').style.display = 'none';
+    document.getElementById('gameTypeScreen').style.display = 'none';
+}
+
+// ========== LOGIN ==========
 async function login() {
     const username = document.getElementById('loginUsername').value;
     const password = document.getElementById('loginPassword').value;
@@ -58,7 +129,7 @@ async function login() {
                     else if (mode === 'drive') showDriveMode();
                     else if (mode === 'translate') showTranslateMode();
                     else if (mode === 'camera') showCameraMode();
-                    else if (mode === 'game') showGameTypeScreen();
+                    else if (mode === 'game') showGameMode();
                 };
             });
             
@@ -67,13 +138,42 @@ async function login() {
                 btn.onclick = () => showModeScreen();
             });
             
+            // Manual wake button
+            const manualWakeBtn = document.getElementById('manualWakeBtn');
+            if (manualWakeBtn) {
+                manualWakeBtn.onclick = () => {
+                    if (!isAwake) wakeUp();
+                    else {
+                        addMessage('ai', 'Chiri đang thức!');
+                        speak('Chiri đang thức!');
+                    }
+                };
+            }
+            
             // Logout button
-            document.getElementById('logoutBtn').onclick = async () => {
-                await fetch('/api/logout', { method: 'POST' });
-                if (ws) ws.close();
-                if (recognition) recognition.stop();
-                location.reload();
-            };
+            const logoutBtn = document.getElementById('logoutBtn');
+            if (logoutBtn) {
+                logoutBtn.onclick = async () => {
+                    await fetch('/api/logout', { method: 'POST' });
+                    if (ws) ws.close();
+                    if (recognition) recognition.stop();
+                    if (inactivityInterval) clearInterval(inactivityInterval);
+                    showLoginScreen();
+                    document.getElementById('loginUsername').value = '';
+                    document.getElementById('loginPassword').value = '';
+                };
+            }
+            
+            // Modal close button
+            const closeModalBtn = document.getElementById('closeModalBtn');
+            if (closeModalBtn) closeModalBtn.onclick = closeRegisterModal;
+            
+            // Capture and save buttons
+            const captureBtn = document.getElementById('capturePhotoBtn');
+            if (captureBtn) captureBtn.onclick = capturePhoto;
+            
+            const saveBtn = document.getElementById('saveFaceBtn');
+            if (saveBtn) saveBtn.onclick = saveFaceRegistration;
             
         } else {
             errorDiv.textContent = data.message;
@@ -82,38 +182,6 @@ async function login() {
         errorDiv.textContent = 'Lỗi kết nối server!';
     }
 }
-
-function showModeScreen() {
-    document.getElementById('modeScreen').style.display = 'block';
-    document.getElementById('chatPanel').style.display = 'none';
-    document.getElementById('drivePanel').style.display = 'none';
-    document.getElementById('translatePanel').style.display = 'none';
-    document.getElementById('cameraPanel').style.display = 'none';
-    document.getElementById('gamePanel').style.display = 'none';
-    document.getElementById('gameTypeScreen').style.display = 'none';
-}
-
-function showGameTypeScreen() {
-    document.getElementById('modeScreen').style.display = 'none';
-    document.getElementById('gameTypeScreen').style.display = 'block';
-}
-
-function startGameWithMode(mode) {
-    document.getElementById('gameTypeScreen').style.display = 'none';
-    document.getElementById('gamePanel').style.display = 'block';
-    
-    if (mode === 'boat') {
-        if (typeof initBoatMode === 'function') initBoatMode();
-        else console.log('Boat mode not loaded');
-    } else if (mode === 'plane') {
-        if (typeof initPlaneMode === 'function') initPlaneMode();
-        else console.log('Plane mode not loaded');
-    }
-}
-
-// Attach to window
-window.showGameTypeScreen = showGameTypeScreen;
-window.startGameWithMode = startGameWithMode;
 
 // ========== WEBSOCKET ==========
 function initWebSocket() {
@@ -125,16 +193,130 @@ function initWebSocket() {
         const data = JSON.parse(event.data);
         if (data.type === 'ai') {
             addMessage('ai', data.text);
-            speak(data.text);
+            if (!isTranslatorMode) speak(data.text);
         }
     };
     ws.onclose = () => setTimeout(initWebSocket, 3000);
 }
 
-// ========== SPEECH ==========
+// ========== CHAT FUNCTIONS ==========
+function setExpression(expression) {
+    const robotSvg = document.querySelector('.robot-svg');
+    if (robotSvg) {
+        robotSvg.classList.remove('listening', 'happy', 'thinking', 'sleepy', 'talking');
+        robotSvg.classList.add(expression);
+    }
+    
+    const mouth = document.querySelector('.robot-mouth');
+    if (!mouth) return;
+    
+    switch(expression) {
+        case 'talking':
+            mouth.style.transform = 'scaleY(0.8)';
+            break;
+        case 'listening':
+            mouth.style.transform = 'scaleY(0.7)';
+            break;
+        case 'happy':
+            mouth.style.transform = 'scaleY(1.1)';
+            break;
+        case 'thinking':
+            mouth.style.transform = 'scaleY(0.2)';
+            break;
+        case 'sleepy':
+            mouth.style.transform = 'scaleY(0.3)';
+            break;
+        default:
+            mouth.style.transform = 'scaleY(0.5)';
+    }
+}
+
+function updateWakeIndicator(state) {
+    const wakeDot = document.getElementById('wakeDot');
+    const statusText = document.getElementById('globalStatusText');
+    
+    if (state === 'listening') {
+        if (wakeDot) wakeDot.style.background = '#f39c12';
+        if (statusText) statusText.innerHTML = 'LISTENING...';
+    } else if (state === 'awake') {
+        if (wakeDot) wakeDot.style.background = '#00ff00';
+        if (statusText) statusText.innerHTML = 'AWAKE';
+    } else {
+        if (wakeDot) wakeDot.style.background = '#666';
+        if (statusText) statusText.innerHTML = 'SLEEPING';
+    }
+}
+
+function addMessage(type, text) {
+    const chatBox = document.getElementById('chatBox');
+    if (!chatBox) return;
+    
+    const messageDiv = document.createElement('div');
+    messageDiv.className = `message ${type}`;
+    messageDiv.innerHTML = `<div class="bubble">${escapeHtml(text)}</div>`;
+    chatBox.appendChild(messageDiv);
+    chatBox.scrollTop = chatBox.scrollHeight;
+    
+    while (chatBox.children.length > 50) {
+        chatBox.removeChild(chatBox.firstChild);
+    }
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+async function speak(text) {
+    if (!text || isTranslatorMode) return;
+    if (window.speechSynthesis) window.speechSynthesis.cancel();
+    
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = 'vi-VN';
+    utterance.rate = 0.9;
+    window.speechSynthesis.speak(utterance);
+}
+
+function wakeUp() {
+    if (isAwake) return;
+    isAwake = true;
+    updateWakeIndicator('awake');
+    setExpression('happy');
+    
+    const greeting = 'Chào bạn! Chiri đã thức! 💕';
+    addMessage('ai', greeting);
+    speak(greeting);
+}
+
+function startInactivityCountdown() {
+    if (inactivityInterval) clearInterval(inactivityInterval);
+    inactivitySeconds = 60;
+    
+    inactivityInterval = setInterval(() => {
+        const timerElem = document.getElementById('sleepTimer');
+        if (!isAwake) {
+            if (timerElem) timerElem.innerHTML = '😴 SLEEP IN 60s';
+            return;
+        }
+        
+        if (inactivitySeconds <= 0) {
+            isAwake = false;
+            updateWakeIndicator('sleeping');
+            setExpression('sleepy');
+            if (timerElem) timerElem.innerHTML = '😴 SLEEPING';
+        } else {
+            if (timerElem) timerElem.innerHTML = `😴 SLEEP IN ${inactivitySeconds}s`;
+            inactivitySeconds--;
+        }
+    }, 1000);
+}
+
 function initSpeechRecognition() {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) return;
+    
+    if (recognition) recognition.stop();
     
     recognition = new SpeechRecognition();
     recognition.continuous = true;
@@ -146,7 +328,7 @@ function initSpeechRecognition() {
         
         if (!isAwake && WAKE_WORDS.some(w => text.toLowerCase().includes(w))) {
             wakeUp();
-        } else if (isAwake && !isTranslatorMode) {
+        } else if (isAwake && !isTranslatorMode && text) {
             processCommand(text);
         }
     };
@@ -154,54 +336,18 @@ function initSpeechRecognition() {
     recognition.start();
 }
 
-async function speak(text) {
-    if (!text) return;
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = 'vi-VN';
-    utterance.rate = 0.9;
-    window.speechSynthesis.speak(utterance);
-}
-
-function addMessage(type, text) {
-    const chatBox = document.getElementById('chatBox');
-    if (!chatBox) return;
-    const msg = document.createElement('div');
-    msg.className = `message ${type}`;
-    msg.innerHTML = `<div class="bubble">${escapeHtml(text)}</div>`;
-    chatBox.appendChild(msg);
-    chatBox.scrollTop = chatBox.scrollHeight;
-}
-
-function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
-}
-
-function wakeUp() {
-    if (isAwake) return;
-    isAwake = true;
-    const greeting = 'Chào bạn! Chiri đã thức! 💕';
-    addMessage('ai', greeting);
-    speak(greeting);
-}
-
 function processCommand(text) {
+    addMessage('user', text);
     if (ws && ws.readyState === WebSocket.OPEN) {
         ws.send(JSON.stringify({ type: 'voice', text, driveMode: false }));
+    } else {
+        addMessage('ai', 'Đang kết nối lại server...');
     }
 }
 
-// ========== MODE FUNCTIONS ==========
-function showChatMode() {
-    showModeScreen();
-    document.getElementById('chatPanel').style.display = 'block';
-    isAwake = false;
-}
-
-function showDriveMode() {
-    showModeScreen();
-    document.getElementById('drivePanel').style.display = 'block';
+// ========== DRIVE MODE ==========
+function initDriveMode() {
+    console.log('Drive mode initialized');
     
     document.querySelectorAll('.drive-btn-gaming').forEach(btn => {
         btn.onmousedown = () => {
@@ -214,23 +360,42 @@ function showDriveMode() {
     });
 }
 
-function showTranslateMode() {
-    showModeScreen();
-    document.getElementById('translatePanel').style.display = 'block';
-    // Translation logic here
-}
-
-function showCameraMode() {
-    showModeScreen();
-    document.getElementById('cameraPanel').style.display = 'block';
-    initCameraMode();
+// ========== TRANSLATE MODE ==========
+function initTranslateMode() {
+    console.log('Translate mode initialized');
+    
+    const sourceLang = document.getElementById('sourceLang').value;
+    const targetLang = document.getElementById('targetLang').value;
+    
+    document.getElementById('swapLangBtn').onclick = () => {
+        const temp = document.getElementById('sourceLang').value;
+        document.getElementById('sourceLang').value = document.getElementById('targetLang').value;
+        document.getElementById('targetLang').value = temp;
+    };
+    
+    document.getElementById('speakTranslationBtn').onclick = () => {
+        const text = document.getElementById('translatedText').innerText;
+        if (text && text !== 'AWAITING INPUT...') {
+            const utterance = new SpeechSynthesisUtterance(text);
+            utterance.lang = 'en-US';
+            window.speechSynthesis.speak(utterance);
+        }
+    };
+    
+    document.getElementById('clearTranslationBtn').onclick = () => {
+        document.getElementById('originalText').innerHTML = 'AWAITING INPUT...';
+        document.getElementById('translatedText').innerHTML = 'AWAITING INPUT...';
+    };
 }
 
 // ========== CAMERA MODE ==========
 async function initCameraMode() {
+    console.log('Camera mode initialized');
+    
     videoElement = document.getElementById('video');
     canvasElement = document.getElementById('canvas');
     
+    if (!videoElement || !canvasElement) return;
     if (typeof FaceMesh === 'undefined') return;
     
     faceMesh = new FaceMesh({
@@ -245,6 +410,7 @@ async function initCameraMode() {
     document.getElementById('recognizeFaceBtn').onclick = () => {
         isRecognizing = !isRecognizing;
         addMessage('ai', isRecognizing ? 'Bắt đầu nhận diện' : 'Đã tắt nhận diện');
+        speak(isRecognizing ? 'Bắt đầu nhận diện khuôn mặt' : 'Đã tắt nhận diện');
     };
 }
 
@@ -259,10 +425,12 @@ async function toggleCamera() {
         await camera.start();
         isCameraActive = true;
         document.getElementById('cameraToggleBtn').textContent = 'TẮT CAMERA';
+        document.getElementById('cameraStatusText').innerHTML = 'ACTIVE';
     } else {
         camera.stop();
         isCameraActive = false;
         document.getElementById('cameraToggleBtn').textContent = 'BẬT CAMERA';
+        document.getElementById('cameraStatusText').innerHTML = 'OFFLINE';
     }
 }
 
@@ -272,8 +440,12 @@ function onFaceMeshResults(results) {
     ctx.clearRect(0, 0, canvasElement.width, canvasElement.height);
     ctx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
     
-    if (results.multiFaceLandmarks?.length > 0 && isRecognizing) {
+    if (results.multiFaceLandmarks?.length > 0) {
         document.getElementById('faceText').textContent = `${results.multiFaceLandmarks.length} face(s) detected`;
+        document.getElementById('faceEmoji').textContent = '😊';
+    } else {
+        document.getElementById('faceText').textContent = 'No face detected';
+        document.getElementById('faceEmoji').textContent = '😔';
     }
 }
 
@@ -294,35 +466,38 @@ function closeRegisterModal() {
     document.getElementById('registerModal').style.display = 'none';
 }
 
-// ========== INACTIVITY ==========
-let inactivityInterval = null;
-
-function startInactivityCountdown() {
-    if (inactivityInterval) clearInterval(inactivityInterval);
-    inactivityInterval = setInterval(() => {
-        if (!isAwake) return;
-        // Auto sleep logic
-    }, 1000);
+function capturePhoto() {
+    alert('📸 Đã chụp ảnh!');
+    const count = document.getElementById('photoCount');
+    const current = parseInt(count.innerHTML.match(/\d+/)?.[0] || 0);
+    if (current < 3) {
+        count.innerHTML = `📸 ${current + 1}/3 CAPTURED`;
+    }
 }
+
+function saveFaceRegistration() {
+    const name = document.getElementById('faceNameInput').value;
+    if (name) {
+        alert(`✅ Đã lưu khuôn mặt cho ${name}`);
+        closeRegisterModal();
+        document.getElementById('faceNameInput').value = '';
+        document.getElementById('photoCount').innerHTML = '📸 0/3 CAPTURED';
+    } else {
+        alert('❌ Vui lòng nhập tên!');
+    }
+}
+
+// ========== EXPORT FUNCTIONS ==========
+window.showModeScreen = showModeScreen;
+window.showChatMode = showChatMode;
+window.showDriveMode = showDriveMode;
+window.showTranslateMode = showTranslateMode;
+window.showCameraMode = showCameraMode;
+window.showGameMode = showGameMode;
+window.showGameTypeScreen = showGameTypeScreen;
 
 // ========== INITIALIZE ==========
 document.getElementById('loginBtn').onclick = login;
 document.getElementById('loginPassword').onkeypress = (e) => {
     if (e.key === 'Enter') login();
 };
-
-document.getElementById('closeModalBtn')?.addEventListener('click', closeRegisterModal);
-document.getElementById('capturePhotoBtn')?.addEventListener('click', () => {
-    alert('Chụp ảnh thành công!');
-});
-document.getElementById('saveFaceBtn')?.addEventListener('click', () => {
-    const name = document.getElementById('faceNameInput').value;
-    if (name) {
-        alert(`Đã lưu khuôn mặt cho ${name}`);
-        closeRegisterModal();
-    }
-});
-
-// Export for game modes
-window.initBoatMode = () => console.log('Boat mode started');
-window.initPlaneMode = () => console.log('Plane mode started');
