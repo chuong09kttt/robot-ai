@@ -568,8 +568,8 @@ function saveFaceRegistration() {
 
 // ========== GAME MODE INITIALIZERS ==========
 // Import game modules (chỉ import 1 lần)
-import { initBoatMode, stopBoatMode } from './js/game.js';
-import { initPlaneMode, stopPlaneMode } from './js/plane-mode.js';
+//import { initBoatMode, stopBoatMode } from './js/game.js';
+//import { initPlaneMode, stopPlaneMode } from './js/plane-mode.js';
 
 window.initBoatMode = initBoatMode;
 window.stopBoatMode = stopBoatMode;
