@@ -4,11 +4,11 @@ const WebSocket = require('ws');
 const path = require('path');
 const fs = require('fs');
 const NodeCache = require('node-cache');
+const session = require('express-session');
 
 // ========== AUTHENTICATION ==========
 const USERS = {
     'admin': { password: 'admin123', name: 'Quản trị viên' },
-    'user1': { password: '123', name: 'ch' },
     'ch': { password: '123', name: 'Chí Hào' }
 };
 
@@ -21,6 +21,7 @@ const esp32Clients = new Map();
 let conversationHistory = {};
 const processingQueue = new Map();
 const clientHeartbeats = new Map();
+let gamePlayers = {};  // Game multiplayer
 
 // ========== LOAD MODULES WITH FALLBACK ==========
 let OpenAI;
@@ -60,9 +61,37 @@ const app = express();
 const server = http.createServer(app);
 const wss = new WebSocket.Server({ server });
 
-app.use(express.static(path.join(__dirname, '/')));
+// ========== SESSION MIDDLEWARE ==========
+app.use(session({
+    secret: 'chiri-super-secret-key-2024',
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+        secure: false,
+        httpOnly: true,
+        maxAge: 24 * 60 * 60 * 1000
+    }
+}));
+
+// ========== SECURITY HEADERS ==========
+app.use((req, res, next) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('X-Frame-Options', 'DENY');
+    next();
+});
+
+// ========== STATIC FILES ==========
+app.use(express.static(path.join(__dirname, 'public')));
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true }));
+
+// ========== ROUTE MẶC ĐỊNH ==========
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
 
 // ========== KHỞI TẠO OPENAI ==========
 let openai = null;
@@ -573,7 +602,6 @@ async function translateText(text, source, target) {
     if (!text || text.trim() === '') return '';
     
     try {
-        // Sử dụng API dịch MyMemory (miễn phí)
         const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=${source}|${target}`;
         const response = await axios.get(url, { timeout: 5000 });
         
@@ -603,7 +631,6 @@ async function processUserMessage(userText, driveMode, sessionId, ws) {
             const lang = detectLanguage(userText);
             console.log(`🌐 Detected language: ${lang === 'en' ? 'ENGLISH' : 'VIETNAMESE'}`);
             
-            // Check for translation commands
             const lower = userText.toLowerCase();
             if (lower.includes('bật phiên dịch') || lower.includes('bật dịch realtime')) {
                 return "🌐 Đã bật chế độ phiên dịch real-time! Vui lòng chọn ngôn ngữ trên màn hình và bắt đầu nói.";
@@ -612,7 +639,6 @@ async function processUserMessage(userText, driveMode, sessionId, ws) {
                 return "🌐 Đã tắt chế độ phiên dịch real-time.";
             }
             
-            // DRIVE MODE
             if (driveMode === true) {
                 const command = getDriveCommand(userText);
                 if (command) {
@@ -631,7 +657,6 @@ async function processUserMessage(userText, driveMode, sessionId, ws) {
                     : '🚫 Chế độ điều khiển xe. Vui lòng nói: TIẾN, LÙI, TRÁI, PHẢI, hoặc DỪNG.';
             }
             
-            // COUNTDOWN
             const countdown = handleCountdownCommand(userText);
             if (countdown.isCountdown) {
                 if (ws && ws.readyState === WebSocket.OPEN) {
@@ -648,7 +673,6 @@ async function processUserMessage(userText, driveMode, sessionId, ws) {
                     : `⏰ Đã bắt đầu đếm ngược ${countdown.seconds} giây!`;
             }
             
-            // REAL-TIME
             if (lower.includes('what time') || lower.includes('current time') || lower.includes('time now') ||
                 lower.includes('mấy giờ') || (lower.includes('giờ') && lower.includes('bao nhiêu'))) {
                 return getCurrentTime(lang);
@@ -658,11 +682,9 @@ async function processUserMessage(userText, driveMode, sessionId, ws) {
                 return getCurrentDate(lang);
             }
             
-            // FALLBACK KNOWLEDGE
             const fallbackAnswer = searchFallbackKnowledge(userText, lang);
             if (fallbackAnswer) return fallbackAnswer;
             
-            // RAG
             console.log('🔍 Searching in custom knowledge...');
             const searchResults = searchInKnowledge(userText);
             
@@ -681,7 +703,6 @@ async function processUserMessage(userText, driveMode, sessionId, ws) {
                 }
             }
             
-            // CHAT MODE
             if (!conversationHistory[sessionId]) {
                 conversationHistory[sessionId] = [];
             }
@@ -749,6 +770,7 @@ app.post('/api/login', (req, res) => {
     
     const user = USERS[username];
     if (user && user.password === password) {
+        req.session.user = { username, name: user.name };
         console.log(`✅ User logged in: ${username}`);
         res.json({ success: true, name: user.name, username: username });
     } else {
@@ -757,11 +779,25 @@ app.post('/api/login', (req, res) => {
     }
 });
 
+// Logout endpoint
+app.post('/api/logout', (req, res) => {
+    req.session.destroy();
+    res.json({ success: true });
+});
+
+// Check session
+app.get('/api/check', (req, res) => {
+    if (req.session.user) {
+        res.json({ authenticated: true, user: req.session.user });
+    } else {
+        res.json({ authenticated: false });
+    }
+});
+
 // Face registration
 app.post('/api/register-face', (req, res) => {
     const { username, faceDescriptor } = req.body;
-    // Lưu face descriptor vào file (có thể mở rộng)
-    const faceFile = 'face-data.json';
+    const faceFile = path.join(__dirname, 'face-data.json');
     let faceData = {};
     try {
         if (fs.existsSync(faceFile)) {
@@ -777,7 +813,7 @@ app.post('/api/register-face', (req, res) => {
 });
 
 app.get('/api/face-database', (req, res) => {
-    const faceFile = 'face-data.json';
+    const faceFile = path.join(__dirname, 'face-data.json');
     let users = [];
     try {
         if (fs.existsSync(faceFile)) {
@@ -785,7 +821,7 @@ app.get('/api/face-database', (req, res) => {
             users = Object.keys(faceData);
         }
     } catch(e) {}
-    res.json({ users: users.length ? users : ['admin', 'user1', 'user2'] });
+    res.json({ users: users.length ? users : ['admin', 'ch'] });
 });
 
 // TTS endpoint
@@ -985,6 +1021,29 @@ wss.on('connection', (ws, req) => {
                 }
             }
             
+            // GAME MULTIPLAYER: Xử lý di chuyển người chơi
+            if (data.type === 'game_move') {
+                gamePlayers[clientId] = {
+                    x: data.x,
+                    z: data.z,
+                    rotation: data.rotation,
+                    lastUpdate: Date.now()
+                };
+                
+                const playersList = {};
+                for (const [id, player] of Object.entries(gamePlayers)) {
+                    if (Date.now() - player.lastUpdate < 5000) {
+                        playersList[id] = { x: player.x, z: player.z, rotation: player.rotation };
+                    }
+                }
+                
+                for (const [id, client] of wss.clients) {
+                    if (client.readyState === WebSocket.OPEN && gamePlayers[id]) {
+                        client.send(JSON.stringify({ type: 'game_players', players: playersList }));
+                    }
+                }
+            }
+            
             if (data.type === 'ping') {
                 ws.send(JSON.stringify({ type: 'pong', time: Date.now() }));
             }
@@ -1000,6 +1059,7 @@ wss.on('connection', (ws, req) => {
             esp32Clients.delete(clientId);
             clientHeartbeats.delete(clientId);
         }
+        delete gamePlayers[clientId];
         setTimeout(() => {
             delete conversationHistory[sessionId];
             processingQueue.delete(sessionId);
@@ -1021,56 +1081,6 @@ setInterval(() => {
     }
 }, 30000);
 
-
-// ========== GAME MULTIPLAYER ==========
-let gamePlayers = {};
-
-// Thêm vào phần WebSocket handling
-wss.on('connection', (ws, req) => {
-    // ... existing code ...
-    
-    ws.on('message', async (message) => {
-        try {
-            const data = JSON.parse(message);
-            
-            // ... existing code ...
-            
-            // GAME: Xử lý di chuyển người chơi
-            if (data.type === 'game_move') {
-                gamePlayers[clientId] = {
-                    x: data.x,
-                    z: data.z,
-                    rotation: data.rotation,
-                    lastUpdate: Date.now()
-                };
-                
-                // Gửi danh sách người chơi đến tất cả
-                const playersList = {};
-                for (const [id, player] of Object.entries(gamePlayers)) {
-                    if (Date.now() - player.lastUpdate < 5000) {
-                        playersList[id] = { x: player.x, z: player.z, rotation: player.rotation };
-                    }
-                }
-                
-                // Broadcast to all game clients
-                for (const [id, client] of wss.clients) {
-                    if (client.readyState === WebSocket.OPEN && gamePlayers[id]) {
-                        client.send(JSON.stringify({ type: 'game_players', players: playersList }));
-                    }
-                }
-            }
-            
-        } catch(e) {
-            console.error('WebSocket error:', e.message);
-        }
-    });
-    
-    ws.on('close', () => {
-        delete gamePlayers[clientId];
-        // ... existing code ...
-    });
-});
-
 // ========== START SERVER ==========
 const PORT = process.env.PORT || 8080;
 
@@ -1079,22 +1089,24 @@ async function startServer() {
     
     server.listen(PORT, '0.0.0.0', () => {
         console.log(`\n╔══════════════════════════════════════════════════════════════════════════════╗`);
-        console.log(`║                         🚀 CHIRI AI - FULL FEATURE MODE v12.0                ║`);
+        console.log(`║                         🚀 CHIRI AI - FULL FEATURE MODE v13.0                ║`);
         console.log(`╠══════════════════════════════════════════════════════════════════════════════╣`);
         console.log(`║  📍 Server URL: http://localhost:${PORT}                                                    ║`);
-        console.log(`║  🔐 Login: admin / admin123                                                      ║`);
+        console.log(`║  🔐 Login: admin / admin123 | ch / 123                                           ║`);
         console.log(`║  📚 Knowledge chunks: ${customKnowledge.length.toString().padEnd(46)}║`);
-        console.log(`║  🤖 ChatGPT: ${(openai && process.env.OPENAI_API_KEY ? 'READY ✅' : 'NOT AVAILABLE ⚠️').padEnd(46)}║`);
+        console.log(`║  🤖 ChatGPT: ${(openai && process.env.OPENAI_API_KEY ? 'READY ✅' : 'SMART MODE ⚠️').padEnd(46)}║`);
         console.log(`║  📄 PDF Reader: ${(pdfParse ? 'READY ✅' : 'NOT AVAILABLE ⚠️').padEnd(46)}║`);
         console.log(`║  🕷️ Web Crawler: ${(axios && cheerio ? 'READY ✅' : 'NOT AVAILABLE ⚠️').padEnd(46)}║`);
         console.log(`║  🌐 Language: Auto-detect (VI/EN) ✅                                               ║`);
         console.log(`║  🌐 Real-time Translation: READY ✅ (8 languages)                                  ║`);
-        console.log(`║  🎤 Voice Control: READY ✅                                                        ║`);
+        console.log(`║  🎤 Voice Control: READY ✅ (Web Speech API)                                       ║`);
         console.log(`║  ⏰ Countdown Timer: READY ✅                                                      ║`);
         console.log(`║  📅 Real-time Clock: READY ✅                                                     ║`);
         console.log(`║  🚗 Drive Control: READY ✅ (Button + Voice)                                       ║`);
         console.log(`║  📷 Face Detection: READY ✅ (Face Mesh)                                           ║`);
         console.log(`║  👤 Face Recognition: READY ✅ (Register + Recognize)                              ║`);
+        console.log(`║  🎮 Game Mode: Boat + Plane (Body Tracking)                                       ║`);
+        console.log(`║  👥 Game Multiplayer: READY ✅                                                    ║`);
         console.log(`║  🚗 ESP32 Clients: ${esp32Clients.size.toString().padEnd(46)}║`);
         console.log(`║  💤 Auto-sleep: 60 seconds inactivity                                            ║`);
         console.log(`║  📄 PDF Source: Google Drive (sáp nhập tỉnh)                                      ║`);
@@ -1103,6 +1115,7 @@ async function startServer() {
         console.log(`║  💡 RULE: Vietnamese question → Vietnamese answer | English → English         ║`);
         console.log(`║  🌐 TRANSLATION: Hỗ trợ VI, EN, ZH, JA, KO, FR, DE, ES                         ║`);
         console.log(`║  📷 FACE ID: Đăng ký 3 ảnh → Nhập tên → Lưu → Nhận diện                        ║`);
+        console.log(`║  🎮 GAME: Giơ 2 tay như vô lăng → lái thuyền | Dang tay → lái máy bay         ║`);
         console.log(`╚══════════════════════════════════════════════════════════════════════════════╝`);
         console.log(``);
     });
