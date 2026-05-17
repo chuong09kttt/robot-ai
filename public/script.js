@@ -114,11 +114,13 @@ function showGameTypeScreen() {
     showGameMode();
 }
 
-// ========== LOGIN ==========
+// ========== LOGIN (ĐÃ SỬA - THÊM credentials: 'include') ==========
 async function login() {
     const username = document.getElementById('loginUsername').value;
     const password = document.getElementById('loginPassword').value;
     const errorDiv = document.getElementById('loginError');
+    
+    console.log('🔐 Login attempt:', username);
     
     if (!username || !password) {
         errorDiv.textContent = 'Vui lòng nhập đầy đủ thông tin!';
@@ -129,9 +131,11 @@ async function login() {
         const response = await fetch('/api/login', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username, password })
+            body: JSON.stringify({ username, password }),
+            credentials: 'include'  // QUAN TRỌNG: gửi cookie session
         });
         const data = await response.json();
+        console.log('📥 Login response:', data);
         
         if (data.success) {
             currentUser = { username: data.username, name: data.name };
@@ -179,7 +183,7 @@ async function login() {
             const logoutBtn = document.getElementById('logoutBtn');
             if (logoutBtn) {
                 logoutBtn.onclick = async () => {
-                    await fetch('/api/logout', { method: 'POST' });
+                    await fetch('/api/logout', { method: 'POST', credentials: 'include' });
                     if (ws) ws.close();
                     if (recognition) recognition.stop();
                     if (inactivityInterval) clearInterval(inactivityInterval);
@@ -204,6 +208,7 @@ async function login() {
             errorDiv.textContent = data.message;
         }
     } catch(e) {
+        console.error('Login error:', e);
         errorDiv.textContent = 'Lỗi kết nối server!';
     }
 }
@@ -561,6 +566,33 @@ function saveFaceRegistration() {
     document.getElementById('photoCount').innerHTML = '📸 0/3 CAPTURED';
 }
 
+// ========== GAME MODE INITIALIZERS ==========
+// Import game modules (chỉ import 1 lần)
+import { initBoatMode, stopBoatMode } from './js/game.js';
+import { initPlaneMode, stopPlaneMode } from './js/plane-mode.js';
+
+window.initBoatMode = initBoatMode;
+window.stopBoatMode = stopBoatMode;
+window.initPlaneMode = initPlaneMode;
+window.stopPlaneMode = stopPlaneMode;
+
+// Override showGameMode
+window.showGameMode = function() {
+    document.getElementById('modeScreen').style.display = 'none';
+    document.getElementById('gameTypeScreen').style.display = 'block';
+};
+
+window.startGameWithMode = function(mode) {
+    document.getElementById('gameTypeScreen').style.display = 'none';
+    document.getElementById('gamePanel').style.display = 'block';
+    
+    if (mode === 'boat') {
+        initBoatMode();
+    } else if (mode === 'plane') {
+        initPlaneMode();
+    }
+};
+
 // ========== EXPORT FUNCTIONS ==========
 window.showModeScreen = showModeScreen;
 window.showChatMode = showChatMode;
@@ -574,58 +606,4 @@ window.showGameTypeScreen = showGameTypeScreen;
 document.getElementById('loginBtn').onclick = login;
 document.getElementById('loginPassword').onkeypress = (e) => {
     if (e.key === 'Enter') login();
-};
-
-// ========== GAME MODE INITIALIZERS ==========
-import { initBoatMode, stopBoatMode } from './js/game.js';
-import { initPlaneMode, stopPlaneMode } from './js/plane-mode.js';
-
-window.initBoatMode = initBoatMode;
-window.stopBoatMode = stopBoatMode;
-window.initPlaneMode = initPlaneMode;
-window.stopPlaneMode = stopPlaneMode;
-
-// Override showGameMode
-window.showGameMode = function() {
-    document.getElementById('modeScreen').style.display = 'none';
-    document.getElementById('gameTypeScreen').style.display = 'block';
-};
-
-window.startGameWithMode = function(mode) {
-    document.getElementById('gameTypeScreen').style.display = 'none';
-    document.getElementById('gamePanel').style.display = 'block';
-    
-    if (mode === 'boat') {
-        initBoatMode();
-    } else if (mode === 'plane') {
-        initPlaneMode();
-    }
-};
-
-
-
-// ========== GAME MODE INITIALIZERS ==========
-import { initBoatMode, stopBoatMode } from './js/game.js';
-import { initPlaneMode, stopPlaneMode } from './js/plane-mode.js';
-
-window.initBoatMode = initBoatMode;
-window.stopBoatMode = stopBoatMode;
-window.initPlaneMode = initPlaneMode;
-window.stopPlaneMode = stopPlaneMode;
-
-// Override showGameMode
-window.showGameMode = function() {
-    document.getElementById('modeScreen').style.display = 'none';
-    document.getElementById('gameTypeScreen').style.display = 'block';
-};
-
-window.startGameWithMode = function(mode) {
-    document.getElementById('gameTypeScreen').style.display = 'none';
-    document.getElementById('gamePanel').style.display = 'block';
-    
-    if (mode === 'boat') {
-        initBoatMode();
-    } else if (mode === 'plane') {
-        initPlaneMode();
-    }
 };
