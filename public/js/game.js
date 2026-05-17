@@ -372,3 +372,5 @@ export function stopBoatMode() {
     gameInitialized = false;
 }
 
+// Cuối file game.js, thêm:
+export { initBoatMode, stopBoatMode };
