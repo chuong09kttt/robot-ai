@@ -68,4 +68,30 @@ async function chat(message, history = [], userId = 'default', lang = 'vi') {
         userHistory.push({ role: 'user', content: message });
         userHistory.push({ role: 'assistant', content: reply });
         if (userHistory.length > 20) {
-            userHistory.splice(0, userHistory.length - 20
+            userHistory.splice(0, userHistory.length - 20);
+        }
+        
+        setCachedResponse(cacheKey, reply);
+        return reply;
+        
+    } catch (error) {
+        console.error('OpenAI error:', error.message);
+        return getSimpleReply(message, lang);
+    }
+}
+
+// Clear conversation history
+function clearHistory(userId) {
+    conversationHistory.delete(userId);
+}
+
+// Get conversation history
+function getHistory(userId) {
+    return conversationHistory.get(userId) || [];
+}
+
+module.exports = {
+    chat,
+    clearHistory,
+    getHistory
+};
