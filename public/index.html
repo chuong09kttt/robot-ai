@@ -386,8 +386,8 @@
         });
     </script>
 
-    <script type="module" src="/script.js"></script>
     <script type="module">
+        // Import các module game
         import { initBoatMode, stopBoatMode } from '/js/game.js';
         import { initPlaneMode, stopPlaneMode } from '/js/plane-mode.js';
         
@@ -403,9 +403,27 @@
             else if (mode === 'plane') initPlaneMode();
         };
         
-        document.getElementById('selectBoatMode')?.addEventListener('click', () => window.startGameWithMode('boat'));
-        document.getElementById('selectPlaneMode')?.addEventListener('click', () => window.startGameWithMode('plane'));
+        // Gắn sự kiện cho nút chọn game
+        const selectBoat = document.getElementById('selectBoatMode');
+        const selectPlane = document.getElementById('selectPlaneMode');
+        const gameBackBtn = document.getElementById('gameBackBtn');
+        const gameTypeBackBtn = document.getElementById('gameTypeBackBtn');
+        
+        if (selectBoat) selectBoat.onclick = () => window.startGameWithMode('boat');
+        if (selectPlane) selectPlane.onclick = () => window.startGameWithMode('plane');
+        if (gameBackBtn) gameBackBtn.onclick = () => {
+            if (typeof window.stopBoatMode === 'function') window.stopBoatMode();
+            if (typeof window.stopPlaneMode === 'function') window.stopPlaneMode();
+            document.getElementById('gamePanel').style.display = 'none';
+            document.getElementById('modeScreen').style.display = 'block';
+        };
+        if (gameTypeBackBtn) gameTypeBackBtn.onclick = () => {
+            document.getElementById('gameTypeScreen').style.display = 'none';
+            document.getElementById('modeScreen').style.display = 'block';
+        };
     </script>
+    
+        
 
     
 </body>
