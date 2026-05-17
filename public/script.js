@@ -544,22 +544,64 @@ function saveFaceRegistration() {
 }
 
 // ========== GAME MODE HANDLERS ==========
-// Kết nối với game modules đã có
-window.startGameWithMode = function(mode) {
+// ========== GAME MODE HANDLERS ==========
+// Các hàm này sẽ được gọi từ main.js sau khi modules loaded
+// Chỉ cần đảm bảo window.startGameWithMode đã được định nghĩa
+
+// Nếu game modules chưa load kịp, chờ một chút
+function waitForGameModules() {
+    return new Promise((resolve) => {
+        if (typeof window.startGameWithMode === 'function') {
+            resolve();
+        } else {
+            const checkInterval = setInterval(() => {
+                if (typeof window.startGameWithMode === 'function') {
+                    clearInterval(checkInterval);
+                    resolve();
+                }
+            }, 100);
+            // Timeout sau 5 giây
+            setTimeout(() => {
+                clearInterval(checkInterval);
+                resolve();
+            }, 5000);
+        }
+    });
+}
+
+// Hàm start game cập nhật
+window.startGameWithMode = async function(mode) {
+    // Đợi game modules load
+    await waitForGameModules();
+    
     document.getElementById('gameTypeScreen').style.display = 'none';
     document.getElementById('gamePanel').style.display = 'block';
+    
     if (mode === 'boat') {
-        if (typeof window.initBoatMode === 'function') window.initBoatMode();
-        else alert('🚤 Chế độ thuyền đang phát triển!');
+        if (typeof window.initBoatMode === 'function') {
+            window.initBoatMode();
+        } else {
+            console.error('initBoatMode not found');
+            alert('🚤 Đang tải game thuyền, vui lòng thử lại!');
+        }
     } else if (mode === 'plane') {
-        if (typeof window.initPlaneMode === 'function') window.initPlaneMode();
-        else alert('✈️ Chế độ máy bay đang phát triển!');
+        if (typeof window.initPlaneMode === 'function') {
+            window.initPlaneMode();
+        } else {
+            console.error('initPlaneMode not found');
+            alert('✈️ Đang tải game máy bay, vui lòng thử lại!');
+        }
     }
 };
 
-// ========== INITIALIZE ==========
-document.getElementById('loginBtn').onclick = login;
-document.getElementById('loginPassword').onkeypress = (e) => { if (e.key === 'Enter') login(); };
+// Gán sự kiện cho nút chọn game
+document.getElementById('selectBoatMode')?.addEventListener('click', () => {
+    window.startGameWithMode('boat');
+});
+document.getElementById('selectPlaneMode')?.addEventListener('click', () => {
+    window.startGameWithMode('plane');
+});
+
 
 // Export functions
 window.showModeScreen = showModeScreen;
