@@ -114,8 +114,7 @@ function showGameTypeScreen() {
     showGameMode();
 }
 
-// ========== LOGIN (ĐÃ SỬA - THÊM credentials: 'include') ==========
-// ========== LOGIN ==========
+// ========== LOGIN (QUAN TRỌNG - ĐÃ SỬA) ==========
 async function login() {
     const username = document.getElementById('loginUsername').value;
     const password = document.getElementById('loginPassword').value;
@@ -133,7 +132,7 @@ async function login() {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ username, password }),
-            credentials: 'include'  // ⚠️ QUAN TRỌNG: Phải có dòng này
+            credentials: 'include'  // ⚠️ QUAN TRỌNG
         });
         
         const data = await response.json();
@@ -146,7 +145,7 @@ async function login() {
             document.getElementById('modeScreen').style.display = 'block';
             document.getElementById('userNameDisplay').innerHTML = `👤 ${data.name}`;
             
-            // Khởi tạo các tính năng
+            // Initialize features
             initWebSocket();
             initSpeechRecognition();
             loadFaceDatabase();
@@ -185,26 +184,20 @@ async function login() {
             const logoutBtn = document.getElementById('logoutBtn');
             if (logoutBtn) {
                 logoutBtn.onclick = async () => {
-                    await fetch('/api/logout', { 
-                        method: 'POST', 
-                        credentials: 'include' 
-                    });
+                    await fetch('/api/logout', { method: 'POST', credentials: 'include' });
                     if (ws) ws.close();
                     if (recognition) recognition.stop();
                     if (inactivityInterval) clearInterval(inactivityInterval);
-                    
-                    document.getElementById('modeScreen').style.display = 'none';
-                    document.getElementById('loginScreen').style.display = 'flex';
+                    showLoginScreen();
                     document.getElementById('loginUsername').value = '';
                     document.getElementById('loginPassword').value = '';
                 };
             }
             
-            // Modal close button
+            // Modal
             const closeModalBtn = document.getElementById('closeModalBtn');
             if (closeModalBtn) closeModalBtn.onclick = closeRegisterModal;
             
-            // Capture and save buttons
             const captureBtn = document.getElementById('capturePhotoBtn');
             if (captureBtn) captureBtn.onclick = capturePhoto;
             
@@ -220,20 +213,10 @@ async function login() {
     }
 }
 
-// Gán sự kiện
-document.getElementById('loginBtn').onclick = login;
-document.getElementById('loginPassword').onkeypress = (e) => {
-    if (e.key === 'Enter') login();
-};
-
-
-
-
 // ========== WEBSOCKET ==========
 function initWebSocket() {
     const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
     ws = new WebSocket(`${protocol}//${location.host}`);
-    
     ws.onopen = () => console.log('WebSocket connected');
     ws.onmessage = (event) => {
         const data = JSON.parse(event.data);
@@ -252,35 +235,21 @@ function setExpression(expression) {
         robotSvg.classList.remove('listening', 'happy', 'thinking', 'sleepy', 'talking');
         robotSvg.classList.add(expression);
     }
-    
     const mouth = document.querySelector('.robot-mouth');
     if (!mouth) return;
-    
     switch(expression) {
-        case 'talking':
-            mouth.style.transform = 'scaleY(0.8)';
-            break;
-        case 'listening':
-            mouth.style.transform = 'scaleY(0.7)';
-            break;
-        case 'happy':
-            mouth.style.transform = 'scaleY(1.1)';
-            break;
-        case 'thinking':
-            mouth.style.transform = 'scaleY(0.2)';
-            break;
-        case 'sleepy':
-            mouth.style.transform = 'scaleY(0.3)';
-            break;
-        default:
-            mouth.style.transform = 'scaleY(0.5)';
+        case 'talking': mouth.style.transform = 'scaleY(0.8)'; break;
+        case 'listening': mouth.style.transform = 'scaleY(0.7)'; break;
+        case 'happy': mouth.style.transform = 'scaleY(1.1)'; break;
+        case 'thinking': mouth.style.transform = 'scaleY(0.2)'; break;
+        case 'sleepy': mouth.style.transform = 'scaleY(0.3)'; break;
+        default: mouth.style.transform = 'scaleY(0.5)';
     }
 }
 
 function updateWakeIndicator(state) {
     const wakeDot = document.getElementById('wakeDot');
     const statusText = document.getElementById('globalStatusText');
-    
     if (state === 'listening') {
         if (wakeDot) wakeDot.style.background = '#f39c12';
         if (statusText) statusText.innerHTML = 'LISTENING...';
@@ -296,16 +265,12 @@ function updateWakeIndicator(state) {
 function addMessage(type, text) {
     const chatBox = document.getElementById('chatBox');
     if (!chatBox) return;
-    
     const messageDiv = document.createElement('div');
     messageDiv.className = `message ${type}`;
     messageDiv.innerHTML = `<div class="bubble">${escapeHtml(text)}</div>`;
     chatBox.appendChild(messageDiv);
     chatBox.scrollTop = chatBox.scrollHeight;
-    
-    while (chatBox.children.length > 50) {
-        chatBox.removeChild(chatBox.firstChild);
-    }
+    while (chatBox.children.length > 50) chatBox.removeChild(chatBox.firstChild);
 }
 
 function escapeHtml(text) {
@@ -317,7 +282,6 @@ function escapeHtml(text) {
 async function speak(text) {
     if (!text || isTranslatorMode) return;
     if (window.speechSynthesis) window.speechSynthesis.cancel();
-    
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.lang = 'vi-VN';
     utterance.rate = 0.9;
@@ -329,7 +293,6 @@ function wakeUp() {
     isAwake = true;
     updateWakeIndicator('awake');
     setExpression('happy');
-    
     const greeting = 'Chào bạn! Chiri đã thức! 💕';
     addMessage('ai', greeting);
     speak(greeting);
@@ -338,16 +301,13 @@ function wakeUp() {
 function startInactivityCountdown() {
     if (inactivityInterval) clearInterval(inactivityInterval);
     inactivitySeconds = 60;
-    
     inactivityInterval = setInterval(() => {
         const timerElem = document.getElementById('sleepTimer');
         if (!timerElem) return;
-        
         if (!isAwake) {
             timerElem.innerHTML = '😴 SLEEP IN 60s';
             return;
         }
-        
         if (inactivitySeconds <= 0) {
             isAwake = false;
             updateWakeIndicator('sleeping');
@@ -363,24 +323,19 @@ function startInactivityCountdown() {
 function initSpeechRecognition() {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) return;
-    
     if (recognition) recognition.stop();
-    
     recognition = new SpeechRecognition();
     recognition.continuous = true;
     recognition.lang = 'vi-VN';
-    
     recognition.onresult = (event) => {
         const text = event.results[event.results.length - 1][0].transcript.trim();
         console.log('Voice:', text);
-        
         if (!isAwake && WAKE_WORDS.some(w => text.toLowerCase().includes(w))) {
             wakeUp();
         } else if (isAwake && !isTranslatorMode && text) {
             processCommand(text);
         }
     };
-    
     recognition.start();
 }
 
@@ -396,11 +351,9 @@ function processCommand(text) {
 // ========== DRIVE MODE ==========
 function initDriveMode() {
     console.log('Drive mode initialized');
-    
     document.querySelectorAll('.drive-btn-gaming').forEach(btn => {
         btn.onmousedown = () => {
             const cmd = btn.getAttribute('data-cmd');
-            console.log('Drive command:', cmd);
             if (ws) ws.send(JSON.stringify({ type: 'drive_command', command: cmd, duration: 0 }));
         };
         btn.onmouseup = () => {
@@ -412,11 +365,9 @@ function initDriveMode() {
 // ========== TRANSLATE MODE ==========
 function initTranslateMode() {
     console.log('Translate mode initialized');
-    
     const swapBtn = document.getElementById('swapLangBtn');
     const speakBtn = document.getElementById('speakTranslationBtn');
     const clearBtn = document.getElementById('clearTranslationBtn');
-    
     if (swapBtn) {
         swapBtn.onclick = () => {
             const source = document.getElementById('sourceLang');
@@ -426,7 +377,6 @@ function initTranslateMode() {
             target.value = temp;
         };
     }
-    
     if (speakBtn) {
         speakBtn.onclick = () => {
             const text = document.getElementById('translatedText').innerText;
@@ -437,7 +387,6 @@ function initTranslateMode() {
             }
         };
     }
-    
     if (clearBtn) {
         clearBtn.onclick = () => {
             document.getElementById('originalText').innerHTML = 'AWAITING INPUT...';
@@ -449,44 +398,25 @@ function initTranslateMode() {
 // ========== CAMERA MODE ==========
 async function initCameraMode() {
     console.log('Camera mode initialized');
-    
     videoElement = document.getElementById('video');
     canvasElement = document.getElementById('canvas');
-    
     if (!videoElement || !canvasElement) return;
-    if (typeof FaceMesh === 'undefined') {
-        console.log('FaceMesh not loaded');
-        return;
-    }
-    
-    faceMesh = new FaceMesh({
-        locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`
-    });
-    
+    if (typeof FaceMesh === 'undefined') return;
+    faceMesh = new FaceMesh({ locateFile: (f) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${f}` });
     faceMesh.setOptions({ maxNumFaces: 4, refineLandmarks: true });
     faceMesh.onResults(onFaceMeshResults);
-    
-    const toggleBtn = document.getElementById('cameraToggleBtn');
-    const registerBtn = document.getElementById('registerFaceBtn');
-    const recognizeBtn = document.getElementById('recognizeFaceBtn');
-    
-    if (toggleBtn) toggleBtn.onclick = toggleCamera;
-    if (registerBtn) registerBtn.onclick = openRegisterModal;
-    if (recognizeBtn) {
-        recognizeBtn.onclick = () => {
-            isRecognizing = !isRecognizing;
-            addMessage('ai', isRecognizing ? 'Bắt đầu nhận diện' : 'Đã tắt nhận diện');
-            speak(isRecognizing ? 'Bắt đầu nhận diện khuôn mặt' : 'Đã tắt nhận diện');
-        };
-    }
+    document.getElementById('cameraToggleBtn').onclick = toggleCamera;
+    document.getElementById('registerFaceBtn').onclick = openRegisterModal;
+    document.getElementById('recognizeFaceBtn').onclick = () => {
+        isRecognizing = !isRecognizing;
+        addMessage('ai', isRecognizing ? 'Bắt đầu nhận diện' : 'Đã tắt nhận diện');
+        speak(isRecognizing ? 'Bắt đầu nhận diện khuôn mặt' : 'Đã tắt nhận diện');
+    };
 }
 
 async function toggleCamera() {
     if (!isCameraActive) {
-        if (typeof Camera === 'undefined') {
-            console.log('Camera library not loaded');
-            return;
-        }
+        if (typeof Camera === 'undefined') return;
         camera = new Camera(videoElement, {
             onFrame: async () => {
                 if (isCameraActive && faceMesh) await faceMesh.send({ image: videoElement });
@@ -494,17 +424,13 @@ async function toggleCamera() {
         });
         await camera.start();
         isCameraActive = true;
-        const toggleBtn = document.getElementById('cameraToggleBtn');
-        if (toggleBtn) toggleBtn.textContent = 'TẮT CAMERA';
+        document.getElementById('cameraToggleBtn').textContent = 'TẮT CAMERA';
         document.getElementById('cameraStatusText').innerHTML = 'ACTIVE';
-        document.getElementById('faceText').innerHTML = 'CAMERA ACTIVE';
     } else {
         camera.stop();
         isCameraActive = false;
-        const toggleBtn = document.getElementById('cameraToggleBtn');
-        if (toggleBtn) toggleBtn.textContent = 'BẬT CAMERA';
+        document.getElementById('cameraToggleBtn').textContent = 'BẬT CAMERA';
         document.getElementById('cameraStatusText').innerHTML = 'OFFLINE';
-        document.getElementById('faceText').innerHTML = 'CAMERA OFFLINE';
     }
 }
 
@@ -513,7 +439,6 @@ function onFaceMeshResults(results) {
     const ctx = canvasElement.getContext('2d');
     ctx.clearRect(0, 0, canvasElement.width, canvasElement.height);
     ctx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
-    
     if (results.multiFaceLandmarks?.length > 0) {
         document.getElementById('faceText').textContent = `${results.multiFaceLandmarks.length} face(s) detected`;
         document.getElementById('faceEmoji').textContent = '😊';
@@ -545,21 +470,6 @@ function capturePhoto() {
     if (photoCount < 3) {
         photoCount++;
         document.getElementById('photoCount').innerHTML = `📸 ${photoCount}/3 CAPTURED`;
-        const preview = document.getElementById('previewCanvas');
-        if (preview) {
-            const ctx = preview.getContext('2d');
-            ctx.fillStyle = 'rgba(0, 255, 255, 0.3)';
-            ctx.fillRect(0, 0, preview.width, preview.height);
-            setTimeout(() => {
-                ctx.clearRect(0, 0, preview.width, preview.height);
-                const video = document.querySelector('#registerModal video');
-                if (video && video.videoWidth) {
-                    preview.width = video.videoWidth;
-                    preview.height = video.videoHeight;
-                    ctx.drawImage(video, 0, 0, preview.width, preview.height);
-                }
-            }, 200);
-        }
     } else {
         alert('Đã chụp đủ 3 ảnh!');
     }
@@ -582,34 +492,13 @@ function saveFaceRegistration() {
     document.getElementById('photoCount').innerHTML = '📸 0/3 CAPTURED';
 }
 
-// ========== GAME MODE INITIALIZERS ==========
-// Import game modules (chỉ import 1 lần)
-//import { initBoatMode, stopBoatMode } from './js/game.js';
-//import { initPlaneMode, stopPlaneMode } from './js/plane-mode.js';
-
-window.initBoatMode = initBoatMode;
-window.stopBoatMode = stopBoatMode;
-window.initPlaneMode = initPlaneMode;
-window.stopPlaneMode = stopPlaneMode;
-
-// Override showGameMode
-window.showGameMode = function() {
-    document.getElementById('modeScreen').style.display = 'none';
-    document.getElementById('gameTypeScreen').style.display = 'block';
+// ========== INITIALIZE ==========
+document.getElementById('loginBtn').onclick = login;
+document.getElementById('loginPassword').onkeypress = (e) => {
+    if (e.key === 'Enter') login();
 };
 
-window.startGameWithMode = function(mode) {
-    document.getElementById('gameTypeScreen').style.display = 'none';
-    document.getElementById('gamePanel').style.display = 'block';
-    
-    if (mode === 'boat') {
-        initBoatMode();
-    } else if (mode === 'plane') {
-        initPlaneMode();
-    }
-};
-
-// ========== EXPORT FUNCTIONS ==========
+// Export functions
 window.showModeScreen = showModeScreen;
 window.showChatMode = showChatMode;
 window.showDriveMode = showDriveMode;
@@ -617,9 +506,3 @@ window.showTranslateMode = showTranslateMode;
 window.showCameraMode = showCameraMode;
 window.showGameMode = showGameMode;
 window.showGameTypeScreen = showGameTypeScreen;
-
-// ========== INITIALIZE ==========
-document.getElementById('loginBtn').onclick = login;
-document.getElementById('loginPassword').onkeypress = (e) => {
-    if (e.key === 'Enter') login();
-};
