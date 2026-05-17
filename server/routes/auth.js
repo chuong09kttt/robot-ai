@@ -1,36 +1,21 @@
 const express = require('express');
-const bcrypt = require('bcrypt');
 const router = express.Router();
 
-// User database (in production, use real database)
 const USERS = {
-    'admin': { passwordHash: '$2b$10$9q4q4q4q4q4q4q4q4q4q4q', name: 'Administrator' },
-    'ch': { passwordHash: '$2b$10$6q4q4q4q4q4q4q4q4q4q4q', name: 'Chí Hào' }
+    'admin': { password: 'admin123', name: 'Quản trị viên' },
+    'ch': { password: '123', name: 'Chí Hào' }
 };
 
-// Hash for password 'admin123' and '123'
-// In production, generate properly:
-// bcrypt.hashSync('admin123', 10)
-
-router.post('/login', async (req, res) => {
+router.post('/login', (req, res) => {
     const { username, password } = req.body;
+    const user = USERS[username];
     
-    if (!username || !password) {
-        return res.status(400).json({ success: false, message: 'Missing credentials' });
+    if (user && user.password === password) {
+        req.session.user = { username, name: user.name };
+        res.json({ success: true, name: user.name });
+    } else {
+        res.json({ success: false, message: 'Sai tài khoản hoặc mật khẩu!' });
     }
-    
-    // Check against stored users
-    if (username === 'admin' && password === 'admin123') {
-        req.session.user = { username: 'admin', name: 'Administrator' };
-        return res.json({ success: true, name: 'Administrator' });
-    }
-    
-    if (username === 'ch' && password === '123') {
-        req.session.user = { username: 'ch', name: 'Chí Hào' };
-        return res.json({ success: true, name: 'Chí Hào' });
-    }
-    
-    res.status(401).json({ success: false, message: 'Invalid credentials' });
 });
 
 router.post('/logout', (req, res) => {
