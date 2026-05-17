@@ -15,6 +15,9 @@
     <!-- Socket.IO and Three.js -->
     <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
+
+
+    
 </head>
 <body>
     <!-- LOGIN SCREEN -->
@@ -341,5 +344,32 @@
     </div>
 
     <script src="/script.js"></script>
+
+    <script type="module">
+    import { initGameWithMode, stopGame } from '/js/game.js';
+    import { startGameTracking, stopGameTracking } from '/js/tracking.js';
+    
+    window.initGameWithMode = initGameWithMode;
+    window.stopGame = stopGame;
+    window.startGameTracking = startGameTracking;
+    window.stopGameTracking = stopGameTracking;
+    
+    // Xử lý nút chọn chế độ game
+    document.getElementById('selectBoatMode')?.addEventListener('click', () => {
+        document.getElementById('gameTypeScreen').style.display = 'none';
+        document.getElementById('gamePanel').style.display = 'block';
+        initGameWithMode('boat');
+    });
+    
+    document.getElementById('selectPlaneMode')?.addEventListener('click', () => {
+        document.getElementById('gameTypeScreen').style.display = 'none';
+        document.getElementById('gamePanel').style.display = 'block';
+        initGameWithMode('plane');
+    });
+    </script>
+
+
+
+    
 </body>
 </html>
