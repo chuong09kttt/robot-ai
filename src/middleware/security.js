@@ -2,7 +2,7 @@
 const helmet = require('helmet');
 const crypto = require('crypto');
 const config = require('../config');
-
+const { checkWatermark } = require('../utils/watermark');
 // Generate request fingerprint
 function generateFingerprint(req) {
     const userAgent = req.headers['user-agent'] || '';
@@ -85,4 +85,15 @@ module.exports = {
     securityHeaders,
     antiTampering,
     generateFingerprint
+};
+
+// Export thêm watermark middleware
+module.exports = {
+    sessionFingerprint,
+    apiLimiter,
+    loginLimiter,
+    securityHeaders,
+    antiTampering,
+    generateFingerprint,
+    watermarkCheck: checkWatermark  // Thêm middleware watermark
 };
