@@ -242,6 +242,30 @@ function generateVersionInfo() {
     log('✅ version.json generated!', 'green');
 }
 
+
+// Generate loader.js
+function generateLoader() {
+    log('\n📄 Generating loader.js...', 'yellow');
+    
+    const sourceLoaderPath = path.join(__dirname, '../protected/loader.js');
+    const targetLoaderPath = path.join(__dirname, '../public/js/loader.js');
+    
+    // Ensure public/js directory exists
+    const publicJsDir = path.join(__dirname, '../public/js');
+    if (!fs.existsSync(publicJsDir)) {
+        fs.mkdirSync(publicJsDir, { recursive: true });
+    }
+    
+    // Copy loader.js to public/js
+    if (fs.existsSync(sourceLoaderPath)) {
+        fs.copyFileSync(sourceLoaderPath, targetLoaderPath);
+        log('✅ loader.js copied to public/js/', 'green');
+    } else {
+        log('⚠️ loader.js source not found', 'yellow');
+    }
+}
+
+
 // Main build function
 async function build() {
     log('\n╔════════════════════════════════════════════════════════════╗', 'blue');
