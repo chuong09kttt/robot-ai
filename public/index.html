@@ -386,6 +386,7 @@
         });
     </script>
 
+    <script type="module" src="/script.js"></script>
     <script type="module">
         import { initBoatMode, stopBoatMode } from '/js/game.js';
         import { initPlaneMode, stopPlaneMode } from '/js/plane-mode.js';
@@ -405,7 +406,6 @@
         document.getElementById('selectBoatMode')?.addEventListener('click', () => window.startGameWithMode('boat'));
         document.getElementById('selectPlaneMode')?.addEventListener('click', () => window.startGameWithMode('plane'));
     </script>
-
 
     
 </body>
