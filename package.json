@@ -9,7 +9,8 @@
     "build": "npm run build:obfuscate && npm run build:css",
     "build:obfuscate": "node scripts/obfuscate.js",
     "build:css": "cleancss -o public/css/style.min.css public/css/style.css",
-    "prestart": "npm run build"
+    "prestart": "npm run build",
+    "generate:keys": "node scripts/generate-keys.js"
   },
   "dependencies": {
     "express": "^4.18.2",
