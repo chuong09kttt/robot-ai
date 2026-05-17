@@ -1,12 +1,13 @@
 // ========== GAME MODULE ==========
 (function() {
+    console.log('🎮 Loading game module...');
+    
     let gameActive = false;
     let gameMode = null;
     let gameScene = null;
     let gameCamera = null;
     let gameRenderer = null;
-    let gameShip = null;
-    let gamePlane = null;
+    let gameVehicle = null;
     let gameBullets = [];
     let gameObstacles = [];
     let gamePowerups = [];
@@ -14,7 +15,9 @@
     let gameLives = 5;
     let gameAnimationId = null;
     let gameShootCooldown = 0;
-    let trackingData = { steeringAngle: 0, speed: 0, shooting: false };
+    let obstacleInterval = null;
+    let powerupInterval = null;
+    let trackingData = { steeringAngle: 0, speed: 0.15, shooting: false };
     
     const gameCanvas = document.getElementById('gameCanvas');
     
@@ -89,44 +92,48 @@
     }
     
     function createObstacle() {
+        if (!gameVehicle) return;
         const obstacle = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.5, 1.0), new THREE.MeshPhongMaterial({ color: 0xaa3333 }));
-        obstacle.position.set((Math.random() - 0.5) * 14, 0.3, (gameShip?.position.z || 0) - 90);
+        const randomX = (Math.random() - 0.5) * 14;
+        obstacle.position.set(randomX, 0.3, gameVehicle.position.z - 90);
         gameScene.add(obstacle);
         gameObstacles.push(obstacle);
     }
     
     function createPowerup() {
+        if (!gameVehicle) return;
         const powerup = new THREE.Mesh(new THREE.SphereGeometry(0.25, 16, 16), new THREE.MeshPhongMaterial({ color: 0xffdd44, emissive: 0xffaa00 }));
-        powerup.position.set((Math.random() - 0.5) * 14, 0.3, (gameShip?.position.z || 0) - 80);
+        powerup.position.set((Math.random() - 0.5) * 14, 0.3, gameVehicle.position.z - 80);
         gameScene.add(powerup);
         gamePowerups.push(powerup);
     }
     
     function fireBullet() {
+        if (!gameVehicle) return;
         const bullet = new THREE.Mesh(new THREE.SphereGeometry(0.12), new THREE.MeshBasicMaterial({ color: 0xffaa44 }));
-        const vehicle = gameShip || gamePlane;
-        if (vehicle) {
-            bullet.position.copy(vehicle.position);
-            bullet.position.z += 1.6;
-            bullet.position.y = 0.6;
-            bullet.userData = { velocityZ: -5 };
-            gameScene.add(bullet);
-            gameBullets.push(bullet);
-            playSound(880, 0.15, 0.1);
-        }
+        bullet.position.copy(gameVehicle.position);
+        bullet.position.z += 1.6;
+        bullet.position.y = 0.6;
+        bullet.userData = { velocityZ: -5 };
+        gameScene.add(bullet);
+        gameBullets.push(bullet);
+        playSound(880, 0.15, 0.1);
     }
     
     function updateUI() {
         const speedElem = document.getElementById('gameSpeed');
         const scoreElem = document.getElementById('gameScore');
         const livesElem = document.getElementById('gameLives');
-        if (speedElem) speedElem.innerHTML = `⚡ Speed: ${(trackingData.speed * 2).toFixed(1)}`;
+        if (speedElem) speedElem.innerHTML = `🚤 Speed: ${(trackingData.speed * 2).toFixed(1)}`;
         if (scoreElem) scoreElem.innerHTML = `💰 Score: ${gameScore}`;
         if (livesElem) livesElem.innerHTML = `❤️ Lives: ${gameLives}`;
     }
     
-    function gameOver() {
+    function showGameOver() {
         gameActive = false;
+        if (obstacleInterval) clearInterval(obstacleInterval);
+        if (powerupInterval) clearInterval(powerupInterval);
+        
         const overlay = document.createElement('div');
         overlay.style.cssText = `position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.9);z-index:1000;display:flex;justify-content:center;align-items:center;flex-direction:column`;
         overlay.innerHTML = `
@@ -145,6 +152,7 @@
         };
         document.getElementById('homeGameBtn').onclick = () => {
             overlay.remove();
+            if (window.stopGame) window.stopGame();
             document.getElementById('gamePanel').style.display = 'none';
             document.getElementById('modeScreen').style.display = 'block';
         };
@@ -159,10 +167,14 @@
         gameBullets = [];
         gameObstacles = [];
         gamePowerups = [];
-        if (gameShip) gameShip.position.set(0, 0, 0);
-        if (gamePlane) gamePlane.position.set(0, 2, 0);
+        if (gameVehicle) gameVehicle.position.set(0, 0, 0);
         gameActive = true;
         updateUI();
+        
+        if (obstacleInterval) clearInterval(obstacleInterval);
+        if (powerupInterval) clearInterval(powerupInterval);
+        obstacleInterval = setInterval(() => { if (gameActive) createObstacle(); }, 1200);
+        powerupInterval = setInterval(() => { if (gameActive) createPowerup(); }, 2500);
     }
     
     function startGameLoop() {
@@ -180,20 +192,12 @@
             let steering = (trackingData.steeringAngle || 0) * 1.2;
             let speed = Math.max(0.15, (trackingData.speed || 0) * 2);
             
-            if (gameMode === 'boat' && gameShip) {
+            if (gameVehicle) {
                 const targetX = steering * 8.5;
-                gameShip.position.x += (targetX - gameShip.position.x) * 0.1;
-                gameShip.position.x = Math.min(8.5, Math.max(-8.5, gameShip.position.x));
-                gameShip.rotation.z = -steering * 0.5;
-                gameShip.position.z -= speed * 0.48;
-            } else if (gameMode === 'plane' && gamePlane) {
-                const targetX = steering * 10;
-                gamePlane.position.x += (targetX - gamePlane.position.x) * 0.12;
-                gamePlane.position.x = Math.min(9, Math.max(-9, gamePlane.position.x));
-                gamePlane.rotation.z = -steering * 0.6;
-                gamePlane.position.z -= speed * 0.55;
-                gamePlane.position.y = 2 + Math.sin(Date.now() * 0.005) * 0.1;
-                if (gamePlane.propeller) gamePlane.propeller.rotation.x += 0.2;
+                gameVehicle.position.x += (targetX - gameVehicle.position.x) * 0.1;
+                gameVehicle.position.x = Math.min(8.5, Math.max(-8.5, gameVehicle.position.x));
+                gameVehicle.rotation.z = -steering * 0.5;
+                gameVehicle.position.z -= speed * 0.48;
             }
             
             if (trackingData.shooting && gameShootCooldown <= 0) {
@@ -219,14 +223,13 @@
                     gameObstacles.splice(i,1);
                     continue;
                 }
-                const vehicle = gameShip || gamePlane;
-                if (vehicle && Math.abs(o.position.x - vehicle.position.x) < 0.9 && Math.abs(o.position.z - vehicle.position.z) < 1.3) {
+                if (gameVehicle && Math.abs(o.position.x - gameVehicle.position.x) < 0.9 && Math.abs(o.position.z - gameVehicle.position.z) < 1.3) {
                     gameLives--;
                     gameScene.remove(o);
                     gameObstacles.splice(i,1);
                     updateUI();
                     playSound(300, 0.35, 0.2);
-                    if (gameLives <= 0) gameOver();
+                    if (gameLives <= 0) showGameOver();
                 }
             }
             
@@ -234,8 +237,7 @@
                 const p = gamePowerups[i];
                 p.position.z += speed * 0.45 + 0.5;
                 p.rotation.y += 0.05;
-                const vehicle = gameShip || gamePlane;
-                if (vehicle && Math.abs(p.position.x - vehicle.position.x) < 1.0 && Math.abs(p.position.z - vehicle.position.z) < 1.3) {
+                if (gameVehicle && Math.abs(p.position.x - gameVehicle.position.x) < 1.0 && Math.abs(p.position.z - gameVehicle.position.z) < 1.3) {
                     gameScore += 10;
                     gameScene.remove(p);
                     gamePowerups.splice(i,1);
@@ -247,11 +249,10 @@
                 }
             }
             
-            const vehicle = gameShip || gamePlane;
-            if (vehicle) {
-                gameCamera.position.x += (vehicle.position.x - gameCamera.position.x) * 0.06;
-                gameCamera.position.z = vehicle.position.z + 12;
-                gameCamera.lookAt(vehicle.position);
+            if (gameVehicle) {
+                gameCamera.position.x += (gameVehicle.position.x - gameCamera.position.x) * 0.06;
+                gameCamera.position.z = gameVehicle.position.z + 12;
+                gameCamera.lookAt(gameVehicle.position);
             }
             
             updateUI();
@@ -273,7 +274,15 @@
         
         if (!gameCanvas || typeof THREE === 'undefined') {
             console.error('Canvas or THREE not ready');
+            alert('Game canvas not ready');
             return;
+        }
+        
+        // Clean up previous game
+        if (gameRenderer) {
+            gameBullets.forEach(b => gameScene.remove(b));
+            gameObstacles.forEach(o => gameScene.remove(o));
+            gamePowerups.forEach(p => gameScene.remove(p));
         }
         
         gameRenderer = new THREE.WebGLRenderer({ canvas: gameCanvas, antialias: true });
@@ -298,15 +307,19 @@
         water.position.y = -0.3;
         gameScene.add(water);
         
-        gameShip = createBoat();
-        gameScene.add(gameShip);
+        gameVehicle = createBoat();
+        gameScene.add(gameVehicle);
         
-        setInterval(() => { if (gameActive) createObstacle(); }, 1200);
-        setInterval(() => { if (gameActive) createPowerup(); }, 2500);
+        if (obstacleInterval) clearInterval(obstacleInterval);
+        if (powerupInterval) clearInterval(powerupInterval);
+        obstacleInterval = setInterval(() => { if (gameActive) createObstacle(); }, 1200);
+        powerupInterval = setInterval(() => { if (gameActive) createPowerup(); }, 2500);
         
         startGameLoop();
         if (window.startGameTracking) window.startGameTracking();
         updateUI();
+        
+        console.log('✅ Boat game started');
     }
     
     function initPlaneMode() {
@@ -318,7 +331,14 @@
         
         if (!gameCanvas || typeof THREE === 'undefined') {
             console.error('Canvas or THREE not ready');
+            alert('Game canvas not ready');
             return;
+        }
+        
+        if (gameRenderer) {
+            gameBullets.forEach(b => gameScene.remove(b));
+            gameObstacles.forEach(o => gameScene.remove(o));
+            gamePowerups.forEach(p => gameScene.remove(p));
         }
         
         gameRenderer = new THREE.WebGLRenderer({ canvas: gameCanvas, antialias: true });
@@ -338,7 +358,7 @@
         sun.position.set(5, 15, 5);
         gameScene.add(sun);
         
-        for (let i = 0; i < 30; i++) {
+        for (let i = 0; i < 20; i++) {
             const cloudGroup = new THREE.Group();
             const cloudMat = new THREE.MeshPhongMaterial({ color: 0xffffff, transparent: true, opacity: 0.85 });
             [0.7, 0.5, 0.6, 0.4, 0.5].forEach((size, idx) => {
@@ -346,19 +366,23 @@
                 part.position.set((idx - 2) * 0.5, 0, (idx % 2) * 0.3);
                 cloudGroup.add(part);
             });
-            cloudGroup.position.set((Math.random() - 0.5) * 40, 3 + Math.random() * 5, (Math.random() - 0.5) * 100 - 50);
+            cloudGroup.position.set((Math.random() - 0.5) * 40, 3 + Math.random() * 4, (Math.random() - 0.5) * 100 - 50);
             gameScene.add(cloudGroup);
         }
         
-        gamePlane = createPlane();
-        gameScene.add(gamePlane);
+        gameVehicle = createPlane();
+        gameScene.add(gameVehicle);
         
-        setInterval(() => { if (gameActive) createObstacle(); }, 1200);
-        setInterval(() => { if (gameActive) createPowerup(); }, 2500);
+        if (obstacleInterval) clearInterval(obstacleInterval);
+        if (powerupInterval) clearInterval(powerupInterval);
+        obstacleInterval = setInterval(() => { if (gameActive) createObstacle(); }, 1200);
+        powerupInterval = setInterval(() => { if (gameActive) createPowerup(); }, 2500);
         
         startGameLoop();
         if (window.startGameTracking) window.startGameTracking();
         updateUI();
+        
+        console.log('✅ Plane game started');
     }
     
     window.initBoatMode = initBoatMode;
@@ -366,12 +390,18 @@
     window.stopGame = function() {
         gameActive = false;
         if (gameAnimationId) cancelAnimationFrame(gameAnimationId);
+        if (obstacleInterval) clearInterval(obstacleInterval);
+        if (powerupInterval) clearInterval(powerupInterval);
         if (window.stopGameTracking) window.stopGameTracking();
     };
     window.startGameWithMode = function(mode) {
-        document.getElementById('gameTypeScreen').style.display = 'none';
-        document.getElementById('gamePanel').style.display = 'block';
+        const gameTypeScreen = document.getElementById('gameTypeScreen');
+        const gamePanel = document.getElementById('gamePanel');
+        if (gameTypeScreen) gameTypeScreen.style.display = 'none';
+        if (gamePanel) gamePanel.style.display = 'block';
         if (mode === 'boat') initBoatMode();
         else if (mode === 'plane') initPlaneMode();
     };
+    
+    console.log('✅ Game module loaded');
 })();
