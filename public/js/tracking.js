@@ -1,11 +1,12 @@
-
-// ========== BODY TRACKING CHO GAME - VÔ LĂNG ==========
-
-const gameTrackingData = {
-  steeringAngle: 0,    // Góc vô lăng (-1 đến 1, 0 là thẳng)
-  headY: 0.5,          // Vị trí đầu theo chiều dọc
-  speed: 0,            // Tốc độ (0-1.2)
-  shooting: false
+// ========== BODY TRACKING FOR GAME - FIXED ==========
+export const trackingData = {
+    steeringAngle: 0,
+    speed: 0,
+    shooting: false,
+    headX: 0.5,
+    headY: 0.5,
+    leftArmAngle: 0,
+    rightArmAngle: 0
 };
 
 let video = null;
@@ -13,192 +14,166 @@ let pose = null;
 let hands = null;
 let camera = null;
 let isTrackingActive = false;
+let lastSteering = 0;
+let lastSpeed = 0;
 
-// Khởi tạo camera
 async function setupCamera() {
-  try {
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video: { 
-        width: { ideal: 640 },
-        height: { ideal: 480 },
-        facingMode: "user"
-      }
-    });
-    
-    video = document.getElementById("webcam");
-    if (video) {
-      video.srcObject = stream;
-      await video.play();
-      console.log("📷 Camera setup complete");
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({ 
+            video: { 
+                width: { ideal: 640 },
+                height: { ideal: 480 },
+                facingMode: "user"
+            } 
+        });
+        video = document.getElementById("webcam");
+        if (video) {
+            video.srcObject = stream;
+            await video.play();
+            console.log("✅ Camera started successfully");
+        }
+    } catch(e) { 
+        console.error("Camera error:", e);
+        const statusElem = document.getElementById("gameStatus");
+        if (statusElem) statusElem.innerHTML = "⚠️ Camera not available";
     }
-  } catch (error) {
-    console.error("Camera error:", error);
-  }
 }
 
-// Khởi tạo Pose detection
 function initPose() {
-  if (pose) return;
-  
-  pose = new Pose({
-    locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`
-  });
-  
-  pose.setOptions({
-    modelComplexity: 1,
-    smoothLandmarks: true,
-    minDetectionConfidence: 0.3,
-    minTrackingConfidence: 0.3
-  });
-  
-  pose.onResults((results) => {
-    if (!isTrackingActive) return;
-    if (!results.poseLandmarks || results.poseLandmarks.length === 0) return;
-    
-    const landmarks = results.poseLandmarks;
-    const nose = landmarks[0];
-    const leftShoulder = landmarks[11];
-    const rightShoulder = landmarks[12];
-    const leftWrist = landmarks[15];
-    const rightWrist = landmarks[16];
-    const leftElbow = landmarks[13];
-    const rightElbow = landmarks[14];
-    
-    if (nose) {
-      // Vị trí đầu theo chiều dọc (để điều khiển tốc độ)
-      // Đầu nâng cao (y nhỏ) -> tăng tốc
-      // Đầu hạ thấp (y lớn) -> giảm tốc
-      let headYNormalized = nose.y;
-      // Đảo ngược: y càng nhỏ (đầu cao) thì speed càng lớn
-      let rawSpeed = (0.3 - headYNormalized) * 3;
-      gameTrackingData.speed = Math.max(0, Math.min(1.2, rawSpeed));
-      gameTrackingData.headY = headYNormalized;
-    }
-    
-    // NHẬN DIỆN VÔ LĂNG - Dùng 2 tay để tạo thành vô lăng
-    // Khi người dùng giơ 2 tay lên ngang vai và xoay, góc giữa 2 tay xác định hướng
-    
-    if (leftWrist && rightWrist && leftShoulder && rightShoulder) {
-      // Tính góc giữa 2 tay (vô lăng)
-      const dx = rightWrist.x - leftWrist.x;
-      const dy = rightWrist.y - leftWrist.y;
-      let angle = Math.atan2(dy, dx);
-      
-      // Chuyển đổi góc thành giá trị từ -1 đến 1
-      // angle ~ -0.5 (trái) đến 0.5 (phải)
-      let steeringRaw = angle * 2;
-      gameTrackingData.steeringAngle = Math.max(-0.9, Math.min(0.9, steeringRaw));
-      
-      // Debug log
-      if (Math.abs(gameTrackingData.steeringAngle) > 0.3) {
-        console.log(`🎮 Steering: ${gameTrackingData.steeringAngle.toFixed(2)}, Speed: ${gameTrackingData.speed.toFixed(2)}`);
-      }
-    } else {
-      // Fallback dùng 1 tay nếu không thấy 2 tay
-      if (rightWrist && rightShoulder) {
-        let armAngle = (rightWrist.x - rightShoulder.x) * 1.5;
-        gameTrackingData.steeringAngle = Math.max(-0.9, Math.min(0.9, armAngle));
-      } else if (leftWrist && leftShoulder) {
-        let armAngle = (leftWrist.x - leftShoulder.x) * 1.5;
-        gameTrackingData.steeringAngle = Math.max(-0.9, Math.min(0.9, armAngle));
-      } else {
-        // Không thấy tay, giữ nguyên góc
-        if (Math.abs(gameTrackingData.steeringAngle) > 0.01) {
-          gameTrackingData.steeringAngle *= 0.95;
-        }
-      }
-    }
-  });
-}
-
-// Khởi tạo Hands detection cho bắn đạn
-function initHands() {
-  if (hands) return;
-  
-  hands = new Hands({
-    locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
-  });
-  
-  hands.setOptions({
-    maxNumHands: 2,
-    modelComplexity: 1,
-    minDetectionConfidence: 0.3,
-    minTrackingConfidence: 0.3
-  });
-  
-  hands.onResults((results) => {
-    if (!isTrackingActive) {
-      gameTrackingData.shooting = false;
-      return;
-    }
-    
-    gameTrackingData.shooting = false;
-    
-    if (!results.multiHandLandmarks || results.multiHandLandmarks.length === 0) return;
-    
-    for (const hand of results.multiHandLandmarks) {
-      if (hand && hand[8] && hand[5]) {
-        const tip = hand[8];
-        const mcp = hand[5];
-        
-        // Nắm tay hoặc giơ ngón trỏ = bắn
-        if (tip.y < mcp.y - 0.05) {
-          gameTrackingData.shooting = true;
-          break;
-        }
-      }
-    }
-  });
-}
-
-// Khởi tạo Camera
-function initCamera() {
-  if (camera) return;
-  
-  if (!video) {
-    video = document.getElementById("webcam");
-  }
-  
-  if (video && typeof Camera !== 'undefined') {
-    camera = new Camera(video, {
-      onFrame: async () => {
-        if (!isTrackingActive) return;
-        if (pose) await pose.send({ image: video });
-        if (hands) await hands.send({ image: video });
-      },
-      width: 640,
-      height: 480
+    if (pose) return;
+    pose = new Pose({ 
+        locateFile: (f) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${f}` 
     });
-  }
+    pose.setOptions({ 
+        modelComplexity: 1, 
+        smoothLandmarks: true,
+        minDetectionConfidence: 0.3,
+        minTrackingConfidence: 0.3
+    });
+    
+    pose.onResults((results) => {
+        if (!isTrackingActive || !results.poseLandmarks) return;
+        
+        const lm = results.poseLandmarks;
+        const nose = lm[0];
+        const leftShoulder = lm[11];
+        const rightShoulder = lm[12];
+        const leftElbow = lm[13];
+        const rightElbow = lm[14];
+        const leftWrist = lm[15];
+        const rightWrist = lm[16];
+        
+        // Cập nhật vị trí đầu
+        if (nose) {
+            trackingData.headX = Math.min(0.95, Math.max(0.05, nose.x));
+            trackingData.headY = Math.min(0.95, Math.max(0.05, nose.y));
+            
+            // Tốc độ dựa trên độ cao của đầu (cúi xuống = giảm tốc, ngước lên = tăng tốc)
+            let speedRaw = (0.3 - nose.y) * 3;
+            trackingData.speed = Math.max(0.1, Math.min(1.2, speedRaw));
+        }
+        
+        // TÍNH GÓC CÁNH TAY CHO MÁY BAY
+        if (leftShoulder && leftWrist) {
+            const dx = leftWrist.x - leftShoulder.x;
+            const dy = leftWrist.y - leftShoulder.y;
+            trackingData.leftArmAngle = Math.atan2(dy, dx);
+        }
+        
+        if (rightShoulder && rightWrist) {
+            const dx = rightWrist.x - rightShoulder.x;
+            const dy = rightWrist.y - rightShoulder.y;
+            trackingData.rightArmAngle = Math.atan2(dy, dx);
+        }
+        
+        // TÍNH GÓC LÁI (dùng góc giữa 2 tay cho máy bay)
+        if (leftWrist && rightWrist) {
+            // Góc giữa 2 tay
+            let angle = (rightWrist.x - leftWrist.x) * 1.2;
+            trackingData.steeringAngle = Math.max(-0.9, Math.min(0.9, angle));
+        } else if (rightWrist && rightShoulder) {
+            // Fallback: dùng tay phải
+            trackingData.steeringAngle = Math.max(-0.9, Math.min(0.9, (rightWrist.x - rightShoulder.x) * 1.5));
+        } else {
+            // Giảm dần về 0 khi không có tín hiệu
+            trackingData.steeringAngle *= 0.95;
+        }
+        
+        // Debug log
+        if (Math.random() < 0.05) {
+            console.log(`🕹️ Steering: ${trackingData.steeringAngle.toFixed(2)}, Speed: ${trackingData.speed.toFixed(2)}, L: ${trackingData.leftArmAngle.toFixed(2)}, R: ${trackingData.rightArmAngle.toFixed(2)}`);
+        }
+    });
+}
+
+function initHands() {
+    if (hands) return;
+    hands = new Hands({ 
+        locateFile: (f) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${f}` 
+    });
+    hands.setOptions({ 
+        maxNumHands: 2,
+        minDetectionConfidence: 0.3,
+        minTrackingConfidence: 0.3
+    });
+    
+    hands.onResults((results) => {
+        if (!isTrackingActive) {
+            trackingData.shooting = false;
+            return;
+        }
+        trackingData.shooting = false;
+        if (!results.multiHandLandmarks) return;
+        
+        // Kiểm tra nắm tay (bắn đạn)
+        for (const hand of results.multiHandLandmarks) {
+            if (hand && hand[8] && hand[5]) {
+                const tip = hand[8];
+                const mcp = hand[5];
+                // Nếu ngón tay gập lại (nắm tay)
+                if (tip.y > mcp.y) {
+                    trackingData.shooting = true;
+                    break;
+                }
+            }
+        }
+    });
+}
+
+function initCamera() {
+    if (camera) return;
+    if (!video) video = document.getElementById("webcam");
+    if (video && typeof Camera !== 'undefined') {
+        camera = new Camera(video, {
+            onFrame: async () => {
+                if (!isTrackingActive) return;
+                if (pose) await pose.send({ image: video });
+                if (hands) await hands.send({ image: video });
+            }
+        });
+    }
 }
 
 export async function startGameTracking() {
-  console.log("🎮 Starting game tracking with steering wheel...");
-  isTrackingActive = true;
-  
-  if (!video) {
-    await setupCamera();
-  }
-  
-  initPose();
-  initHands();
-  initCamera();
-  
-  if (camera) {
-    await camera.start();
-    console.log("🎮 Camera started!");
-  }
-  
-  console.log("🎮 Game tracking started! Hold your hands like a steering wheel!");
+    console.log("🎮 Starting game tracking...");
+    isTrackingActive = true;
+    if (!video) await setupCamera();
+    initPose();
+    initHands();
+    initCamera();
+    if (camera) await camera.start();
+    console.log("✅ Game tracking active!");
 }
 
 export function stopGameTracking() {
-  console.log("🎮 Stopping game tracking...");
-  isTrackingActive = false;
-  
-  if (camera) {
-    camera.stop();
-  }
+    console.log("🎮 Stopping game tracking...");
+    isTrackingActive = false;
+    if (camera) camera.stop();
 }
 
-export { gameTrackingData as trackingData };
+// Auto-update global trackingData
+setInterval(() => {
+    if (typeof window !== 'undefined') {
+        window.trackingData = trackingData;
+    }
+}, 16);
