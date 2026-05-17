@@ -8,7 +8,8 @@ const {
     securityHeaders, 
     sessionFingerprint, 
     apiLimiter,
-    antiTampering 
+    antiTampering, 
+    watermarkCheck      // Thêm watermark middleware
 } = require('./middleware/security');
 const { cleanupSession } = require('./middleware/auth');
 const { setupWebSocket } = require('./socket');
@@ -30,7 +31,8 @@ app.use(securityHeaders);
 app.use(antiTampering);
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
-
+// Thêm watermark middleware vào app
+app.use(watermarkCheck);
 // Session with secure configuration
 app.use(session({
     secret: config.SESSION_SECRET,
