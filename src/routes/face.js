@@ -1,27 +1,11 @@
 // ========== FACE RECOGNITION ROUTES ==========
 const express = require('express');
-const fs = require('fs');
 const router = express.Router();
-const config = require('../config');
-const { requireApiAuth } = require('../middleware/auth');
-
-// Read face database
-function readFaceDB() {
-    try {
-        if (fs.existsSync(config.FACE_DATA_FILE)) {
-            return JSON.parse(fs.readFileSync(config.FACE_DATA_FILE, 'utf8'));
-        }
-    } catch(e) {}
-    return {};
-}
-
-// Write face database
-function writeFaceDB(data) {
-    fs.writeFileSync(config.FACE_DATA_FILE, JSON.stringify(data, null, 2));
-}
+const faceEngine = require('../services/faceEngine');
+const { requireAuth } = require('../middleware/auth');
 
 // Register face
-router.post('/register', requireApiAuth, (req, res) => {
+router.post('/register', requireAuth, (req, res) => {
     const { name, descriptor } = req.body;
     const username = req.session.user.username;
     
@@ -29,60 +13,68 @@ router.post('/register', requireApiAuth, (req, res) => {
         return res.status(400).json({ error: 'Missing face data' });
     }
     
-    const db = readFaceDB();
-    if (!db[username]) db[username] = [];
-    db[username].push({ name, descriptor, registeredAt: Date.now() });
-    writeFaceDB(db);
-    
-    res.json({ success: true, message: `Đã lưu khuôn mặt cho ${name}` });
+    const result = faceEngine.registerFace(username, name, descriptor);
+    res.json(result);
 });
 
 // Recognize face
-router.post('/recognize', requireApiAuth, (req, res) => {
+router.post('/recognize', requireAuth, (req, res) => {
     const { descriptor } = req.body;
     const username = req.session.user.username;
-    const db = readFaceDB();
-    const userFaces = db[username] || [];
     
-    // Simple matching - in production use proper face matching
-    const match = userFaces.find(f => 
-        JSON.stringify(f.descriptor) === JSON.stringify(descriptor)
-    );
-    
-    if (match) {
-        res.json({ success: true, name: match.name });
-    } else {
-        res.json({ success: false, name: null });
+    if (!descriptor) {
+        return res.status(400).json({ error: 'Missing face descriptor' });
     }
-});
-
-// List registered faces
-router.get('/list', requireApiAuth, (req, res) => {
-    const username = req.session.user.username;
-    const db = readFaceDB();
-    const userFaces = db[username] || [];
     
-    res.json({ faces: userFaces.map(f => ({ name: f.name, registeredAt: f.registeredAt })) });
+    const result = faceEngine.recognizeFace(username, descriptor);
+    res.json(result);
 });
 
-// Delete face
-router.delete('/:name', requireApiAuth, (req, res) => {
+// Get list of registered faces
+router.get('/list', requireAuth, (req, res) => {
+    const username = req.session.user.username;
+    const faces = faceEngine.getRegisteredFaces(username);
+    res.json({ faces });
+});
+
+// Delete a face
+router.delete('/:name', requireAuth, (req, res) => {
     const { name } = req.params;
     const username = req.session.user.username;
-    
-    const db = readFaceDB();
-    if (db[username]) {
-        db[username] = db[username].filter(f => f.name !== name);
-        writeFaceDB(db);
-    }
-    
-    res.json({ success: true });
+    const result = faceEngine.deleteFace(username, name);
+    res.json(result);
 });
 
-// Get face database info
-router.get('/database', (req, res) => {
-    const db = readFaceDB();
-    res.json({ users: Object.keys(db) });
+// Delete all faces
+router.delete('/all', requireAuth, (req, res) => {
+    const username = req.session.user.username;
+    const result = faceEngine.clearAllFaces(username);
+    res.json(result);
+});
+
+// Analyze face (glasses, hat, expression)
+router.post('/analyze', requireAuth, (req, res) => {
+    const { landmarks } = req.body;
+    
+    if (!landmarks || landmarks.length === 0) {
+        return res.status(400).json({ error: 'No face landmarks' });
+    }
+    
+    const result = faceEngine.analyzeFace(landmarks[0]);
+    res.json(result);
+});
+
+// Get database stats
+router.get('/stats', requireAuth, (req, res) => {
+    const db = faceEngine.readFaceDatabase();
+    const username = req.session.user.username;
+    const userFaces = db[username] || [];
+    
+    res.json({
+        totalUsers: Object.keys(db).length,
+        userFacesCount: userFaces.length,
+        userFaces: userFaces.map(f => ({ name: f.name, registeredAt: f.registeredAt }))
+    });
 });
 
 module.exports = router;
