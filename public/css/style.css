@@ -1,0 +1,165 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    background: #0a0a0f;
+    font-family: 'Orbitron', 'Share Tech Mono', monospace;
+    overflow: hidden;
+}
+
+/* Login Screen */
+.login-screen {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+    background: radial-gradient(ellipse at 20% 30%, #0a0a1a, #030308);
+}
+
+.login-container {
+    background: rgba(10, 10, 20, 0.85);
+    backdrop-filter: blur(15px);
+    border-radius: 20px;
+    padding: 40px;
+    width: 90%;
+    max-width: 400px;
+    text-align: center;
+    border: 2px solid #00ffff;
+    box-shadow: 0 0 30px rgba(0, 255, 255, 0.3);
+}
+
+.login-robot-glow {
+    font-size: 70px;
+    animation: float 3s ease-in-out infinite;
+}
+
+.gaming-title {
+    font-size: 36px;
+    font-weight: 800;
+    background: linear-gradient(135deg, #00ffff, #ff00ff);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+}
+
+.gaming-subtitle {
+    font-size: 10px;
+    letter-spacing: 3px;
+    color: #00ffff;
+}
+
+.input-group {
+    display: flex;
+    align-items: center;
+    background: rgba(0, 0, 0, 0.7);
+    border-radius: 10px;
+    margin: 15px 0;
+    border: 1px solid #00ffff;
+}
+
+.input-icon {
+    padding: 12px 15px;
+    color: #00ffff;
+}
+
+.input-group input {
+    flex: 1;
+    background: none;
+    border: none;
+    padding: 12px 15px 12px 0;
+    color: white;
+    outline: none;
+}
+
+.gaming-btn {
+    width: 100%;
+    padding: 12px;
+    background: linear-gradient(90deg, #00ffff, #ff00ff);
+    border: none;
+    border-radius: 10px;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+.login-error {
+    color: #ff4444;
+    margin-top: 10px;
+    font-size: 12px;
+}
+
+.login-hint {
+    margin-top: 20px;
+    padding: 15px;
+    background: rgba(0, 0, 0, 0.5);
+    border-radius: 10px;
+}
+
+.hint-title {
+    color: #ffff00;
+    font-size: 11px;
+}
+
+.hint-item {
+    color: #00ffff;
+    font-size: 11px;
+    margin: 3px 0;
+}
+
+/* Mode Screen */
+.mode-screen {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    overflow-y: auto;
+}
+
+.mode-container {
+    max-width: 1000px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+.user-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 20px;
+    background: rgba(0, 0, 0, 0.7);
+    border-radius: 15px;
+    margin-bottom: 30px;
+    border: 1px solid #00ffff;
+}
+
+.user-name {
+    color: #00ffff;
+    font-weight: bold;
+}
+
+.logout-gaming {
+    background: rgba(255, 0, 255, 0.2);
+    border: 1px solid #ff00ff;
+    padding: 6px 20px;
+    border-radius: 8px;
+    color: #ff00ff;
+    cursor: pointer;
+}
+
+.mode-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 20px;
+    margin-bottom: 30px;
+}
+
+.mode-card {
+    background: linear-gradient(135deg
