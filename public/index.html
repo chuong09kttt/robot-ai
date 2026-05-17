@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>🐹 CHIRI AI - Cyberpunk Edition</title>
+    <link rel="stylesheet" href="/css/style.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { background: #0a0a0f; font-family: 'Orbitron', 'Share Tech Mono', monospace; overflow: hidden; }
+        .loading { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); color: #00ffff; font-size: 24px; z-index: 9999; text-shadow: 0 0 10px #00ffff; }
+    </style>
+</head>
+<body>
+    <div class="loading" id="loading">🔐 LOADING SECURE MODULE...</div>
+    <div id="app"></div>
+
+    <script>
+        // Anti-debugging
+        (function() {
+            let devToolsDetected = false;
+            const checkDevTools = () => {
+                const threshold = 160;
+                const widthDiff = window.outerWidth - window.innerWidth;
+                const heightDiff = window.outerHeight - window.innerHeight;
+                if (widthDiff > threshold || heightDiff > threshold) {
+                    if (!devToolsDetected) {
+                        devToolsDetected = true;
+                        document.body.innerHTML = '<div style="color:#ff4444;text-align:center;margin-top:50%">🔒 Developer tools detected. Please close to continue.</div>';
+                        setTimeout(() => location.reload(), 3000);
+                    }
+                }
+            };
+            setInterval(checkDevTools, 1000);
+        })();
+
+        // Secure loader
+        (async function() {
+            try {
+                // Check authentication
+                const authCheck = await fetch('/api/auth/check', { credentials: 'include' });
+                const authData = await authCheck.json();
+                
+                if (!authData.authenticated) {
+                    // Show login screen
+                    showLoginScreen();
+                } else {
+                    // Load main application
+                    document.getElementById('loading').style.display = 'none';
+                    loadMainApp();
+                }
+            } catch(e) {
+                console.error('Auth check failed');
+                showLoginScreen();
+            }
+        })();
+
+        function showLoginScreen() {
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('app').innerHTML = `
+                <div class="login-screen">
+                    <div class="gaming-bg"></div>
+                    <div class="login-container">
+                        <div class="login-robot-glow">🐹</div>
+                        <h1 class="gaming-title">CHIRI <span class="highlight">AI</span></h1>
+                        <div class="gaming-subtitle">SECURE EDITION</div>
+                        <div class="login-form">
+                            <div class="input-group">
+                                <span class="input-icon">👤</span>
+                                <input type="text" id="loginUsername" placeholder="USERNAME">
+                            </div>
+                            <div class="input-group">
+                                <span class="input-icon">🔒</span>
+                                <input type="password" id="loginPassword" placeholder="PASSWORD">
+                            </div>
+                            <button id="loginBtn" class="gaming-btn">ĐĂNG NHẬP</button>
+                            <div id="loginError" class="login-error"></div>
+                        </div>
+                        <div class="login-hint">
+                            <div class="hint-title">⚡ ACCESS CODE</div>
+                            <div class="hint-item">admin / admin123</div>
+                            <div class="hint-item">ch / 123</div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            document.getElementById('loginBtn').onclick = async () => {
+                const username = document.getElementById('loginUsername').value;
+                const password = document.getElementById('loginPassword').value;
+                
+                const res = await fetch('/api/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password }),
+                    credentials: 'include'
+                });
+                const data = await res.json();
+                
+                if (data.success) {
+                    location.reload();
+                } else {
+                    document.getElementById('loginError').textContent = data.message;
+                }
+            };
+        }
+
+        function loadMainApp() {
+            const script = document.createElement('script');
+            script.src = '/js/loader.js';
+            script.type = 'text/javascript';
+            document.head.appendChild(script);
+        }
+    </script>
+</body>
+</html>
