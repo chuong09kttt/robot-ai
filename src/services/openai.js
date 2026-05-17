@@ -16,24 +16,31 @@ if (config.OPENAI_API_KEY) {
 const conversationHistory = new Map();
 
 // System prompts
-function getSystemPrompt(lang) {
+function getSystemPrompt(lang, customContext = '') {
+    let prompt;
     if (lang === 'en') {
-        return `You are Chiri - a smart, friendly, cute AI assistant.
+        prompt = `You are Chiri - a smart, friendly, cute AI assistant.
 - Answer ALL user questions accurately and helpfully
 - Tone: friendly, enthusiastic, use emojis (❤️, 😊, 🚀)
 - Answer in ENGLISH only, SHORT (2-3 sentences)
 - If you don't know, say "I'm not sure about that"`;
     } else {
-        return `Bạn là Chiri - một trợ lý AI thông minh, thân thiện, dễ thương.
+        prompt = `Bạn là Chiri - một trợ lý AI thông minh, thân thiện, dễ thương.
 - Trả lời MỌI câu hỏi của người dùng một cách chính xác, hữu ích
 - Giọng điệu: thân thiện, nhiệt tình, dùng icon cảm xúc (❤️, 😊, 🚀)
 - Trả lời bằng TIẾNG VIỆT, NGẮN GỌN (2-3 câu)
 - Nếu không biết, nói "Mình chưa rõ lắm"`;
     }
+    
+    if (customContext) {
+        prompt += `\n\n**REFERENCE INFORMATION:**\n${customContext.slice(0, 500)}\n\nUse this information to answer if relevant.`;
+    }
+    
+    return prompt;
 }
 
 // Chat with AI
-async function chat(message, history = [], userId = 'default', lang = 'vi') {
+async function chat(message, history = [], userId = 'default', lang = 'vi', customContext = '') {
     const cacheKey = `${userId}_${message.slice(0, 200)}_${lang}`;
     const cached = getCachedResponse(cacheKey);
     if (cached) return cached;
@@ -50,7 +57,7 @@ async function chat(message, history = [], userId = 'default', lang = 'vi') {
         
         const userHistory = conversationHistory.get(userId);
         const messages = [
-            { role: 'system', content: getSystemPrompt(lang) },
+            { role: 'system', content: getSystemPrompt(lang, customContext) },
             ...userHistory.slice(-10),
             { role: 'user', content: message.slice(0, 500) }
         ];
