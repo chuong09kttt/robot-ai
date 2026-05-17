@@ -43,6 +43,7 @@ function getSystemPrompt(lang, customContext = '') {
 async function chat(message, history = [], userId = 'default', lang = 'vi', customContext = '') {
     const cacheKey = `${userId}_${message.slice(0, 200)}_${lang}`;
     const cached = getCachedResponse(cacheKey);
+    const systemPrompt = getSystemPrompt(lang, customContext);
     if (cached) return cached;
     
     if (!openai) {
