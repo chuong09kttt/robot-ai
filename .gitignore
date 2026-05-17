@@ -1,6 +1,48 @@
+# Dependencies
 node_modules/
+
+# Environment
 .env
-*.log
-.DS_Store
-face-data.json
+.env.local
+.env.production
+
+# Database (encrypted files)
+database/*.enc
+database/logs/*.log
+database/logs/
+!database/logs/.gitkeep
+
+# Protected files (obfuscated)
+protected/js/**/*.js
+protected/wasm/*.wasm
+!protected/js/.gitkeep
+!protected/wasm/.gitkeep
+
+# Public build outputs
 public/css/style.min.css
+public/js/bundle.js
+
+# Secrets
+.secrets/
+*.key
+*.pem
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Build outputs
+dist/
+build/
