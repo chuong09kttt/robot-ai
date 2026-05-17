@@ -6,7 +6,7 @@ const config = require('./config');
 const { sessionMiddleware } = require('./middleware/auth');
 const { corsOptions, securityHeaders } = require('./middleware/cors');
 const { apiLimiter } = require('./middleware/rateLimit');
-const { setupWebSocket } = require('./socket');
+const { setupWebSocket } = require('./services/websocket');  // Đã sửa đường dẫn
 
 // Routes
 const authRoutes = require('./routes/auth');
