@@ -1,6 +1,4 @@
 // ========== BASE GAME CLASS ==========
-// Tất cả các game đều kế thừa từ class này
-
 export class BaseGame {
     constructor(canvasId, options = {}) {
         this.canvas = document.getElementById(canvasId);
@@ -20,48 +18,56 @@ export class BaseGame {
         this.intervals = [];
     }
     
-    // Khởi tạo scene 3D
     initScene() {
+        if (!this.canvas) {
+            console.error('Canvas not found:', this.canvas);
+            return false;
+        }
+        
         this.renderer = new THREE.WebGLRenderer({ canvas: this.canvas, antialias: true });
         this.renderer.setSize(window.innerWidth, window.innerHeight);
+        this.renderer.setClearColor(0x0a1030);
         
         this.scene = new THREE.Scene();
-        this.camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 1000);
+        this.scene.background = new THREE.Color(0x0a1030);
+        this.scene.fog = new THREE.FogExp2(0x0a1030, 0.008);
         
-        // Ánh sáng cơ bản
+        this.camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 1000);
+        this.camera.position.set(0, 7, 14);
+        
         const ambient = new THREE.AmbientLight(0x404060, 0.7);
         this.scene.add(ambient);
         const sun = new THREE.DirectionalLight(0xfff5e6, 1.0);
         sun.position.set(5, 15, 5);
         this.scene.add(sun);
+        
+        return true;
     }
     
-    // Tạo vật thể (override bởi game con)
     createVehicle() {
-        throw new Error('Must implement createVehicle()');
+        // To be overridden
     }
     
     createObstacle() {
-        throw new Error('Must implement createObstacle()');
+        const obstacle = new THREE.Mesh(
+            new THREE.BoxGeometry(0.9, 0.5, 1.0),
+            new THREE.MeshPhongMaterial({ color: 0xaa3333 })
+        );
+        obstacle.position.set((Math.random() - 0.5) * 14, 0.3, this.vehicle.position.z - 90);
+        this.scene.add(obstacle);
+        this.obstacles.push(obstacle);
     }
     
     createPowerup() {
-        throw new Error('Must implement createPowerup()');
+        const powerup = new THREE.Mesh(
+            new THREE.SphereGeometry(0.25, 16, 16),
+            new THREE.MeshPhongMaterial({ color: 0xffdd44, emissive: 0xffaa00 })
+        );
+        powerup.position.set((Math.random() - 0.5) * 14, 0.3, this.vehicle.position.z - 80);
+        this.scene.add(powerup);
+        this.powerups.push(powerup);
     }
     
-    // Cập nhật UI
-    updateUI() {
-        const speedElem = document.getElementById('gameSpeed');
-        const scoreElem = document.getElementById('gameScore');
-        const livesElem = document.getElementById('gameLives');
-        if (speedElem && window.trackingData) {
-            speedElem.innerHTML = `${this.options.speedIcon || '⚡'} Speed: ${(window.trackingData.speed * 2).toFixed(1)}`;
-        }
-        if (scoreElem) scoreElem.innerHTML = `💰 Score: ${this.score}`;
-        if (livesElem) livesElem.innerHTML = `❤️ Lives: ${this.lives}`;
-    }
-    
-    // Bắn đạn
     fireBullet() {
         if (!this.vehicle) return;
         const bullet = new THREE.Mesh(
@@ -77,7 +83,6 @@ export class BaseGame {
         this.playSound(880, 0.15, 0.1);
     }
     
-    // Phát âm thanh
     playSound(freq, duration, volume = 0.1) {
         try {
             const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -94,23 +99,17 @@ export class BaseGame {
         } catch(e) {}
     }
     
-    // Xử lý va chạm
-    handleCollision(obstacle) {
-        this.lives--;
-        this.scene.remove(obstacle);
-        this.playSound(300, 0.35, 0.2);
-        this.updateUI();
-        if (this.lives <= 0) this.gameOver();
+    updateUI() {
+        const speedElem = document.getElementById('gameSpeed');
+        const scoreElem = document.getElementById('gameScore');
+        const livesElem = document.getElementById('gameLives');
+        if (speedElem && window.trackingData) {
+            speedElem.innerHTML = `${this.options.speedIcon || '⚡'} Speed: ${(window.trackingData.speed * 2).toFixed(1)}`;
+        }
+        if (scoreElem) scoreElem.innerHTML = `💰 Score: ${this.score}`;
+        if (livesElem) livesElem.innerHTML = `❤️ Lives: ${this.lives}`;
     }
     
-    handlePowerup(powerup) {
-        this.score += 10;
-        this.scene.remove(powerup);
-        this.updateUI();
-        this.playSound(800, 0.1, 0.08);
-    }
-    
-    // Game over
     gameOver() {
         this.isActive = false;
         this.intervals.forEach(i => clearInterval(i));
@@ -139,7 +138,6 @@ export class BaseGame {
         };
     }
     
-    // Reset game
     reset() {
         this.score = 0;
         this.lives = this.options.lives || 5;
@@ -156,7 +154,6 @@ export class BaseGame {
         this.startIntervals();
     }
     
-    // Vòng lặp game (override bởi game con nếu cần)
     updateMovement(steering, speed) {
         if (!this.vehicle) return;
         const targetX = steering * 8.5;
@@ -209,8 +206,12 @@ export class BaseGame {
                 }
                 if (this.vehicle && Math.abs(o.position.x - this.vehicle.position.x) < 0.9 && 
                     Math.abs(o.position.z - this.vehicle.position.z) < 1.3) {
-                    this.handleCollision(o);
+                    this.lives--;
+                    this.scene.remove(o);
                     this.obstacles.splice(i,1);
+                    this.playSound(300, 0.35, 0.2);
+                    this.updateUI();
+                    if (this.lives <= 0) this.gameOver();
                 }
             }
             
@@ -221,8 +222,11 @@ export class BaseGame {
                 p.rotation.y += 0.05;
                 if (this.vehicle && Math.abs(p.position.x - this.vehicle.position.x) < 1.0 && 
                     Math.abs(p.position.z - this.vehicle.position.z) < 1.3) {
-                    this.handlePowerup(p);
+                    this.score += 10;
+                    this.scene.remove(p);
                     this.powerups.splice(i,1);
+                    this.updateUI();
+                    this.playSound(800, 0.1, 0.08);
                 } else if (p.position.z > 28) {
                     this.scene.remove(p);
                     this.powerups.splice(i,1);
@@ -253,9 +257,8 @@ export class BaseGame {
         this.intervals = [obstacleInterval, powerupInterval];
     }
     
-    // Khởi động game
     start() {
-        this.initScene();
+        if (!this.initScene()) return;
         this.createVehicle();
         this.startGameLoop();
         this.startIntervals();
@@ -264,7 +267,6 @@ export class BaseGame {
         this.updateUI();
     }
     
-    // Dừng game
     stop() {
         this.isActive = false;
         if (this.animationId) cancelAnimationFrame(this.animationId);
