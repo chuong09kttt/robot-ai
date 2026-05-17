@@ -20,6 +20,7 @@ async function setupCamera() {
         if (video) {
             video.srcObject = stream;
             await video.play();
+            console.log('✅ Camera started');
         }
     } catch(e) { console.error('Camera error:', e); }
 }
@@ -87,6 +88,7 @@ function initCameraTracking() {
 }
 
 export async function startTracking() {
+    console.log('Starting game tracking...');
     isTrackingActive = true;
     if (!video) await setupCamera();
     initPose();
@@ -96,6 +98,7 @@ export async function startTracking() {
 }
 
 export function stopTracking() {
+    console.log('Stopping game tracking...');
     isTrackingActive = false;
     if (camera) camera.stop();
 }
