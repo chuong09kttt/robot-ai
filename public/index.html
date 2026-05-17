@@ -17,14 +17,16 @@
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
 </head>
 <body>
+    <!-- Animated Background -->
+    <div class="background"></div>
+
     <!-- LOGIN SCREEN -->
     <div id="loginScreen" class="login-screen">
-        <div class="gaming-bg"></div>
         <div class="login-container">
             <div class="login-robot-glow">🐹</div>
             <h1 class="gaming-title">CHIRI <span class="highlight">AI</span></h1>
             <div class="gaming-subtitle">CYBERPUNK EDITION</div>
-            <div class="version-tag">v13.0 | SECURE</div>
+            <div class="version-tag">v13.0 | PROFESSIONAL</div>
             
             <div class="login-form">
                 <div class="input-group">
@@ -49,7 +51,6 @@
 
     <!-- MODE SELECTION SCREEN -->
     <div id="modeScreen" class="mode-screen" style="display: none;">
-        <div class="gaming-bg"></div>
         <div class="mode-container">
             <div class="user-header">
                 <span id="userNameDisplay" class="user-name">👤 USER</span>
@@ -140,17 +141,17 @@
         
         <div class="robot-display">
             <div class="robot-svg-container">
-                <svg class="robot-svg" viewBox="0 0 400 400" width="150" height="150">
-                    <circle cx="90" cy="100" r="40" fill="#FFB347" stroke="#00ffff" stroke-width="3"/>
-                    <circle cx="310" cy="100" r="40" fill="#FFB347" stroke="#00ffff" stroke-width="3"/>
-                    <ellipse cx="200" cy="210" rx="125" ry="135" fill="#FFD699" stroke="#00ffff" stroke-width="4"/>
-                    <ellipse cx="145" cy="195" rx="32" ry="36" fill="white" stroke="#00ffff" stroke-width="3" class="robot-eye"/>
+                <svg class="robot-svg" viewBox="0 0 400 400" width="180" height="180">
+                    <circle cx="90" cy="100" r="40" fill="#FFB347" stroke="#00d4ff" stroke-width="3"/>
+                    <circle cx="310" cy="100" r="40" fill="#FFB347" stroke="#00d4ff" stroke-width="3"/>
+                    <ellipse cx="200" cy="210" rx="125" ry="135" fill="#FFD699" stroke="#00d4ff" stroke-width="4"/>
+                    <ellipse cx="145" cy="195" rx="32" ry="36" fill="white" stroke="#00d4ff" stroke-width="3" class="robot-eye"/>
                     <circle cx="152" cy="195" r="16" fill="#2C3E50" class="pupil"/>
-                    <ellipse cx="255" cy="195" rx="32" ry="36" fill="white" stroke="#00ffff" stroke-width="3" class="robot-eye"/>
+                    <ellipse cx="255" cy="195" rx="32" ry="36" fill="white" stroke="#00d4ff" stroke-width="3" class="robot-eye"/>
                     <circle cx="262" cy="195" r="16" fill="#2C3E50" class="pupil"/>
                     <path d="M115 155 Q145 140 175 155" stroke="#ff00ff" stroke-width="7" fill="none"/>
                     <path d="M225 155 Q255 140 285 155" stroke="#ff00ff" stroke-width="7" fill="none"/>
-                    <path d="M165 275 Q200 315 235 275" stroke="#00ffff" stroke-width="5" fill="none" class="robot-mouth"/>
+                    <path d="M165 275 Q200 315 235 275" stroke="#00d4ff" stroke-width="5" fill="none" class="robot-mouth"/>
                 </svg>
             </div>
             <div class="sleep-timer" id="sleepTimer">😴 SLEEP IN 60s</div>
@@ -313,7 +314,7 @@
         </div>
     </div>
 
-    <!-- GAME MODE PANEL (chứa canvas game) -->
+    <!-- GAME MODE PANEL -->
     <div id="gamePanel" class="mode-panel" style="display: none;">
         <div class="panel-header">
             <button class="back-btn" id="gameBackBtn">⌂ HOME</button>
@@ -346,7 +347,6 @@
         window.startGameTracking = startGameTracking;
         window.stopGameTracking = stopGameTracking;
         
-        // Xử lý nút chọn chế độ game sau khi DOM load
         document.addEventListener('DOMContentLoaded', () => {
             const selectBoat = document.getElementById('selectBoatMode');
             const selectPlane = document.getElementById('selectPlaneMode');
