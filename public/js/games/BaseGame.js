@@ -20,7 +20,7 @@ export class BaseGame {
     
     initScene() {
         if (!this.canvas) {
-            console.error('Canvas not found:', this.canvas);
+            console.error('Canvas not found');
             return false;
         }
         
@@ -30,7 +30,6 @@ export class BaseGame {
         
         this.scene = new THREE.Scene();
         this.scene.background = new THREE.Color(0x0a1030);
-        this.scene.fog = new THREE.FogExp2(0x0a1030, 0.008);
         
         this.camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 1000);
         this.camera.position.set(0, 7, 14);
@@ -45,24 +44,29 @@ export class BaseGame {
     }
     
     createVehicle() {
-        // To be overridden
+        const boat = new THREE.Group();
+        const hull = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.9, 1.8, 12), new THREE.MeshPhongMaterial({ color: 0xff4444 }));
+        hull.rotation.x = Math.PI / 2;
+        hull.position.y = 0.2;
+        boat.add(hull);
+        this.vehicle = boat;
+        this.scene.add(this.vehicle);
+        
+        const water = new THREE.Mesh(new THREE.PlaneGeometry(500, 400, 100, 80), new THREE.MeshPhongMaterial({ color: 0x2a6f8f }));
+        water.rotation.x = -Math.PI / 2;
+        water.position.y = -0.3;
+        this.scene.add(water);
     }
     
     createObstacle() {
-        const obstacle = new THREE.Mesh(
-            new THREE.BoxGeometry(0.9, 0.5, 1.0),
-            new THREE.MeshPhongMaterial({ color: 0xaa3333 })
-        );
+        const obstacle = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.5, 1.0), new THREE.MeshPhongMaterial({ color: 0xaa3333 }));
         obstacle.position.set((Math.random() - 0.5) * 14, 0.3, this.vehicle.position.z - 90);
         this.scene.add(obstacle);
         this.obstacles.push(obstacle);
     }
     
     createPowerup() {
-        const powerup = new THREE.Mesh(
-            new THREE.SphereGeometry(0.25, 16, 16),
-            new THREE.MeshPhongMaterial({ color: 0xffdd44, emissive: 0xffaa00 })
-        );
+        const powerup = new THREE.Mesh(new THREE.SphereGeometry(0.25, 16, 16), new THREE.MeshPhongMaterial({ color: 0xffdd44, emissive: 0xffaa00 }));
         powerup.position.set((Math.random() - 0.5) * 14, 0.3, this.vehicle.position.z - 80);
         this.scene.add(powerup);
         this.powerups.push(powerup);
@@ -70,33 +74,13 @@ export class BaseGame {
     
     fireBullet() {
         if (!this.vehicle) return;
-        const bullet = new THREE.Mesh(
-            new THREE.SphereGeometry(0.12),
-            new THREE.MeshBasicMaterial({ color: 0xffaa44 })
-        );
+        const bullet = new THREE.Mesh(new THREE.SphereGeometry(0.12), new THREE.MeshBasicMaterial({ color: 0xffaa44 }));
         bullet.position.copy(this.vehicle.position);
         bullet.position.z += 1.6;
         bullet.position.y = 0.6;
         bullet.userData = { velocityZ: -5 };
         this.scene.add(bullet);
         this.bullets.push(bullet);
-        this.playSound(880, 0.15, 0.1);
-    }
-    
-    playSound(freq, duration, volume = 0.1) {
-        try {
-            const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-            const osc = audioCtx.createOscillator();
-            const gain = audioCtx.createGain();
-            osc.connect(gain);
-            gain.connect(audioCtx.destination);
-            osc.frequency.value = freq;
-            gain.gain.value = volume;
-            osc.start();
-            gain.gain.exponentialRampToValueAtTime(0.00001, audioCtx.currentTime + duration);
-            osc.stop(audioCtx.currentTime + duration);
-            setTimeout(() => audioCtx.close(), duration * 1000 + 100);
-        } catch(e) {}
     }
     
     updateUI() {
@@ -104,7 +88,7 @@ export class BaseGame {
         const scoreElem = document.getElementById('gameScore');
         const livesElem = document.getElementById('gameLives');
         if (speedElem && window.trackingData) {
-            speedElem.innerHTML = `${this.options.speedIcon || '⚡'} Speed: ${(window.trackingData.speed * 2).toFixed(1)}`;
+            speedElem.innerHTML = `⚡ Speed: ${(window.trackingData.speed * 2).toFixed(1)}`;
         }
         if (scoreElem) scoreElem.innerHTML = `💰 Score: ${this.score}`;
         if (livesElem) livesElem.innerHTML = `❤️ Lives: ${this.lives}`;
@@ -114,53 +98,9 @@ export class BaseGame {
         this.isActive = false;
         this.intervals.forEach(i => clearInterval(i));
         if (this.animationId) cancelAnimationFrame(this.animationId);
-        
-        const overlay = document.createElement('div');
-        overlay.style.cssText = `position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.9);z-index:1000;display:flex;justify-content:center;align-items:center;flex-direction:column`;
-        overlay.innerHTML = `
-            <div style="background:linear-gradient(135deg,#0a0a2a,#1a1a3a);border:2px solid #00d4ff;border-radius:20px;padding:40px;text-align:center">
-                <div style="font-size:48px;color:#ff4444;margin-bottom:20px">💀 GAME OVER 💀</div>
-                <div style="font-size:32px;color:#ffff00;margin-bottom:30px">💰 SCORE: ${this.score}</div>
-                <button id="restartGameBtn" style="padding:15px 40px;font-size:24px;background:#00d4ff;border:none;border-radius:15px;cursor:pointer">🔄 PLAY AGAIN</button>
-                <button id="homeGameBtn" style="margin-top:20px;padding:12px 35px;font-size:20px;background:#ff00ff;border:none;border-radius:15px;cursor:pointer">🏠 HOME</button>
-            </div>
-        `;
-        document.body.appendChild(overlay);
-        document.getElementById('restartGameBtn').onclick = () => {
-            overlay.remove();
-            this.reset();
-        };
-        document.getElementById('homeGameBtn').onclick = () => {
-            overlay.remove();
-            document.getElementById('gamePanel').style.display = 'none';
-            document.getElementById('modeScreen').style.display = 'block';
-            if (window.stopGameTracking) window.stopGameTracking();
-        };
-    }
-    
-    reset() {
-        this.score = 0;
-        this.lives = this.options.lives || 5;
-        this.bullets.forEach(b => this.scene.remove(b));
-        this.obstacles.forEach(o => this.scene.remove(o));
-        this.powerups.forEach(p => this.scene.remove(p));
-        this.bullets = [];
-        this.obstacles = [];
-        this.powerups = [];
-        if (this.vehicle) this.vehicle.position.set(0, 0, 0);
-        this.isActive = true;
-        this.updateUI();
-        this.startGameLoop();
-        this.startIntervals();
-    }
-    
-    updateMovement(steering, speed) {
-        if (!this.vehicle) return;
-        const targetX = steering * 8.5;
-        this.vehicle.position.x += (targetX - this.vehicle.position.x) * 0.1;
-        this.vehicle.position.x = Math.min(8.5, Math.max(-8.5, this.vehicle.position.x));
-        this.vehicle.rotation.z = -steering * 0.5;
-        this.vehicle.position.z -= speed * 0.48;
+        alert(`💀 GAME OVER! Score: ${this.score}`);
+        document.getElementById('gamePanel').style.display = 'none';
+        document.getElementById('modeScreen').style.display = 'block';
     }
     
     startGameLoop() {
@@ -177,7 +117,11 @@ export class BaseGame {
             let steering = (trackingData.steeringAngle || 0) * 1.2;
             let speed = Math.max(0.15, (trackingData.speed || 0) * 2);
             
-            this.updateMovement(steering, speed);
+            const targetX = steering * 8.5;
+            this.vehicle.position.x += (targetX - this.vehicle.position.x) * 0.1;
+            this.vehicle.position.x = Math.min(8.5, Math.max(-8.5, this.vehicle.position.x));
+            this.vehicle.rotation.z = -steering * 0.5;
+            this.vehicle.position.z -= speed * 0.48;
             
             if (trackingData.shooting && this.shootCooldown <= 0) {
                 this.fireBullet();
@@ -195,7 +139,7 @@ export class BaseGame {
                 }
             }
             
-            // Update obstacles & collision
+            // Update obstacles
             for (let i = this.obstacles.length-1; i>=0; i--) {
                 const o = this.obstacles[i];
                 o.position.z += speed * 0.45 + 0.6;
@@ -204,12 +148,11 @@ export class BaseGame {
                     this.obstacles.splice(i,1);
                     continue;
                 }
-                if (this.vehicle && Math.abs(o.position.x - this.vehicle.position.x) < 0.9 && 
+                if (Math.abs(o.position.x - this.vehicle.position.x) < 0.9 && 
                     Math.abs(o.position.z - this.vehicle.position.z) < 1.3) {
                     this.lives--;
                     this.scene.remove(o);
                     this.obstacles.splice(i,1);
-                    this.playSound(300, 0.35, 0.2);
                     this.updateUI();
                     if (this.lives <= 0) this.gameOver();
                 }
@@ -220,25 +163,21 @@ export class BaseGame {
                 const p = this.powerups[i];
                 p.position.z += speed * 0.45 + 0.5;
                 p.rotation.y += 0.05;
-                if (this.vehicle && Math.abs(p.position.x - this.vehicle.position.x) < 1.0 && 
+                if (Math.abs(p.position.x - this.vehicle.position.x) < 1.0 && 
                     Math.abs(p.position.z - this.vehicle.position.z) < 1.3) {
                     this.score += 10;
                     this.scene.remove(p);
                     this.powerups.splice(i,1);
                     this.updateUI();
-                    this.playSound(800, 0.1, 0.08);
                 } else if (p.position.z > 28) {
                     this.scene.remove(p);
                     this.powerups.splice(i,1);
                 }
             }
             
-            // Update camera
-            if (this.vehicle) {
-                this.camera.position.x += (this.vehicle.position.x - this.camera.position.x) * 0.06;
-                this.camera.position.z = this.vehicle.position.z + 12;
-                this.camera.lookAt(this.vehicle.position);
-            }
+            this.camera.position.x += (this.vehicle.position.x - this.camera.position.x) * 0.06;
+            this.camera.position.z = this.vehicle.position.z + 12;
+            this.camera.lookAt(this.vehicle.position);
             
             this.updateUI();
             this.renderer.render(this.scene, this.camera);
