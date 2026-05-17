@@ -338,35 +338,62 @@
     </div>
 
     <!-- Scripts -->
-    <!-- Main script (non-module for compatibility) -->
-    <script src="/js/script.js"></script>
+        <!-- Main script (non-module for compatibility) -->
+        <!-- Cuối file body, thay thế các script bằng: -->
     
-    <!-- Game Module Loader -->
-    <script type="module">
-        import { startGameWithMode, stopGame } from '/js/main.js';
-        
-        window.startGameWithMode = startGameWithMode;
-        window.stopGame = stopGame;
-        
-        // Xử lý nút chọn game
-        document.getElementById('selectBoatMode')?.addEventListener('click', () => {
-            window.startGameWithMode('boat');
-        });
-        
-        document.getElementById('selectPlaneMode')?.addEventListener('click', () => {
-            window.startGameWithMode('plane');
-        });
-        
-        document.getElementById('gameBackBtn')?.addEventListener('click', () => {
-            if (typeof window.stopGame === 'function') window.stopGame();
-            document.getElementById('gamePanel').style.display = 'none';
-            document.getElementById('modeScreen').style.display = 'block';
-        });
-        
-        document.getElementById('gameTypeBackBtn')?.addEventListener('click', () => {
-            document.getElementById('gameTypeScreen').style.display = 'none';
-            document.getElementById('modeScreen').style.display = 'block';
+    <!-- Main UI script (non-module) -->
+    <script src="/script.js"></script>
+    
+    <!-- Game modules (module) -->
+    <script type="module" src="/js/main.js"></script>
+    
+    <script>
+        // Đợi DOM và modules load xong
+        document.addEventListener('DOMContentLoaded', function() {
+            // Gắn lại sự kiện cho nút game (phòng trường hợp bị ghi đè)
+            const selectBoat = document.getElementById('selectBoatMode');
+            const selectPlane = document.getElementById('selectPlaneMode');
+            const gameBackBtn = document.getElementById('gameBackBtn');
+            const gameTypeBackBtn = document.getElementById('gameTypeBackBtn');
+            
+            if (selectBoat) {
+                selectBoat.onclick = function() {
+                    if (typeof window.startGameWithMode === 'function') {
+                        window.startGameWithMode('boat');
+                    } else {
+                        alert('Đang tải game, vui lòng thử lại!');
+                    }
+                };
+            }
+            
+            if (selectPlane) {
+                selectPlane.onclick = function() {
+                    if (typeof window.startGameWithMode === 'function') {
+                        window.startGameWithMode('plane');
+                    } else {
+                        alert('Đang tải game, vui lòng thử lại!');
+                    }
+                };
+            }
+            
+            if (gameBackBtn) {
+                gameBackBtn.onclick = function() {
+                    if (typeof window.stopGame === 'function') window.stopGame();
+                    document.getElementById('gamePanel').style.display = 'none';
+                    document.getElementById('modeScreen').style.display = 'block';
+                };
+            }
+            
+            if (gameTypeBackBtn) {
+                gameTypeBackBtn.onclick = function() {
+                    document.getElementById('gameTypeScreen').style.display = 'none';
+                    document.getElementById('modeScreen').style.display = 'block';
+                };
+            }
         });
     </script>
+
+
+    
 </body>
 </html>
