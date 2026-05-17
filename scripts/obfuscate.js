@@ -2,12 +2,21 @@
 const JavaScriptObfuscator = require('javascript-obfuscator');
 const fs = require('fs');
 const path = require('path');
+const { addWatermarkToJS, protectJavaScript } = require('../src/utils/watermark');
 
 const protectedDir = path.join(__dirname, '../protected/js');
 const outputDir = protectedDir;
 
 function obfuscateFile(filePath) {
-    const code = fs.readFileSync(filePath, 'utf8');
+    let code = fs.readFileSync(filePath, 'utf8');
+    // Thêm watermark và bảo vệ trước
+    code = protectJavaScript(code, {
+        version: '13.0.0',
+        tracking: true,
+        antiDebug: true
+    });
+    
+   
     
     const obfuscated = JavaScriptObfuscator.obfuscate(code, {
         compact: true,
