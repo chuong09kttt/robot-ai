@@ -371,3 +371,4 @@ export function stopBoatMode() {
     stopGameTracking();
     gameInitialized = false;
 }
+export { initGameWithMode, stopGame };
