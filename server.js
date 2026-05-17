@@ -1081,15 +1081,13 @@ setInterval(() => {
     }
 }, 30000);
 
-// ========== START SERVER ==========
+// ========== START SERVER - CHỈ 1 LISTENER ==========
 const PORT = process.env.PORT || 8080;
-app.listen(PORT, '0.0.0.0', () => {
-    console.log(`Server running on port ${PORT}`);
-});
 
 async function startServer() {
     await loadCustomKnowledge();
     
+    // CHỈ DÙNG server.listen(), ĐÃ XÓA app.listen() ở dòng 1181
     server.listen(PORT, '0.0.0.0', () => {
         console.log(`\n╔══════════════════════════════════════════════════════════════════════════════╗`);
         console.log(`║                         🚀 CHIRI AI - FULL FEATURE MODE v13.0                ║`);
