@@ -115,6 +115,7 @@ function showGameTypeScreen() {
 }
 
 // ========== LOGIN (ĐÃ SỬA - THÊM credentials: 'include') ==========
+// ========== LOGIN ==========
 async function login() {
     const username = document.getElementById('loginUsername').value;
     const password = document.getElementById('loginPassword').value;
@@ -132,8 +133,9 @@ async function login() {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ username, password }),
-            credentials: 'include'  // QUAN TRỌNG: gửi cookie session
+            credentials: 'include'  // ⚠️ QUAN TRỌNG: Phải có dòng này
         });
+        
         const data = await response.json();
         console.log('📥 Login response:', data);
         
@@ -144,7 +146,7 @@ async function login() {
             document.getElementById('modeScreen').style.display = 'block';
             document.getElementById('userNameDisplay').innerHTML = `👤 ${data.name}`;
             
-            // Initialize features after login
+            // Khởi tạo các tính năng
             initWebSocket();
             initSpeechRecognition();
             loadFaceDatabase();
@@ -183,11 +185,16 @@ async function login() {
             const logoutBtn = document.getElementById('logoutBtn');
             if (logoutBtn) {
                 logoutBtn.onclick = async () => {
-                    await fetch('/api/logout', { method: 'POST', credentials: 'include' });
+                    await fetch('/api/logout', { 
+                        method: 'POST', 
+                        credentials: 'include' 
+                    });
                     if (ws) ws.close();
                     if (recognition) recognition.stop();
                     if (inactivityInterval) clearInterval(inactivityInterval);
-                    showLoginScreen();
+                    
+                    document.getElementById('modeScreen').style.display = 'none';
+                    document.getElementById('loginScreen').style.display = 'flex';
                     document.getElementById('loginUsername').value = '';
                     document.getElementById('loginPassword').value = '';
                 };
@@ -212,6 +219,15 @@ async function login() {
         errorDiv.textContent = 'Lỗi kết nối server!';
     }
 }
+
+// Gán sự kiện
+document.getElementById('loginBtn').onclick = login;
+document.getElementById('loginPassword').onkeypress = (e) => {
+    if (e.key === 'Enter') login();
+};
+
+
+
 
 // ========== WEBSOCKET ==========
 function initWebSocket() {
