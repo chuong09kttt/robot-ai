@@ -1,11 +1,14 @@
 // ========== CHIRI AI - MAIN UI SCRIPT ==========
-// Các tính năng: Login, Chat, Drive, Translate, Camera
+// Đây là file chính điều khiển toàn bộ giao diện và tính năng
 
 // Global variables
 let currentUser = null;
 let ws = null;
 let recognition = null;
 let isAwake = false;
+let isListening = false;
+let isSpeaking = false;
+let isAIProcessing = false;
 let isTranslatorMode = false;
 let isCameraActive = false;
 let faceMesh = null;
@@ -14,10 +17,18 @@ let videoElement = null;
 let canvasElement = null;
 let faceDatabase = new Map();
 let isRecognizing = false;
+let mouthAnimationInterval = null;
 let inactivityInterval = null;
 let inactivitySeconds = 60;
+let reconnectAttempts = 0;
 
-// WAKE WORDS
+// Translation variables
+let translationRecognition = null;
+let lastProcessedText = '';
+let translationTimeout = null;
+let sourceLang = 'vi';
+let targetLang = 'en';
+
 const WAKE_WORDS = ['xin chào', 'hello', 'hi', 'chào chiri', 'chiri ơi'];
 
 // ========== UI NAVIGATION ==========
@@ -34,19 +45,7 @@ function showModeScreen() {
     console.log('Show mode screen');
 }
 
-function showLoginScreen() {
-    document.getElementById('loginScreen').style.display = 'flex';
-    document.getElementById('modeScreen').style.display = 'none';
-    document.getElementById('chatPanel').style.display = 'none';
-    document.getElementById('drivePanel').style.display = 'none';
-    document.getElementById('translatePanel').style.display = 'none';
-    document.getElementById('cameraPanel').style.display = 'none';
-    document.getElementById('gamePanel').style.display = 'none';
-    document.getElementById('gameTypeScreen').style.display = 'none';
-}
-
 function showChatMode() {
-    console.log('Showing Chat Mode');
     document.getElementById('modeScreen').style.display = 'none';
     document.getElementById('chatPanel').style.display = 'block';
     isAwake = false;
@@ -55,34 +54,26 @@ function showChatMode() {
 }
 
 function showDriveMode() {
-    console.log('Showing Drive Mode');
     document.getElementById('modeScreen').style.display = 'none';
     document.getElementById('drivePanel').style.display = 'block';
     initDriveMode();
 }
 
 function showTranslateMode() {
-    console.log('Showing Translate Mode');
     document.getElementById('modeScreen').style.display = 'none';
     document.getElementById('translatePanel').style.display = 'block';
     initTranslateMode();
 }
 
 function showCameraMode() {
-    console.log('Showing Camera Mode');
     document.getElementById('modeScreen').style.display = 'none';
     document.getElementById('cameraPanel').style.display = 'block';
     initCameraMode();
 }
 
 function showGameMode() {
-    console.log('Showing Game Mode Selection');
     document.getElementById('modeScreen').style.display = 'none';
     document.getElementById('gameTypeScreen').style.display = 'block';
-}
-
-function showGameTypeScreen() {
-    showGameMode();
 }
 
 // ========== LOGIN ==========
@@ -92,7 +83,7 @@ async function login() {
     const errorDiv = document.getElementById('loginError');
     
     if (!username || !password) {
-        errorDiv.textContent = 'Vui lòng nhập đầy đủ thông tin!';
+        errorDiv.textContent = 'Vui lòng nhập tên đăng nhập và mật khẩu!';
         return;
     }
     
@@ -111,6 +102,7 @@ async function login() {
             document.getElementById('modeScreen').style.display = 'block';
             document.getElementById('userNameDisplay').innerHTML = `👤 ${data.name}`;
             
+            // Initialize features
             initWebSocket();
             initSpeechRecognition();
             loadFaceDatabase();
@@ -128,21 +120,12 @@ async function login() {
                 };
             });
             
+            // Back buttons
             document.querySelectorAll('.back-btn').forEach(btn => {
                 btn.onclick = () => showModeScreen();
             });
             
-            const manualWakeBtn = document.getElementById('manualWakeBtn');
-            if (manualWakeBtn) {
-                manualWakeBtn.onclick = () => {
-                    if (!isAwake) wakeUp();
-                    else {
-                        addMessage('ai', 'Chiri đang thức!');
-                        speak('Chiri đang thức!');
-                    }
-                };
-            }
-            
+            // Logout button
             const logoutBtn = document.getElementById('logoutBtn');
             if (logoutBtn) {
                 logoutBtn.onclick = async () => {
@@ -150,10 +133,12 @@ async function login() {
                     if (ws) ws.close();
                     if (recognition) recognition.stop();
                     if (inactivityInterval) clearInterval(inactivityInterval);
-                    showLoginScreen();
+                    document.getElementById('modeScreen').style.display = 'none';
+                    document.getElementById('loginScreen').style.display = 'flex';
                 };
             }
             
+            // Modal close
             const closeModalBtn = document.getElementById('closeModalBtn');
             if (closeModalBtn) closeModalBtn.onclick = closeRegisterModal;
             
@@ -175,15 +160,22 @@ async function login() {
 function initWebSocket() {
     const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
     ws = new WebSocket(`${protocol}//${location.host}`);
-    ws.onopen = () => console.log('WebSocket connected');
+    ws.onopen = () => {
+        reconnectAttempts = 0;
+        console.log('WebSocket connected');
+    };
     ws.onmessage = (event) => {
         const data = JSON.parse(event.data);
         if (data.type === 'ai') {
+            isAIProcessing = false;
             addMessage('ai', data.text);
             if (!isTranslatorMode) speak(data.text);
         }
     };
-    ws.onclose = () => setTimeout(initWebSocket, 3000);
+    ws.onclose = () => {
+        const delay = Math.min(1000 * Math.pow(2, reconnectAttempts++), 8000);
+        setTimeout(initWebSocket, delay);
+    };
 }
 
 // ========== CHAT FUNCTIONS ==========
@@ -195,13 +187,34 @@ function setExpression(expression) {
     }
     const mouth = document.querySelector('.robot-mouth');
     if (!mouth) return;
+    if (mouthAnimationInterval) clearInterval(mouthAnimationInterval);
     switch(expression) {
-        case 'talking': mouth.style.transform = 'scaleY(0.8)'; break;
+        case 'talking':
+            startMouthAnimation();
+            break;
         case 'listening': mouth.style.transform = 'scaleY(0.7)'; break;
         case 'happy': mouth.style.transform = 'scaleY(1.1)'; break;
         case 'thinking': mouth.style.transform = 'scaleY(0.2)'; break;
         case 'sleepy': mouth.style.transform = 'scaleY(0.3)'; break;
         default: mouth.style.transform = 'scaleY(0.5)';
+    }
+}
+
+function startMouthAnimation() {
+    if (mouthAnimationInterval) clearInterval(mouthAnimationInterval);
+    const mouth = document.querySelector('.robot-mouth');
+    let frame = 0;
+    mouthAnimationInterval = setInterval(() => {
+        frame++;
+        const scale = 0.4 + Math.sin(frame * 0.8) * 0.45;
+        if (mouth) mouth.style.transform = `scaleY(${scale})`;
+    }, 80);
+}
+
+function stopMouthAnimation() {
+    if (mouthAnimationInterval) {
+        clearInterval(mouthAnimationInterval);
+        mouthAnimationInterval = null;
     }
 }
 
@@ -240,9 +253,16 @@ function escapeHtml(text) {
 async function speak(text) {
     if (!text || isTranslatorMode) return;
     if (window.speechSynthesis) window.speechSynthesis.cancel();
+    isSpeaking = true;
+    setExpression('talking');
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.lang = 'vi-VN';
     utterance.rate = 0.9;
+    utterance.onend = () => {
+        isSpeaking = false;
+        stopMouthAnimation();
+        if (isAwake && !isTranslatorMode) setExpression('listening');
+    };
     window.speechSynthesis.speak(utterance);
 }
 
@@ -254,6 +274,15 @@ function wakeUp() {
     const greeting = 'Chào bạn! Chiri đã thức! 💕';
     addMessage('ai', greeting);
     speak(greeting);
+    startInactivityCountdown();
+}
+
+function goToSleep() {
+    if (!isAwake) return;
+    isAwake = false;
+    updateWakeIndicator('sleeping');
+    setExpression('sleepy');
+    if (recognition) try { recognition.stop(); } catch(e) {}
 }
 
 function startInactivityCountdown() {
@@ -262,15 +291,14 @@ function startInactivityCountdown() {
     inactivityInterval = setInterval(() => {
         const timerElem = document.getElementById('sleepTimer');
         if (!timerElem) return;
-        if (!isAwake) {
+        if (!isAwake || isSpeaking || isAIProcessing || isTranslatorMode) {
+            inactivitySeconds = 60;
             timerElem.innerHTML = '😴 SLEEP IN 60s';
             return;
         }
         if (inactivitySeconds <= 0) {
-            isAwake = false;
-            updateWakeIndicator('sleeping');
-            setExpression('sleepy');
-            timerElem.innerHTML = '😴 SLEEPING';
+            clearInterval(inactivityInterval);
+            goToSleep();
         } else {
             timerElem.innerHTML = `😴 SLEEP IN ${inactivitySeconds}s`;
             inactivitySeconds--;
@@ -280,29 +308,36 @@ function startInactivityCountdown() {
 
 function initSpeechRecognition() {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRecognition) return;
-    if (recognition) recognition.stop();
+    if (!SpeechRecognition) { alert('Trình duyệt không hỗ trợ!'); return; }
+    if (recognition) try { recognition.stop(); } catch(e) {}
     recognition = new SpeechRecognition();
     recognition.continuous = true;
     recognition.lang = 'vi-VN';
+    recognition.onstart = () => { isListening = true; if (!isTranslatorMode) { updateWakeIndicator('listening'); setExpression('listening'); } };
     recognition.onresult = (event) => {
-        const text = event.results[event.results.length - 1][0].transcript.trim();
-        console.log('Voice:', text);
-        if (!isAwake && WAKE_WORDS.some(w => text.toLowerCase().includes(w))) {
-            wakeUp();
-        } else if (isAwake && !isTranslatorMode && text) {
-            processCommand(text);
+        const transcript = event.results[event.results.length - 1][0].transcript.trim();
+        if (!transcript) return;
+        const lower = transcript.toLowerCase();
+        if (!isAwake) { if (WAKE_WORDS.some(w => lower.includes(w))) wakeUp(); return; }
+        if (!isSpeaking && !isAIProcessing) {
+            if (lower.includes('bật phiên dịch')) toggleTranslatorMode();
+            else if (lower.includes('tắt phiên dịch')) toggleTranslatorMode();
+            else processCommand(transcript);
         }
     };
+    recognition.onend = () => { isListening = false; if (isAwake && !isSpeaking && !isTranslatorMode) setTimeout(() => recognition.start(), 500); };
     recognition.start();
 }
 
 function processCommand(text) {
+    isAIProcessing = true;
+    setExpression('thinking');
     addMessage('user', text);
     if (ws && ws.readyState === WebSocket.OPEN) {
         ws.send(JSON.stringify({ type: 'voice', text, driveMode: false }));
     } else {
         addMessage('ai', 'Đang kết nối lại server...');
+        isAIProcessing = false;
     }
 }
 
@@ -323,34 +358,97 @@ function initDriveMode() {
 // ========== TRANSLATE MODE ==========
 function initTranslateMode() {
     console.log('Translate mode initialized');
+    sourceLang = document.getElementById('sourceLang').value;
+    targetLang = document.getElementById('targetLang').value;
     const swapBtn = document.getElementById('swapLangBtn');
     const speakBtn = document.getElementById('speakTranslationBtn');
     const clearBtn = document.getElementById('clearTranslationBtn');
-    
-    if (swapBtn) {
-        swapBtn.onclick = () => {
-            const source = document.getElementById('sourceLang');
-            const target = document.getElementById('targetLang');
-            const temp = source.value;
-            source.value = target.value;
-            target.value = temp;
-        };
-    }
-    if (speakBtn) {
-        speakBtn.onclick = () => {
-            const text = document.getElementById('translatedText').innerText;
-            if (text && text !== 'AWAITING INPUT...') {
-                const utterance = new SpeechSynthesisUtterance(text);
-                utterance.lang = 'en-US';
-                window.speechSynthesis.speak(utterance);
+    if (swapBtn) swapBtn.onclick = swapLanguages;
+    if (speakBtn) speakBtn.onclick = speakCurrentTranslation;
+    if (clearBtn) clearBtn.onclick = clearTranslation;
+    startTranslationMode();
+}
+
+function toggleTranslatorMode() {
+    isTranslatorMode = !isTranslatorMode;
+    if (isTranslatorMode) { startTranslationMode(); addMessage('ai', 'Đã bật phiên dịch!'); speak('Đã bật phiên dịch'); }
+    else { stopTranslationMode(); addMessage('ai', 'Đã tắt phiên dịch.'); speak('Đã tắt phiên dịch'); }
+}
+
+function startTranslationMode() {
+    if (translationRecognition) try { translationRecognition.stop(); } catch(e) {}
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) return;
+    translationRecognition = new SpeechRecognition();
+    translationRecognition.continuous = true;
+    translationRecognition.interimResults = true;
+    translationRecognition.lang = getLanguageCode(sourceLang);
+    translationRecognition.onstart = () => { const elem = document.getElementById('translateStatusText'); if (elem) elem.innerHTML = '🎤 LISTENING...'; };
+    translationRecognition.onresult = async (event) => {
+        let finalText = '';
+        for (let i = event.resultIndex; i < event.results.length; i++) if (event.results[i].isFinal) finalText += event.results[i][0].transcript;
+        if (finalText && finalText !== lastProcessedText) {
+            document.getElementById('originalText').innerHTML = escapeHtml(finalText);
+            if (translationTimeout) clearTimeout(translationTimeout);
+            translationTimeout = setTimeout(async () => {
+                const translated = await translateText(finalText, sourceLang, targetLang);
+                document.getElementById('translatedText').innerHTML = escapeHtml(translated);
+                lastProcessedText = finalText;
+            }, 500);
+        }
+    };
+    translationRecognition.onend = () => { if (isTranslatorMode) setTimeout(() => { if (isTranslatorMode && translationRecognition) translationRecognition.start(); }, 500); };
+    translationRecognition.start();
+}
+
+function stopTranslationMode() {
+    if (translationRecognition) { translationRecognition.stop(); translationRecognition = null; }
+    if (translationTimeout) clearTimeout(translationTimeout);
+}
+
+async function translateText(text, source, target) {
+    if (!text || source === target) return text;
+    try {
+        const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=${source}|${target}`;
+        const response = await fetch(url);
+        if (response.ok) {
+            const data = await response.json();
+            if (data?.responseData?.translatedText) {
+                let translated = data.responseData.translatedText.replace(/^\[ERROR\]\s*/, '').replace(/<[^>]*>/g, '');
+                if (translated && !translated.includes('MYMEMORY WARNING')) return translated;
             }
-        };
-    }
-    if (clearBtn) {
-        clearBtn.onclick = () => {
-            document.getElementById('originalText').innerHTML = 'AWAITING INPUT...';
-            document.getElementById('translatedText').innerHTML = 'AWAITING INPUT...';
-        };
+        }
+        return text;
+    } catch(e) { return text; }
+}
+
+function getLanguageCode(lang) {
+    const codes = { 'vi': 'vi-VN', 'en': 'en-US', 'zh': 'zh-CN', 'ja': 'ja-JP', 'ko': 'ko-KR', 'fr': 'fr-FR', 'de': 'de-DE', 'es': 'es-ES' };
+    return codes[lang] || 'en-US';
+}
+
+function swapLanguages() {
+    const temp = sourceLang;
+    sourceLang = targetLang;
+    targetLang = temp;
+    document.getElementById('sourceLang').value = sourceLang;
+    document.getElementById('targetLang').value = targetLang;
+    clearTranslation();
+    if (isTranslatorMode) { stopTranslationMode(); startTranslationMode(); }
+}
+
+function clearTranslation() {
+    document.getElementById('originalText').innerHTML = 'AWAITING INPUT...';
+    document.getElementById('translatedText').innerHTML = 'AWAITING INPUT...';
+    lastProcessedText = '';
+}
+
+function speakCurrentTranslation() {
+    const text = document.getElementById('translatedText')?.innerText;
+    if (text && text !== 'AWAITING INPUT...') {
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.lang = getLanguageCode(targetLang);
+        window.speechSynthesis.speak(utterance);
     }
 }
 
@@ -361,17 +459,15 @@ async function initCameraMode() {
     canvasElement = document.getElementById('canvas');
     if (!videoElement || !canvasElement) return;
     if (typeof FaceMesh === 'undefined') return;
-    
     faceMesh = new FaceMesh({ locateFile: (f) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${f}` });
     faceMesh.setOptions({ maxNumFaces: 4, refineLandmarks: true });
     faceMesh.onResults(onFaceMeshResults);
-    
     document.getElementById('cameraToggleBtn').onclick = toggleCamera;
     document.getElementById('registerFaceBtn').onclick = openRegisterModal;
     document.getElementById('recognizeFaceBtn').onclick = () => {
         isRecognizing = !isRecognizing;
         addMessage('ai', isRecognizing ? 'Bắt đầu nhận diện' : 'Đã tắt nhận diện');
-        speak(isRecognizing ? 'Bắt đầu nhận diện khuôn mặt' : 'Đã tắt nhận diện');
+        speak(isRecognizing ? 'Bắt đầu nhận diện' : 'Đã tắt nhận diện');
     };
 }
 
@@ -379,19 +475,19 @@ async function toggleCamera() {
     if (!isCameraActive) {
         if (typeof Camera === 'undefined') return;
         camera = new Camera(videoElement, {
-            onFrame: async () => {
-                if (isCameraActive && faceMesh) await faceMesh.send({ image: videoElement });
-            }
+            onFrame: async () => { if (isCameraActive && faceMesh) await faceMesh.send({ image: videoElement }); }
         });
         await camera.start();
         isCameraActive = true;
         document.getElementById('cameraToggleBtn').textContent = 'TẮT CAMERA';
         document.getElementById('cameraStatusText').innerHTML = 'ACTIVE';
+        document.getElementById('faceText').innerHTML = 'CAMERA ACTIVE';
     } else {
         camera.stop();
         isCameraActive = false;
         document.getElementById('cameraToggleBtn').textContent = 'BẬT CAMERA';
         document.getElementById('cameraStatusText').innerHTML = 'OFFLINE';
+        document.getElementById('faceText').innerHTML = 'CAMERA OFFLINE';
     }
 }
 
@@ -438,14 +534,8 @@ function capturePhoto() {
 
 function saveFaceRegistration() {
     const name = document.getElementById('faceNameInput').value.trim();
-    if (!name) {
-        alert('❌ Vui lòng nhập tên!');
-        return;
-    }
-    if (photoCount < 3) {
-        alert(`❌ Cần chụp đủ 3 ảnh! Hiện có ${photoCount}/3`);
-        return;
-    }
+    if (!name) { alert('❌ Vui lòng nhập tên!'); return; }
+    if (photoCount < 3) { alert(`❌ Cần chụp đủ 3 ảnh! Hiện có ${photoCount}/3`); return; }
     alert(`✅ Đã đăng ký khuôn mặt cho ${name}!`);
     closeRegisterModal();
     document.getElementById('faceNameInput').value = '';
@@ -453,17 +543,28 @@ function saveFaceRegistration() {
     document.getElementById('photoCount').innerHTML = '📸 0/3 CAPTURED';
 }
 
-// ========== EXPORT FUNCTIONS ==========
+// ========== GAME MODE HANDLERS ==========
+// Kết nối với game modules đã có
+window.startGameWithMode = function(mode) {
+    document.getElementById('gameTypeScreen').style.display = 'none';
+    document.getElementById('gamePanel').style.display = 'block';
+    if (mode === 'boat') {
+        if (typeof window.initBoatMode === 'function') window.initBoatMode();
+        else alert('🚤 Chế độ thuyền đang phát triển!');
+    } else if (mode === 'plane') {
+        if (typeof window.initPlaneMode === 'function') window.initPlaneMode();
+        else alert('✈️ Chế độ máy bay đang phát triển!');
+    }
+};
+
+// ========== INITIALIZE ==========
+document.getElementById('loginBtn').onclick = login;
+document.getElementById('loginPassword').onkeypress = (e) => { if (e.key === 'Enter') login(); };
+
+// Export functions
 window.showModeScreen = showModeScreen;
 window.showChatMode = showChatMode;
 window.showDriveMode = showDriveMode;
 window.showTranslateMode = showTranslateMode;
 window.showCameraMode = showCameraMode;
 window.showGameMode = showGameMode;
-window.showGameTypeScreen = showGameTypeScreen;
-
-// ========== INITIALIZE ==========
-document.getElementById('loginBtn').onclick = login;
-document.getElementById('loginPassword').onkeypress = (e) => {
-    if (e.key === 'Enter') login();
-};
