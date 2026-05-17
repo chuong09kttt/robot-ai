@@ -15,9 +15,6 @@
     <!-- Socket.IO and Three.js -->
     <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
-
-
-    
 </head>
 <body>
     <!-- LOGIN SCREEN -->
@@ -104,10 +101,10 @@
         </div>
     </div>
 
-    <!-- GAME MODE SELECTION -->
+    <!-- GAME MODE SELECTION SCREEN -->
     <div id="gameTypeScreen" class="mode-panel" style="display: none;">
         <div class="panel-header">
-            <button class="back-btn" data-back="mode">⌂ HOME</button>
+            <button class="back-btn" id="gameTypeBackBtn">⌂ HOME</button>
             <div class="panel-title">🎮 CHỌN CHẾ ĐỘ</div>
             <div class="panel-status">SELECT VEHICLE</div>
         </div>
@@ -316,10 +313,10 @@
         </div>
     </div>
 
-    <!-- GAME MODE PANEL -->
+    <!-- GAME MODE PANEL (chứa canvas game) -->
     <div id="gamePanel" class="mode-panel" style="display: none;">
         <div class="panel-header">
-            <button class="back-btn" data-back="mode">⌂ HOME</button>
+            <button class="back-btn" id="gameBackBtn">⌂ HOME</button>
             <div class="panel-title">🎮 OCEAN RUSH</div>
             <div class="panel-status" id="gameStatusText">🎮 GAMING</div>
         </div>
@@ -330,46 +327,63 @@
             <div id="gameHud">
                 <div id="gameSpeed">🚤 Speed: 0</div>
                 <div id="gameScore">💰 Score: 0</div>
-                <div id="gamePlayers">👥 Players: 1</div>
+                <div id="gameLives">❤️ Lives: 5</div>
                 <div id="gameStatus">🎮 READY</div>
             </div>
             <div class="game-instruction">
                 🎮 <span>ĐIỀU KHIỂN:</span> Giơ 2 tay như vô lăng → xoay để lái | Đầu cao → tăng tốc | Nắm tay → bắn
             </div>
         </div>
-        
-        <div class="chat-controls">
-            <button class="control-btn back" data-back="mode">⌂ HOME</button>
-        </div>
     </div>
 
     <script src="/script.js"></script>
-
     <script type="module">
-    import { initGameWithMode, stopGame } from '/js/game.js';
-    import { startGameTracking, stopGameTracking } from '/js/tracking.js';
-    
-    window.initGameWithMode = initGameWithMode;
-    window.stopGame = stopGame;
-    window.startGameTracking = startGameTracking;
-    window.stopGameTracking = stopGameTracking;
-    
-    // Xử lý nút chọn chế độ game
-    document.getElementById('selectBoatMode')?.addEventListener('click', () => {
-        document.getElementById('gameTypeScreen').style.display = 'none';
-        document.getElementById('gamePanel').style.display = 'block';
-        initGameWithMode('boat');
-    });
-    
-    document.getElementById('selectPlaneMode')?.addEventListener('click', () => {
-        document.getElementById('gameTypeScreen').style.display = 'none';
-        document.getElementById('gamePanel').style.display = 'block';
-        initGameWithMode('plane');
-    });
+        import { initGameWithMode, stopGame } from '/js/game.js';
+        import { startGameTracking, stopGameTracking } from '/js/tracking.js';
+        
+        window.initGameWithMode = initGameWithMode;
+        window.stopGame = stopGame;
+        window.startGameTracking = startGameTracking;
+        window.stopGameTracking = stopGameTracking;
+        
+        // Xử lý nút chọn chế độ game sau khi DOM load
+        document.addEventListener('DOMContentLoaded', () => {
+            const selectBoat = document.getElementById('selectBoatMode');
+            const selectPlane = document.getElementById('selectPlaneMode');
+            const gameBackBtn = document.getElementById('gameBackBtn');
+            const gameTypeBackBtn = document.getElementById('gameTypeBackBtn');
+            
+            if (selectBoat) {
+                selectBoat.onclick = () => {
+                    document.getElementById('gameTypeScreen').style.display = 'none';
+                    document.getElementById('gamePanel').style.display = 'block';
+                    initGameWithMode('boat');
+                };
+            }
+            
+            if (selectPlane) {
+                selectPlane.onclick = () => {
+                    document.getElementById('gameTypeScreen').style.display = 'none';
+                    document.getElementById('gamePanel').style.display = 'block';
+                    initGameWithMode('plane');
+                };
+            }
+            
+            if (gameBackBtn) {
+                gameBackBtn.onclick = () => {
+                    if (typeof stopGame === 'function') stopGame();
+                    document.getElementById('gamePanel').style.display = 'none';
+                    document.getElementById('modeScreen').style.display = 'block';
+                };
+            }
+            
+            if (gameTypeBackBtn) {
+                gameTypeBackBtn.onclick = () => {
+                    document.getElementById('gameTypeScreen').style.display = 'none';
+                    document.getElementById('modeScreen').style.display = 'block';
+                };
+            }
+        });
     </script>
-
-
-
-    
 </body>
 </html>
