@@ -601,3 +601,31 @@ window.startGameWithMode = function(mode) {
         initPlaneMode();
     }
 };
+
+
+
+// ========== GAME MODE INITIALIZERS ==========
+import { initBoatMode, stopBoatMode } from './js/game.js';
+import { initPlaneMode, stopPlaneMode } from './js/plane-mode.js';
+
+window.initBoatMode = initBoatMode;
+window.stopBoatMode = stopBoatMode;
+window.initPlaneMode = initPlaneMode;
+window.stopPlaneMode = stopPlaneMode;
+
+// Override showGameMode
+window.showGameMode = function() {
+    document.getElementById('modeScreen').style.display = 'none';
+    document.getElementById('gameTypeScreen').style.display = 'block';
+};
+
+window.startGameWithMode = function(mode) {
+    document.getElementById('gameTypeScreen').style.display = 'none';
+    document.getElementById('gamePanel').style.display = 'block';
+    
+    if (mode === 'boat') {
+        initBoatMode();
+    } else if (mode === 'plane') {
+        initPlaneMode();
+    }
+};
