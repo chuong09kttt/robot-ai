@@ -11,6 +11,9 @@
     "express-session": "^1.17.3",
     "ws": "^8.14.2",
     "axios": "^1.6.0",
-    "node-cache": "^5.1.2"
+    "node-cache": "^5.1.2",
+    "openai": "^4.20.0",
+    "pdf-parse": "^1.1.1",
+    "cheerio": "^1.0.0-rc.12"
   }
 }
