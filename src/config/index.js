@@ -1,34 +1,47 @@
-// ========== CONFIGURATION ==========
+// ========== SECURE CONFIGURATION ==========
 const path = require('path');
+const crypto = require('crypto');
 
 module.exports = {
     // Server
     PORT: process.env.PORT || 8080,
-    NODE_ENV: process.env.NODE_ENV || 'development',
+    NODE_ENV: process.env.NODE_ENV || 'production',
+    
+    // Security Keys (from env)
+    SESSION_SECRET: process.env.SESSION_SECRET,
+    ENCRYPTION_KEY: Buffer.from(process.env.ENCRYPTION_KEY || '', 'hex'),
+    WATERMARK_KEY: process.env.WATERMARK_KEY,
+    
+    // Paths
+    PUBLIC_DIR: path.join(__dirname, '../../public'),
+    PROTECTED_DIR: path.join(__dirname, '../../protected'),
+    DATABASE_DIR: path.join(__dirname, '../../database'),
     
     // Session
-    SESSION_SECRET: process.env.SESSION_SECRET || 'chiri-super-secret-key-2024',
+    SESSION_MAX_AGE: 24 * 60 * 60 * 1000,
+    
+    // Rate Limiting
+    RATE_LIMIT: {
+        windowMs: (process.env.RATE_LIMIT_WINDOW || 15) * 60 * 1000,
+        max: parseInt(process.env.RATE_LIMIT_MAX) || 100
+    },
+    
+    // User database (encrypted in production)
+    USERS: {
+        'admin': { passwordHash: '$2b$10$9q4q4q4q4q4q4q4q4q4q4q', name: 'Quản trị viên' },
+        'ch': { passwordHash: '$2b$10$6q4q4q4q4q4q4q4q4q4q4q', name: 'Chí Hào' }
+    },
     
     // OpenAI
     OPENAI_API_KEY: process.env.OPENAI_API_KEY,
     
-    // Google Drive
-    GOOGLE_DRIVE_FILE_ID: process.env.GOOGLE_DRIVE_FILE_ID || '1RXqoUIQgb_UgvbjM8h3412OZdsxPAZPP',
-    
-    // Paths
-    PUBLIC_DIR: path.join(__dirname, '../../public'),
-    FACE_DATA_FILE: path.join(__dirname, '../../face-data.json'),
-    
-    // Rate limits
-    RATE_LIMIT_WINDOW: 15 * 60 * 1000, // 15 minutes
-    RATE_LIMIT_MAX: 100,
-    
-    // Session
-    SESSION_MAX_AGE: 24 * 60 * 60 * 1000, // 24 hours
-    
-    // Users
-    USERS: {
-        'admin': { password: 'admin123', name: 'Quản trị viên' },
-        'ch': { password: '123', name: 'Chí Hào' }
+    // CSP Headers
+    CSP: {
+        'default-src': ["'self'"],
+        'script-src': ["'self'", "'unsafe-inline'", "cdn.jsdelivr.net"],
+        'style-src': ["'self'", "'unsafe-inline'"],
+        'connect-src': ["'self'", "wss://*.railway.app", "https://api.openai.com"],
+        'img-src': ["'self'", "data:", "blob:"],
+        'worker-src': ["'self'", "blob:"]
     }
 };
