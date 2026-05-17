@@ -409,3 +409,5 @@ export function stopPlaneMode() {
     stopGameTracking();
     gameInitialized = false;
 }
+// Cuối file plane-mode.js, thêm:
+export { initPlaneMode, stopPlaneMode };
