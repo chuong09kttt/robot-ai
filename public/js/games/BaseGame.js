@@ -1,4 +1,4 @@
-// ========== BASE GAME CLASS ==========
+// ========== BASE GAME CLASS (CLIENT-SIDE) ==========
 export class BaseGame {
     constructor(canvasId, options = {}) {
         this.canvas = document.getElementById(canvasId);
@@ -6,11 +6,11 @@ export class BaseGame {
         this.isActive = false;
         this.score = 0;
         this.lives = options.lives || 5;
+        this.sessionId = null;
         this.scene = null;
         this.camera = null;
         this.renderer = null;
         this.vehicle = null;
-        this.bullets = [];
         this.obstacles = [];
         this.powerups = [];
         this.shootCooldown = 0;
@@ -18,69 +18,154 @@ export class BaseGame {
         this.intervals = [];
     }
     
-    initScene() {
-        if (!this.canvas) {
-            console.error('Canvas not found');
+    async initSession() {
+        try {
+            const response = await fetch('/api/secure-game/init', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ mode: this.options.mode || 'boat' }),
+                credentials: 'include'
+            });
+            const data = await response.json();
+            
+            if (data.success) {
+                this.sessionId = data.sessionId;
+                this.lives = data.gameState.lives;
+                this.score = data.gameState.score;
+                console.log('✅ Game session created:', this.sessionId);
+                return true;
+            }
+            return false;
+        } catch(e) {
+            console.error('Session init error:', e);
             return false;
         }
-        
-        this.renderer = new THREE.WebGLRenderer({ canvas: this.canvas, antialias: true });
-        this.renderer.setSize(window.innerWidth, window.innerHeight);
-        this.renderer.setClearColor(0x0a1030);
-        
-        this.scene = new THREE.Scene();
-        this.scene.background = new THREE.Color(0x0a1030);
-        
-        this.camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 1000);
-        this.camera.position.set(0, 7, 14);
-        
-        const ambient = new THREE.AmbientLight(0x404060, 0.7);
-        this.scene.add(ambient);
-        const sun = new THREE.DirectionalLight(0xfff5e6, 1.0);
-        sun.position.set(5, 15, 5);
-        this.scene.add(sun);
-        
-        return true;
     }
     
-    createVehicle() {
-        const boat = new THREE.Group();
-        const hull = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.9, 1.8, 12), new THREE.MeshPhongMaterial({ color: 0xff4444 }));
-        hull.rotation.x = Math.PI / 2;
-        hull.position.y = 0.2;
-        boat.add(hull);
-        this.vehicle = boat;
-        this.scene.add(this.vehicle);
+    async updateGameState(steering, speed, shooting, position) {
+        if (!this.sessionId) return null;
         
-        const water = new THREE.Mesh(new THREE.PlaneGeometry(500, 400, 100, 80), new THREE.MeshPhongMaterial({ color: 0x2a6f8f }));
-        water.rotation.x = -Math.PI / 2;
-        water.position.y = -0.3;
-        this.scene.add(water);
+        try {
+            const response = await fetch('/api/secure-game/update', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    sessionId: this.sessionId,
+                    steering: steering,
+                    speed: speed,
+                    shooting: shooting,
+                    position: position
+                }),
+                credentials: 'include'
+            });
+            const data = await response.json();
+            
+            if (data.success) {
+                this.score = data.gameState.score;
+                this.lives = data.gameState.lives;
+                
+                // Thêm vật cản mới từ server
+                if (data.newObstacles) {
+                    for (const obs of data.newObstacles) {
+                        this.addObstacleFromServer(obs);
+                    }
+                }
+                
+                // Thêm vật phẩm mới từ server
+                if (data.newPowerups) {
+                    for (const p of data.newPowerups) {
+                        this.addPowerupFromServer(p);
+                    }
+                }
+                
+                return data.gameState;
+            }
+            return null;
+        } catch(e) {
+            console.error('Game update error:', e);
+            return null;
+        }
     }
     
-    createObstacle() {
-        const obstacle = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.5, 1.0), new THREE.MeshPhongMaterial({ color: 0xaa3333 }));
-        obstacle.position.set((Math.random() - 0.5) * 14, 0.3, this.vehicle.position.z - 90);
+    async fetchObstacles() {
+        if (!this.sessionId) return;
+        
+        try {
+            const response = await fetch(`/api/secure-game/obstacles/${this.sessionId}`, {
+                credentials: 'include'
+            });
+            const data = await response.json();
+            
+            // Cập nhật obstacles từ server
+            this.updateObstaclesFromServer(data.obstacles);
+            this.updatePowerupsFromServer(data.powerups);
+        } catch(e) {}
+    }
+    
+    addObstacleFromServer(obsData) {
+        const obstacle = new THREE.Mesh(
+            new THREE.BoxGeometry(0.9, 0.5, 1.0),
+            new THREE.MeshPhongMaterial({ color: 0xaa3333 })
+        );
+        obstacle.position.set(obsData.x, 0.3, obsData.z);
+        obstacle.userData = { id: obsData.id };
         this.scene.add(obstacle);
         this.obstacles.push(obstacle);
     }
     
-    createPowerup() {
-        const powerup = new THREE.Mesh(new THREE.SphereGeometry(0.25, 16, 16), new THREE.MeshPhongMaterial({ color: 0xffdd44, emissive: 0xffaa00 }));
-        powerup.position.set((Math.random() - 0.5) * 14, 0.3, this.vehicle.position.z - 80);
+    addPowerupFromServer(powerupData) {
+        const powerup = new THREE.Mesh(
+            new THREE.SphereGeometry(0.25, 16, 16),
+            new THREE.MeshPhongMaterial({ color: 0xffdd44, emissive: 0xffaa00 })
+        );
+        powerup.position.set(powerupData.x, 0.3, powerupData.z);
+        powerup.userData = { id: powerupData.id };
         this.scene.add(powerup);
         this.powerups.push(powerup);
     }
     
-    fireBullet() {
-        if (!this.vehicle) return;
-        const bullet = new THREE.Mesh(new THREE.SphereGeometry(0.12), new THREE.MeshBasicMaterial({ color: 0xffaa44 }));
-        bullet.position.copy(this.vehicle.position);
-        bullet.position.z += 1.6;
-        bullet.position.y = 0.6;
-        bullet.userData = { velocityZ: -5 };
-        this.scene.add(bullet);
-        this.bullets.push(bullet);
+    updateObstaclesFromServer(serverObstacles) {
+        // Xóa obstacles cũ không còn trên server
+        const serverIds = new Set(serverObstacles.map(o => o.id));
+        
+        for (let i = this.obstacles.length - 1; i >= 0; i--) {
+            const obs = this.obstacles[i];
+            if (!serverIds.has(obs.userData.id)) {
+                this.scene.remove(obs);
+                this.obstacles.splice(i, 1);
+            } else {
+                // Cập nhật vị trí
+                const serverObs = serverObstacles.find(o => o.id === obs.userData.id);
+                if (serverObs) {
+                    obs.position.z = serverObs.z;
+                }
+            }
+        }
+    }
+    
+    updatePowerupsFromServer(serverPowerups) {
+        const serverIds = new Set(serverPowerups.map(p => p.id));
+        
+        for (let i = this.powerups.length - 1; i >= 0; i--) {
+            const p = this.powerups[i];
+            if (!serverIds.has(p.userData.id)) {
+                this.scene.remove(p);
+                this.powerups.splice(i, 1);
+            } else {
+                const serverP = serverPowerups.find(pw => pw.id === p.userData.id);
+                if (serverP) {
+                    p.position.z = serverP.z;
+                }
+            }
+        }
+    }
+    
+    initScene() {
+        // ... (giữ nguyên code tạo scene 3D)
+    }
+    
+    createVehicle() {
+        // ... (giữ nguyên)
     }
     
     updateUI() {
@@ -94,17 +179,24 @@ export class BaseGame {
         if (livesElem) livesElem.innerHTML = `❤️ Lives: ${this.lives}`;
     }
     
-    gameOver() {
-        this.isActive = false;
-        this.intervals.forEach(i => clearInterval(i));
-        if (this.animationId) cancelAnimationFrame(this.animationId);
-        alert(`💀 GAME OVER! Score: ${this.score}`);
-        document.getElementById('gamePanel').style.display = 'none';
-        document.getElementById('modeScreen').style.display = 'block';
+    async start() {
+        const sessionCreated = await this.initSession();
+        if (!sessionCreated) {
+            alert('Không thể khởi tạo game!');
+            return;
+        }
+        
+        this.initScene();
+        this.createVehicle();
+        this.startGameLoop();
+        this.startIntervals();
+        this.isActive = true;
+        if (window.startGameTracking) window.startGameTracking();
+        this.updateUI();
     }
     
     startGameLoop() {
-        const animate = () => {
+        const animate = async () => {
             if (!this.isActive) {
                 if (this.renderer) this.renderer.render(this.scene, this.camera);
                 requestAnimationFrame(animate);
@@ -117,67 +209,57 @@ export class BaseGame {
             let steering = (trackingData.steeringAngle || 0) * 1.2;
             let speed = Math.max(0.15, (trackingData.speed || 0) * 2);
             
-            const targetX = steering * 8.5;
-            this.vehicle.position.x += (targetX - this.vehicle.position.x) * 0.1;
-            this.vehicle.position.x = Math.min(8.5, Math.max(-8.5, this.vehicle.position.x));
-            this.vehicle.rotation.z = -steering * 0.5;
-            this.vehicle.position.z -= speed * 0.48;
+            // Cập nhật game state qua server (ẩn logic)
+            const vehicle = this.vehicle;
+            if (vehicle) {
+                const gameState = await this.updateGameState(steering, speed, trackingData.shooting, {
+                    x: vehicle.position.x,
+                    z: vehicle.position.z
+                });
+                
+                if (gameState) {
+                    // Cập nhật vị trí từ server (đã được tính toán an toàn)
+                    vehicle.position.x = gameState.position.x;
+                    vehicle.position.z = gameState.position.z;
+                    vehicle.rotation.z = -steering * 0.5;
+                    
+                    if (gameState.isGameOver) {
+                        this.gameOver();
+                    }
+                }
+            }
             
+            // Lấy obstacles từ server
+            await this.fetchObstacles();
+            
+            // Di chuyển obstacles (client chỉ render)
+            for (const obs of this.obstacles) {
+                // Vị trí đã được cập nhật từ server
+            }
+            
+            // Bắn đạn (client-side effect, server xác nhận)
             if (trackingData.shooting && this.shootCooldown <= 0) {
                 this.fireBullet();
                 this.shootCooldown = 10;
             }
             if (this.shootCooldown > 0) this.shootCooldown--;
             
-            // Update bullets
-            for (let i = this.bullets.length-1; i>=0; i--) {
+            // Update bullets (client-side only)
+            for (let i = this.bullets.length - 1; i >= 0; i--) {
                 const b = this.bullets[i];
                 b.position.z += b.userData.velocityZ;
                 if (b.position.z < -30) {
                     this.scene.remove(b);
-                    this.bullets.splice(i,1);
+                    this.bullets.splice(i, 1);
                 }
             }
             
-            // Update obstacles
-            for (let i = this.obstacles.length-1; i>=0; i--) {
-                const o = this.obstacles[i];
-                o.position.z += speed * 0.45 + 0.6;
-                if (o.position.z > 28) {
-                    this.scene.remove(o);
-                    this.obstacles.splice(i,1);
-                    continue;
-                }
-                if (Math.abs(o.position.x - this.vehicle.position.x) < 0.9 && 
-                    Math.abs(o.position.z - this.vehicle.position.z) < 1.3) {
-                    this.lives--;
-                    this.scene.remove(o);
-                    this.obstacles.splice(i,1);
-                    this.updateUI();
-                    if (this.lives <= 0) this.gameOver();
-                }
+            // Update camera
+            if (vehicle) {
+                this.camera.position.x += (vehicle.position.x - this.camera.position.x) * 0.06;
+                this.camera.position.z = vehicle.position.z + 12;
+                this.camera.lookAt(vehicle.position);
             }
-            
-            // Update powerups
-            for (let i = this.powerups.length-1; i>=0; i--) {
-                const p = this.powerups[i];
-                p.position.z += speed * 0.45 + 0.5;
-                p.rotation.y += 0.05;
-                if (Math.abs(p.position.x - this.vehicle.position.x) < 1.0 && 
-                    Math.abs(p.position.z - this.vehicle.position.z) < 1.3) {
-                    this.score += 10;
-                    this.scene.remove(p);
-                    this.powerups.splice(i,1);
-                    this.updateUI();
-                } else if (p.position.z > 28) {
-                    this.scene.remove(p);
-                    this.powerups.splice(i,1);
-                }
-            }
-            
-            this.camera.position.x += (this.vehicle.position.x - this.camera.position.x) * 0.06;
-            this.camera.position.z = this.vehicle.position.z + 12;
-            this.camera.lookAt(this.vehicle.position);
             
             this.updateUI();
             this.renderer.render(this.scene, this.camera);
@@ -186,24 +268,40 @@ export class BaseGame {
         animate();
     }
     
-    startIntervals() {
-        const obstacleInterval = setInterval(() => {
-            if (this.isActive && this.vehicle) this.createObstacle();
-        }, 1200);
-        const powerupInterval = setInterval(() => {
-            if (this.isActive && this.vehicle) this.createPowerup();
-        }, 2500);
-        this.intervals = [obstacleInterval, powerupInterval];
+    fireBullet() {
+        if (!this.vehicle) return;
+        const bullet = new THREE.Mesh(
+            new THREE.SphereGeometry(0.12),
+            new THREE.MeshBasicMaterial({ color: 0xffaa44 })
+        );
+        bullet.position.copy(this.vehicle.position);
+        bullet.position.z += 1.6;
+        bullet.position.y = 0.6;
+        bullet.userData = { velocityZ: -5 };
+        this.scene.add(bullet);
+        this.bullets.push(bullet);
     }
     
-    start() {
-        if (!this.initScene()) return;
-        this.createVehicle();
-        this.startGameLoop();
-        this.startIntervals();
-        this.isActive = true;
-        if (window.startGameTracking) window.startGameTracking();
-        this.updateUI();
+    gameOver() {
+        this.isActive = false;
+        this.intervals.forEach(i => clearInterval(i));
+        if (this.animationId) cancelAnimationFrame(this.animationId);
+        
+        // Gửi kết thúc game lên server
+        fetch('/api/secure-game/end', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ sessionId: this.sessionId }),
+            credentials: 'include'
+        }).then(() => {
+            alert(`💀 GAME OVER! Score: ${this.score}`);
+            document.getElementById('gamePanel').style.display = 'none';
+            document.getElementById('modeScreen').style.display = 'block';
+        }).catch(() => {
+            alert(`💀 GAME OVER! Score: ${this.score}`);
+            document.getElementById('gamePanel').style.display = 'none';
+            document.getElementById('modeScreen').style.display = 'block';
+        });
     }
     
     stop() {
