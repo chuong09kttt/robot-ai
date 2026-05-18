@@ -22,6 +22,10 @@ const chatRoutes = require('./routes/chat');
 const driveRoutes = require('./routes/drive');
 const gameRoutes = require('./routes/game');
 const protectedRoutes = require('./routes/protected');
+// Thêm vào sau các route khác
+const secureGameRoutes = require('./routes/secure-game');
+app.use('/api/secure-game', secureGameRoutes);
+
 
 const app = express();
 const server = http.createServer(app);
