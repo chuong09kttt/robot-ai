@@ -844,3 +844,81 @@ function showQRCode() {
     }
 }
 
+// ========== PWA INSTALL PROMPT ==========
+let deferredPrompt;
+
+window.addEventListener('beforeinstallprompt', (e) => {
+    console.log('beforeinstallprompt event fired');
+    e.preventDefault();
+    deferredPrompt = e;
+    showInstallPromotion();
+});
+
+function showInstallPromotion() {
+    // Tạo banner cài đặt
+    const banner = document.createElement('div');
+    banner.id = 'installBanner';
+    banner.style.cssText = `
+        position: fixed;
+        bottom: 20px;
+        left: 20px;
+        right: 20px;
+        background: linear-gradient(135deg, #0a0a2a, #1a1a3a);
+        border: 2px solid #00d4ff;
+        border-radius: 16px;
+        padding: 16px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        z-index: 10000;
+        backdrop-filter: blur(10px);
+        box-shadow: 0 0 30px rgba(0,212,255,0.3);
+    `;
+    
+    banner.innerHTML = `
+        <div style="display: flex; align-items: center; gap: 12px;">
+            <span style="font-size: 32px;">🐹</span>
+            <div>
+                <div style="font-weight: bold; color: #00d4ff;">Cài đặt CHIRI AI</div>
+                <div style="font-size: 12px; opacity: 0.8;">Trải nghiệm như app thực thụ</div>
+            </div>
+        </div>
+        <button id="installBtn" style="
+            background: linear-gradient(90deg, #00d4ff, #ff00ff);
+            border: none;
+            padding: 10px 24px;
+            border-radius: 30px;
+            color: white;
+            font-weight: bold;
+            cursor: pointer;
+        ">CÀI ĐẶT</button>
+    `;
+    
+    document.body.appendChild(banner);
+    
+    document.getElementById('installBtn').onclick = async () => {
+        if (deferredPrompt) {
+            deferredPrompt.prompt();
+            const { outcome } = await deferredPrompt.userChoice;
+            if (outcome === 'accepted') {
+                console.log('User installed the app');
+            }
+            deferredPrompt = null;
+            banner.remove();
+        }
+    };
+    
+    // Tự động ẩn sau 10 giây
+    setTimeout(() => {
+        if (banner.parentNode) banner.remove();
+    }, 10000);
+}
+
+// Register Service Worker
+if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/service-worker.js')
+            .then(reg => console.log('Service Worker registered:', reg))
+            .catch(err => console.log('Service Worker error:', err));
+    });
+}
