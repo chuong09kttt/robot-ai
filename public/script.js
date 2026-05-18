@@ -297,21 +297,89 @@ function escapeHtml(text) {
     return div.innerHTML;
 }
 
+// ========== GIỌNG NÓI TỰ NHIÊN NHƯ NGƯỜI THẬT ==========
 async function speak(text) {
     if (!text || isTranslatorMode) return;
-    if (window.speechSynthesis) window.speechSynthesis.cancel();
+    
+    if (window.speechSynthesis) {
+        window.speechSynthesis.cancel();
+        await new Promise(resolve => setTimeout(resolve, 50));
+    }
+    
     isSpeaking = true;
     setExpression('talking');
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = 'vi-VN';
-    utterance.rate = 0.9;
-    utterance.onend = () => {
+    
+    try {
+        const utterance = new SpeechSynthesisUtterance(text);
+        
+        // Lấy danh sách giọng nói
+        let voices = window.speechSynthesis.getVoices();
+        if (voices.length === 0) {
+            await new Promise(resolve => {
+                window.speechSynthesis.onvoiceschanged = () => {
+                    voices = window.speechSynthesis.getVoices();
+                    resolve();
+                };
+            });
+        }
+        
+        // Chọn giọng nói tự nhiên nhất
+        const preferredVoices = [
+            'Google Tiếng Việt',
+            'Google Vietnamese',
+            'Microsoft HoaiMy',
+            'Microsoft Nam',
+            'Google UK English Female',
+            'Google US English',
+            'Samantha'
+        ];
+        
+        let selectedVoice = null;
+        for (const preferred of preferredVoices) {
+            selectedVoice = voices.find(v => v.name.includes(preferred));
+            if (selectedVoice) break;
+        }
+        
+        if (!selectedVoice) {
+            selectedVoice = voices.find(v => v.lang === 'vi-VN') ||
+                           voices.find(v => v.lang === 'en-US') ||
+                           voices[0];
+        }
+        
+        if (selectedVoice) {
+            utterance.voice = selectedVoice;
+            console.log(`🎤 Using voice: ${selectedVoice.name}`);
+        }
+        
+        // Phát hiện ngôn ngữ
+        const isVietnamese = /[àáảãạâầấẩẫậêềếểễệôồốổỗộơờớởỡợưừứửữựđ]/i.test(text);
+        utterance.lang = isVietnamese ? 'vi-VN' : 'en-US';
+        utterance.rate = 0.95;
+        utterance.pitch = 1.05;
+        utterance.volume = 1;
+        
+        utterance.onstart = () => console.log('🗣️ Speaking...');
+        utterance.onend = () => {
+            isSpeaking = false;
+            stopMouthAnimation();
+            if (isAwake && !isTranslatorMode) setExpression('listening');
+        };
+        utterance.onerror = (e) => {
+            console.error('Speech error:', e);
+            isSpeaking = false;
+            stopMouthAnimation();
+        };
+        
+        window.speechSynthesis.speak(utterance);
+        
+    } catch (error) {
+        console.error('TTS error:', error);
         isSpeaking = false;
         stopMouthAnimation();
-        if (isAwake && !isTranslatorMode) setExpression('listening');
-    };
-    window.speechSynthesis.speak(utterance);
+    }
 }
+
+
 
 function wakeUp() {
     if (isAwake) return;
