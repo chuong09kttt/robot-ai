@@ -1,6 +1,53 @@
 // ========== CHIRI AI - MAIN UI SCRIPT ==========
 // Đây là file chính điều khiển toàn bộ giao diện và tính năng
 
+
+
+// ========== ANTI-DEVTOOLS ==========
+(function() {
+    // Chặn F12, Ctrl+Shift+I, Ctrl+U
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'F12' || 
+            (e.ctrlKey && e.shiftKey && (e.key === 'I' || e.key === 'J')) ||
+            (e.ctrlKey && e.key === 'u')) {
+            e.preventDefault();
+            alert('🔒 Developer tools are disabled for security');
+            return false;
+        }
+    });
+    
+    // Chặn right-click
+    document.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        return false;
+    });
+    
+    // Phát hiện DevTools qua debugger
+    setInterval(() => {
+        const before = new Date();
+        debugger;
+        const after = new Date();
+        if (after - before > 100) {
+            document.body.innerHTML = `
+                <div style="position:fixed;top:0;left:0;width:100%;height:100%;background:#000;color:#ff4444;display:flex;justify-content:center;align-items:center;z-index:99999;font-size:24px">
+                    🔒 Developer tools detected!<br>Please close to continue.
+                </div>
+            `;
+            setTimeout(() => location.reload(), 3000);
+        }
+    }, 1000);
+    
+    // Chặn console.log (tùy chọn)
+    if (window.location.hostname !== 'localhost') {
+        console.log = function() {};
+        console.error = function() {};
+        console.warn = function() {};
+    }
+})();
+
+
+
+
 // Global variables
 let currentUser = null;
 let ws = null;
