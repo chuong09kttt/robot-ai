@@ -1,5 +1,5 @@
 // ========== CHIRI AI - SECURE ENTRY POINT ==========
-require('dotenv').config();
+//require('dotenv').config();
 const { startServer } = require('./src/app');
 
 // Start server
