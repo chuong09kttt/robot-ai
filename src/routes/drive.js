@@ -42,4 +42,9 @@ router.get('/clients', (req, res) => {
     res.json({ count });
 });
 
-module.exports = { router, esp32Clients, sendToESP32 };
+// ========== EXPORTS ==========
+// Export router as default (cho app.use)
+module.exports = router;
+// Export additional items for other modules
+module.exports.esp32Clients = esp32Clients;
+module.exports.sendToESP32 = sendToESP32;
