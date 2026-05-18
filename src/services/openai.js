@@ -2,7 +2,7 @@
 const OpenAI = require('openai');
 const config = require('../config');
 const { getCachedResponse, setCachedResponse } = require('../utils/cache');
-const { getSimpleReply, detectLanguage } = require('../utils/helpers');
+const { getSimpleReply } = require('../utils/helpers');
 
 let openai = null;
 if (config.OPENAI_API_KEY) {
@@ -12,38 +12,31 @@ if (config.OPENAI_API_KEY) {
     console.log('⚠️ OpenAI not configured, using smart reply mode');
 }
 
-// Conversation histories
 const conversationHistory = new Map();
 
-// System prompts
 function getSystemPrompt(lang, customContext = '') {
-    let prompt;
     if (lang === 'en') {
-        prompt = `You are Chiri - a smart, friendly, cute AI assistant.
+        return `You are Chiri - a smart, friendly, cute AI assistant.
 - Answer ALL user questions accurately and helpfully
 - Tone: friendly, enthusiastic, use emojis (❤️, 😊, 🚀)
-- Answer in ENGLISH only, SHORT (2-3 sentences)
-- If you don't know, say "I'm not sure about that"`;
+- Answer in ENGLISH only
+- Answer SHORT and NATURAL (2-3 sentences max)
+- Use conversational language, like a real person talking
+- If you don't know, say "I'm not sure about that, but I can help you search!"`;
     } else {
-        prompt = `Bạn là Chiri - một trợ lý AI thông minh, thân thiện, dễ thương.
+        return `Bạn là Chiri - một trợ lý AI thông minh, thân thiện, dễ thương.
 - Trả lời MỌI câu hỏi của người dùng một cách chính xác, hữu ích
-- Giọng điệu: thân thiện, nhiệt tình, dùng icon cảm xúc (❤️, 😊, 🚀)
-- Trả lời bằng TIẾNG VIỆT, NGẮN GỌN (2-3 câu)
-- Nếu không biết, nói "Mình chưa rõ lắm"`;
+- Giọng điệu: thân thiện, tự nhiên, dùng icon cảm xúc (❤️, 😊, 🚀)
+- Trả lời bằng TIẾNG VIỆT, TỰ NHIÊN NHƯ NGƯỜI THẬT
+- Trả lời NGẮN GỌN (2-3 câu), không lan man
+- Sử dụng ngôn ngữ đời thường, gần gũi
+- Nếu không biết, nói "Mình chưa rõ lắm, nhưng mình có thể giúp bạn tra cứu thêm nhé!"`;
     }
-    
-    if (customContext) {
-        prompt += `\n\n**REFERENCE INFORMATION:**\n${customContext.slice(0, 500)}\n\nUse this information to answer if relevant.`;
-    }
-    
-    return prompt;
 }
 
-// Chat with AI
 async function chat(message, history = [], userId = 'default', lang = 'vi', customContext = '') {
     const cacheKey = `${userId}_${message.slice(0, 200)}_${lang}`;
     const cached = getCachedResponse(cacheKey);
-    const systemPrompt = getSystemPrompt(lang, customContext);
     if (cached) return cached;
     
     if (!openai) {
@@ -51,7 +44,6 @@ async function chat(message, history = [], userId = 'default', lang = 'vi', cust
     }
     
     try {
-        // Get or create conversation history
         if (!conversationHistory.has(userId)) {
             conversationHistory.set(userId, []);
         }
@@ -60,19 +52,18 @@ async function chat(message, history = [], userId = 'default', lang = 'vi', cust
         const messages = [
             { role: 'system', content: getSystemPrompt(lang, customContext) },
             ...userHistory.slice(-10),
-            { role: 'user', content: message.slice(0, 500) }
+            { role: 'user', content: message }
         ];
         
         const completion = await openai.chat.completions.create({
             model: 'gpt-3.5-turbo',
             messages: messages,
-            max_tokens: 350,
-            temperature: 0.7
+            max_tokens: 200,
+            temperature: 0.8,
         });
         
         const reply = completion.choices[0].message.content;
         
-        // Update history
         userHistory.push({ role: 'user', content: message });
         userHistory.push({ role: 'assistant', content: reply });
         if (userHistory.length > 20) {
@@ -88,18 +79,12 @@ async function chat(message, history = [], userId = 'default', lang = 'vi', cust
     }
 }
 
-// Clear conversation history
 function clearHistory(userId) {
     conversationHistory.delete(userId);
 }
 
-// Get conversation history
 function getHistory(userId) {
     return conversationHistory.get(userId) || [];
 }
 
-module.exports = {
-    chat,
-    clearHistory,
-    getHistory
-};
+module.exports = { chat, clearHistory, getHistory };
