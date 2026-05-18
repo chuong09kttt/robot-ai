@@ -1,6 +1,7 @@
 // ========== DRIVE CONTROL ROUTES ==========
 const express = require('express');
 const router = express.Router();
+const { requireAuth } = require('../middleware/auth');  // ← SỬA TÊN
 const { DRIVE_REPLIES } = require('../utils/constants');
 
 // Global map for ESP32 clients (shared)
@@ -18,8 +19,8 @@ function sendToESP32(command, duration = 0) {
     return sent;
 }
 
-// Command endpoint - TEMPORARILY REMOVED AUTH FOR DEPLOYMENT
-router.post('/command', (req, res) => {
+// Command endpoint
+router.post('/command', requireAuth, (req, res) => {  // ← SỬA TÊN
     const { command, duration } = req.body;
     
     if (!command) {
@@ -41,6 +42,7 @@ router.get('/clients', (req, res) => {
     res.json({ count });
 });
 
+// Export
 module.exports = router;
 module.exports.esp32Clients = esp32Clients;
 module.exports.sendToESP32 = sendToESP32;
