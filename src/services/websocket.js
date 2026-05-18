@@ -22,21 +22,30 @@ const processingQueue = new Map();
 // ========== TỪ KHÓA NỘI BỘ (cần tra RAG) ==========
 // Những từ khóa này sẽ ưu tiên tìm trong knowledge base
 const INTERNAL_KEYWORDS = [
-    'vinfast', 'sáp nhập tỉnh', 'sáp nhập', 'vard', 'vũng tàu',
-    'chính sách', 'nội bộ', 'công ty', 'dự án', 'báo cáo',
-    'tài liệu', 'hướng dẫn', 'quy trình', 'nội quy'
+    'vinfast',
+    'vard',
+    'sáp nhập tỉnh',
+    'nội bộ',
+    'quy trình',
+    'tài liệu công ty',
+    'quy định công ty',
+    'vũng tàu'
 ];
 
 // ========== LANGUAGE DETECTION ==========
 function detectLanguageImproved(text) {
-    if (!text || text.length === 0) return 'vi';
-    
-    const vietnameseChars = /[àáảãạâầấẩẫậêềếểễệôồốổỗộơờớởỡợưừứửữựđ]/i;
-    if (vietnameseChars.test(text)) return 'vi';
-    
-    const englishPattern = /^[a-zA-Z0-9\s\.\,\?\!\'\"\(\)\-\:\;]+$/;
-    if (englishPattern.test(text) && text.length > 2) return 'en';
-    
+    if (!text) return 'vi';
+
+    const viChars = /[àáảãạăâêôơưđ]/i;
+    if (viChars.test(text)) {
+        return 'vi';
+    }
+
+    const englishWords = /\b(what|where|when|why|how|hello|hi|thanks|please|current|date|time)\b/ix;
+    if (englishWords.test(text)) {
+        return 'en';
+    }
+
     return 'vi';
 }
 
@@ -73,7 +82,10 @@ async function searchKnowledgeBase(query, lang) {
             
             // Lấy nội dung từ kết quả tìm kiếm
             const contexts = searchResults.map(r => r.content).slice(0, 2);
-            const context = contexts.join('\n\n---\n\n');
+            let context = contexts.join('\n\n---\n\n');
+            
+            // limit context
+            context = context.slice(0, 1500);
             
             return {
                 found: true,
@@ -119,7 +131,12 @@ async function handleGeneralQuestion(userText, sessionId, lang) {
     const history = conversationHistory.get(sessionId);
     history.push({ role: 'user', content: userText });
     
-    let reply = await openaiService.chat(userText, history, sessionId, lang);
+    // chỉ gửi 6 message gần nhất
+    const shortHistory = history.slice(-6);
+    
+    console.log('🧠 History:', shortHistory);
+    
+    let reply = await openaiService.chat(userText, shortHistory, sessionId, lang);
     
     if (!reply || reply.includes('having a problem') || reply.includes('gặp vấn đề')) {
         reply = getSimpleReply(userText, lang);
@@ -149,6 +166,14 @@ async function processUserMessage(userText, driveMode, sessionId, ws) {
             console.log(`🌐 Detected language: ${lang === 'en' ? 'ENGLISH' : 'VIETNAMESE'}`);
             
             const lower = userText.toLowerCase();
+            
+            // ========== DEBUG ==========
+            console.log({
+                question: userText,
+                lang,
+                driveMode,
+                useRAG: shouldUseRAG(userText)
+            });
             
             // ========== LỆNH ĐIỀU KHIỂN ==========
             if (lower.includes('bật phiên dịch') || lower.includes('bật dịch')) {
@@ -286,8 +311,8 @@ function setupWebSocket(server) {
                         }
                     }
                     
-                    for (const [id, client] of wss.clients) {
-                        if (client.readyState === WebSocket.OPEN && gamePlayers.has(id)) {
+                    for (const client of wss.clients) {
+                        if (client.readyState === WebSocket.OPEN) {
                             client.send(JSON.stringify({ type: 'game_players', players: playersList }));
                         }
                     }
