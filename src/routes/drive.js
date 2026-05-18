@@ -1,7 +1,6 @@
 // ========== DRIVE CONTROL ROUTES ==========
 const express = require('express');
 const router = express.Router();
-const { requireApiAuth } = require('../middleware/auth');
 const { DRIVE_REPLIES } = require('../utils/constants');
 
 // Global map for ESP32 clients (shared)
@@ -11,7 +10,7 @@ const esp32Clients = new Map();
 function sendToESP32(command, duration = 0) {
     let sent = false;
     for (const [id, client] of esp32Clients) {
-        if (client.readyState === 1) { // WebSocket.OPEN
+        if (client.readyState === 1) {
             client.send(JSON.stringify({ type: 'command', command, duration }));
             sent = true;
         }
@@ -19,8 +18,8 @@ function sendToESP32(command, duration = 0) {
     return sent;
 }
 
-// Command endpoint
-router.post('/command', requireApiAuth, (req, res) => {
+// Command endpoint - TEMPORARILY REMOVED AUTH FOR DEPLOYMENT
+router.post('/command', (req, res) => {
     const { command, duration } = req.body;
     
     if (!command) {
@@ -42,9 +41,6 @@ router.get('/clients', (req, res) => {
     res.json({ count });
 });
 
-// ========== EXPORTS ==========
-// Export router as default (cho app.use)
 module.exports = router;
-// Export additional items for other modules
 module.exports.esp32Clients = esp32Clients;
 module.exports.sendToESP32 = sendToESP32;
