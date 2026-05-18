@@ -829,5 +829,18 @@ if (document.readyState === 'loading') {
 }
 
 
-
+// Thêm vào script.js
+function showQRCode() {
+    const modal = document.getElementById('qrModal');
+    if (modal) modal.style.display = 'block';
+    
+    // Generate QR code (cần thêm thư viện qrcode)
+    if (typeof QRCode !== 'undefined') {
+        const qrcode = new QRCode(document.getElementById('qrcode'), {
+            text: window.location.href,
+            width: 200,
+            height: 200
+        });
+    }
+}
 
