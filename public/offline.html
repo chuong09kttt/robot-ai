@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🐹 CHIRI AI - Offline</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            background: linear-gradient(135deg, #0a0a1a, #030308);
+            font-family: 'Orbitron', monospace;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            color: white;
+        }
+        .offline-container {
+            text-align: center;
+            padding: 40px;
+        }
+        .offline-icon {
+            font-size: 80px;
+            margin-bottom: 20px;
+            animation: float 2s ease-in-out infinite;
+        }
+        h1 {
+            color: #00d4ff;
+            margin-bottom: 10px;
+        }
+        p {
+            color: rgba(255,255,255,0.7);
+            margin-bottom: 20px;
+        }
+        button {
+            padding: 12px 30px;
+            background: linear-gradient(90deg, #00d4ff, #ff00ff);
+            border: none;
+            border-radius: 30px;
+            color: white;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        @keyframes float {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-10px); }
+        }
+    </style>
+</head>
+<body>
+    <div class="offline-container">
+        <div class="offline-icon">📡</div>
+        <h1>CHIRI AI</h1>
+        <p>Không có kết nối internet</p>
+        <p>Vui lòng kiểm tra kết nối mạng của bạn</p>
+        <button onclick="location.reload()">🔄 THỬ LẠI</button>
+    </div>
+</body>
+</html>
