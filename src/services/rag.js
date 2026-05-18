@@ -223,6 +223,17 @@ function clearKnowledge() {
     customKnowledge = [];
 }
 
+// Debug: in ra nội dung đang có trong knowledge base
+function logKnowledgeBase() {
+    console.log('📚 CURRENT KNOWLEDGE BASE:');
+    console.log(`Total chunks: ${customKnowledge.length}`);
+    for (let i = 0; i < Math.min(5, customKnowledge.length); i++) {
+        console.log(`  [${i}] Source: ${customKnowledge[i].source}`);
+        console.log(`      Preview: ${customKnowledge[i].content.slice(0, 200)}...`);
+    }
+}
+
+
 module.exports = {
     addPDF,
     addWebsite,
