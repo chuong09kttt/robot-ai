@@ -1,13 +1,11 @@
 // ========== HELPER FUNCTIONS ==========
 
-// Detect language of text
 function detectLanguage(text) {
     if (!text || text.length === 0) return 'vi';
-    const vietnameseChars = /[àáảãạăâầấẩẫậêềếểễệôồốổỗộơờớởỡợưừứửữựđ]/i;
+    const vietnameseChars = /[àáảãạâầấẩẫậêềếểễệôồốổỗộơờớởỡợưừứửữựđ]/i;
     return vietnameseChars.test(text) ? 'vi' : 'en';
 }
 
-// Get current time
 function getCurrentTime(lang = 'vi') {
     const now = new Date();
     const hours = now.getHours();
@@ -29,7 +27,6 @@ function getCurrentTime(lang = 'vi') {
     }
 }
 
-// Get current date
 function getCurrentDate(lang = 'vi') {
     const now = new Date();
     const day = now.getDate();
@@ -46,7 +43,6 @@ function getCurrentDate(lang = 'vi') {
     }
 }
 
-// Simple reply when ChatGPT is not available
 function getSimpleReply(userMessage, lang = 'vi') {
     const lower = userMessage.toLowerCase();
     
@@ -60,35 +56,43 @@ function getSimpleReply(userMessage, lang = 'vi') {
         if (lower.includes('thank')) {
             return 'You\'re welcome! Happy to help you! 💖';
         }
-        return `🤔 I heard you say: "${userMessage.slice(0, 50)}". I am still learning.`;
+        if (lower.includes('what time') || lower.includes('time now')) {
+            return getCurrentTime('en');
+        }
+        if (lower.includes('what date') || lower.includes('today')) {
+            return getCurrentDate('en');
+        }
+        return `🤔 I heard you say: "${userMessage.slice(0, 50)}". Can you tell me more? I'm here to help! 😊`;
     } else {
         if (lower.includes('xin chào') || lower.includes('hello')) {
             return 'Xin chào bạn! Mình là Chiri AI, rất vui được gặp bạn! 💕';
         }
         if (lower.includes('khỏe') || lower.includes('khoẻ')) {
-            return 'Mình rất tốt, cảm ơn bạn đã hỏi! 😊';
+            return 'Mình rất khỏe, cảm ơn bạn đã hỏi! Còn bạn thì sao? 😊';
         }
         if (lower.includes('cảm ơn')) {
             return 'Không có gì đâu ạ! Rất vui khi được giúp bạn! 💖';
         }
-        return `🤔 Mình nghe bạn nói: "${userMessage.slice(0, 50)}". Mình đang học hỏi thêm.`;
+        if (lower.includes('mấy giờ') || (lower.includes('giờ') && lower.includes('bao nhiêu'))) {
+            return getCurrentTime('vi');
+        }
+        if (lower.includes('hôm nay') || lower.includes('ngày mấy')) {
+            return getCurrentDate('vi');
+        }
+        return `🤔 Mình nghe bạn nói: "${userMessage.slice(0, 50)}". Bạn có thể nói rõ hơn được không? Mình sẵn sàng giúp bạn! 😊`;
     }
 }
 
-// Parse drive command from text
 function parseDriveCommand(text) {
     const lower = text.toLowerCase().trim();
-    const cleanText = lower.replace(/đang|ơi|ạ|mình|hãy|làm ơn|cho|tôi/g, '');
-    
-    if (cleanText.includes('tiến') || cleanText === 'đi') return 'FORWARD';
-    if (cleanText.includes('lùi')) return 'BACKWARD';
-    if (cleanText.includes('trái')) return 'LEFT';
-    if (cleanText.includes('phải')) return 'RIGHT';
-    if (cleanText.includes('dừng')) return 'STOP';
+    if (lower.includes('tiến') || lower === 'đi') return 'FORWARD';
+    if (lower.includes('lùi')) return 'BACKWARD';
+    if (lower.includes('trái')) return 'LEFT';
+    if (lower.includes('phải')) return 'RIGHT';
+    if (lower.includes('dừng')) return 'STOP';
     return null;
 }
 
-// Parse countdown command
 function parseCountdownCommand(text) {
     const lower = text.toLowerCase();
     const match = lower.match(/(?:đếm ngược|countdown)\s*(\d+)\s*(giây|s)/i);
@@ -99,14 +103,12 @@ function parseCountdownCommand(text) {
     return { isCountdown: false };
 }
 
-// Escape HTML
 function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
 }
 
-// Delay function
 function delay(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
