@@ -1,0 +1,30 @@
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#00d4ff"/>
+      <stop offset="100%" style="stop-color:#ff00ff"/>
+    </linearGradient>
+  </defs>
+  
+  <!-- Background -->
+  <rect width="512" height="512" rx="100" fill="#0a0a1a"/>
+  
+  <!-- Outer ring -->
+  <circle cx="256" cy="256" r="200" fill="none" stroke="url(#grad)" stroke-width="12"/>
+  
+  <!-- Eyes -->
+  <circle cx="180" cy="220" r="35" fill="white"/>
+  <circle cx="332" cy="220" r="35" fill="white"/>
+  <circle cx="190" cy="220" r="18" fill="#2C3E50"/>
+  <circle cx="342" cy="220" r="18" fill="#2C3E50"/>
+  
+  <!-- Mouth (smile) -->
+  <path d="M180 310 Q256 370 332 310" fill="none" stroke="url(#grad)" stroke-width="15" stroke-linecap="round"/>
+  
+  <!-- Ears -->
+  <circle cx="100" cy="120" r="50" fill="url(#grad)" opacity="0.8"/>
+  <circle cx="412" cy="120" r="50" fill="url(#grad)" opacity="0.8"/>
+  
+  <!-- Center logo -->
+  <text x="256" y="420" text-anchor="middle" fill="white" font-family="Orbitron" font-size="48" font-weight="bold">CHIRI</text>
+</svg>
