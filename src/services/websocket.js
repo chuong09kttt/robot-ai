@@ -2,6 +2,7 @@
 const WebSocket = require('ws');
 const openaiService = require('./openai');
 const translationService = require('./translation');
+const ragService = require('./rag');
 const { sendToESP32, esp32Clients } = require('../routes/drive');
 const { 
     detectLanguage, 
@@ -11,74 +12,129 @@ const {
     getCurrentDate,
     getSimpleReply
 } = require('../utils/helpers');
-const { FALLBACK_KNOWLEDGE, DRIVE_REPLIES } = require('../utils/constants');
+const { DRIVE_REPLIES } = require('../utils/constants');
 
 // Game players storage
 const gamePlayers = new Map();
 const conversationHistory = new Map();
 const processingQueue = new Map();
 
-// ========== LANGUAGE DETECTION CẢI TIẾN ==========
+// ========== TỪ KHÓA NỘI BỘ (cần tra RAG) ==========
+// Những từ khóa này sẽ ưu tiên tìm trong knowledge base
+const INTERNAL_KEYWORDS = [
+    'vinfast', 'sáp nhập tỉnh', 'sáp nhập', 'vard', 'vũng tàu',
+    'chính sách', 'nội bộ', 'công ty', 'dự án', 'báo cáo',
+    'tài liệu', 'hướng dẫn', 'quy trình', 'nội quy'
+];
+
+// ========== LANGUAGE DETECTION ==========
 function detectLanguageImproved(text) {
     if (!text || text.length === 0) return 'vi';
     
-    // Biểu thức cho tiếng Việt
     const vietnameseChars = /[àáảãạâầấẩẫậêềếểễệôồốổỗộơờớởỡợưừứửữựđ]/i;
+    if (vietnameseChars.test(text)) return 'vi';
     
-    // Nếu có ký tự tiếng Việt -> tiếng Việt
-    if (vietnameseChars.test(text)) {
-        return 'vi';
-    }
-    
-    // Biểu thức cho tiếng Anh
     const englishPattern = /^[a-zA-Z0-9\s\.\,\?\!\'\"\(\)\-\:\;]+$/;
-    if (englishPattern.test(text) && text.length > 2) {
-        return 'en';
-    }
+    if (englishPattern.test(text) && text.length > 2) return 'en';
     
     return 'vi';
 }
 
-// ========== FALLBACK KNOWLEDGE MỞ RỘNG ==========
-const expandedKnowledge = {
-    'vi': {
-        'trái đất nặng bao nhiêu': 'Khối lượng của Trái Đất là khoảng 5.97 × 10^24 kg, tức 5.97 tỷ tỷ tấn! Đó là một con số khổng lồ! 🌍',
-        'khối lượng trái đất': 'Trái Đất có khối lượng khoảng 5.97 × 10^24 kg. Nặng lắm đó bạn ạ!',
-        'trái đất bao nhiêu tuổi': 'Trái Đất khoảng 4.54 tỷ năm tuổi, rất già rồi đấy!',
-        'mặt trăng bao xa': 'Mặt Trăng cách Trái Đất khoảng 384,400 km, tương đương 30 lần đường kính Trái Đất! 🌙',
-        'mặt trời bao xa': 'Mặt Trời cách Trái Đất khoảng 149.6 triệu km!',
-        'vinfast': 'VinFast đang tái cấu trúc: Công ty Tương Lai mua lại 2 nhà máy. VinFast vẫn giữ thương hiệu và bảo hành. Dự kiến có lãi từ năm 2027.',
-        'xin chào': 'Xin chào bạn! Mình là Chiri AI, rất vui được gặp bạn! 💕',
-        'bạn khỏe không': 'Mình rất khỏe, cảm ơn bạn đã hỏi! Bạn có khỏe không ạ? 😊',
-        'cảm ơn': 'Không có gì đâu ạ! Rất vui khi được giúp bạn! 💖',
-        'tạm biệt': 'Tạm biệt bạn! Hẹn gặp lại nhé! 👋'
-    },
-    'en': {
-        'how heavy is earth': 'The Earth has a mass of approximately 5.97 × 10^24 kg! That\'s huge! 🌍',
-        'earth mass': 'Earth\'s mass is about 5.97 × 10^24 kilograms.',
-        'how old is earth': 'Earth is approximately 4.54 billion years old!',
-        'distance to moon': 'The Moon is about 384,400 km away from Earth! 🌙',
-        'distance to sun': 'The Sun is about 149.6 million km away from Earth!',
-        'hello': 'Hello! I am Chiri AI, nice to meet you! 💕',
-        'how are you': 'I am doing great, thank you for asking! How about you? 😊',
-        'thank you': 'You are very welcome! Happy to help you! 💖',
-        'goodbye': 'Goodbye! See you later! 👋'
-    }
-};
-
-function searchKnowledge(query, lang = 'vi') {
-    const lower = query.toLowerCase().trim();
-    const knowledge = expandedKnowledge[lang];
+// ========== KIỂM TRA CÓ CẦN TRA RAG KHÔNG ==========
+function shouldUseRAG(query) {
+    const lower = query.toLowerCase();
     
-    for (const [keyword, answer] of Object.entries(knowledge)) {
+    // Kiểm tra từ khóa nội bộ
+    for (const keyword of INTERNAL_KEYWORDS) {
         if (lower.includes(keyword)) {
-            return answer;
+            return true;
         }
     }
-    return null;
+    
+    // Kiểm tra nếu có dấu hiệu hỏi về tài liệu
+    if (lower.includes('theo tài liệu') || 
+        lower.includes('trong file') || 
+        lower.includes('tài liệu nói') ||
+        lower.includes('theo văn bản')) {
+        return true;
+    }
+    
+    return false;
 }
 
-// Process user message
+// ========== TÌM KIẾM TRONG KNOWLEDGE BASE ==========
+async function searchKnowledgeBase(query, lang) {
+    try {
+        console.log('🔍 Searching in knowledge base...');
+        const searchResults = ragService.search(query);
+        
+        if (searchResults && searchResults.length > 0) {
+            console.log(`📖 Found ${searchResults.length} relevant results`);
+            
+            // Lấy nội dung từ kết quả tìm kiếm
+            const contexts = searchResults.map(r => r.content).slice(0, 2);
+            const context = contexts.join('\n\n---\n\n');
+            
+            return {
+                found: true,
+                context: context,
+                sources: searchResults.map(r => r.source)
+            };
+        }
+        return { found: false, context: null, sources: [] };
+    } catch (error) {
+        console.error('RAG search error:', error);
+        return { found: false, context: null, sources: [] };
+    }
+}
+
+// ========== TẠO CÂU TRẢ LỜI TỪ RAG + CHATGPT ==========
+async function generateAnswerWithRAG(userText, context, sources, lang) {
+    const contextPrompt = lang === 'en' 
+        ? `Based on the following reference information, please answer the user's question accurately and concisely.\n\nReference information:\n${context}\n\nUser question: ${userText}\n\nAnswer:`
+        : `Dựa trên thông tin tham khảo sau đây, hãy trả lời câu hỏi của người dùng một cách chính xác và ngắn gọn.\n\nThông tin tham khảo:\n${context}\n\nCâu hỏi: ${userText}\n\nTrả lời:`;
+    
+    try {
+        // Thử dùng ChatGPT với context
+        const reply = await openaiService.chat(contextPrompt, [], `rag_${Date.now()}`, lang);
+        
+        // Thêm nguồn tham khảo
+        const sourceText = sources.length > 0 
+            ? `\n\n📌 *Nguồn: ${sources.slice(0, 2).join(', ')}*` 
+            : '';
+        
+        return reply + sourceText;
+    } catch (error) {
+        // Fallback: trả về context trực tiếp
+        return `📖 **Thông tin tham khảo:**\n\n${context.slice(0, 800)}${context.length > 800 ? '...' : ''}\n\n📌 *Nguồn: ${sources.join(', ')}*`;
+    }
+}
+
+// ========== XỬ LÝ CÂU HỎI THƯỜNG (CHATGPT) ==========
+async function handleGeneralQuestion(userText, sessionId, lang) {
+    if (!conversationHistory.has(sessionId)) {
+        conversationHistory.set(sessionId, []);
+    }
+    
+    const history = conversationHistory.get(sessionId);
+    history.push({ role: 'user', content: userText });
+    
+    let reply = await openaiService.chat(userText, history, sessionId, lang);
+    
+    if (!reply || reply.includes('having a problem') || reply.includes('gặp vấn đề')) {
+        reply = getSimpleReply(userText, lang);
+    }
+    
+    history.push({ role: 'assistant', content: reply });
+    
+    if (history.length > 20) {
+        conversationHistory.set(sessionId, history.slice(-20));
+    }
+    
+    return reply;
+}
+
+// ========== PROCESS USER MESSAGE (CHÍNH) ==========
 async function processUserMessage(userText, driveMode, sessionId, ws) {
     if (!processingQueue.has(sessionId)) {
         processingQueue.set(sessionId, Promise.resolve());
@@ -89,13 +145,12 @@ async function processUserMessage(userText, driveMode, sessionId, ws) {
         try {
             console.log(`🔍 Process: "${userText}" | driveMode: ${driveMode}`);
             
-            // Phát hiện ngôn ngữ cải tiến
             const lang = detectLanguageImproved(userText);
             console.log(`🌐 Detected language: ${lang === 'en' ? 'ENGLISH' : 'VIETNAMESE'}`);
             
             const lower = userText.toLowerCase();
             
-            // Lệnh bật/tắt phiên dịch
+            // ========== LỆNH ĐIỀU KHIỂN ==========
             if (lower.includes('bật phiên dịch') || lower.includes('bật dịch')) {
                 return "🌐 Đã bật chế độ phiên dịch real-time! Vui lòng chọn ngôn ngữ trên màn hình.";
             }
@@ -126,7 +181,7 @@ async function processUserMessage(userText, driveMode, sessionId, ws) {
                     : `⏰ Đã bắt đầu đếm ngược ${countdown.seconds} giây!`;
             }
             
-            // THỜI GIAN THỰC
+            // ========== THỜI GIAN THỰC ==========
             if (lower.includes('mấy giờ') || lower.includes('current time') || lower.includes('time now')) {
                 return getCurrentTime(lang);
             }
@@ -134,29 +189,22 @@ async function processUserMessage(userText, driveMode, sessionId, ws) {
                 return getCurrentDate(lang);
             }
             
-            // KIẾN THỨC CÓ SẴN
-            const knowledgeAnswer = searchKnowledge(userText, lang);
-            if (knowledgeAnswer) return knowledgeAnswer;
-            
-            // Chat mode
-            if (!conversationHistory.has(sessionId)) {
-                conversationHistory.set(sessionId, []);
+            // ========== KIỂM TRA CÓ CẦN TRA RAG KHÔNG ==========
+            if (shouldUseRAG(userText)) {
+                console.log('📚 This question may need internal knowledge, searching RAG...');
+                const ragResult = await searchKnowledgeBase(userText, lang);
+                
+                if (ragResult.found) {
+                    console.log('✅ Found relevant information in knowledge base');
+                    const answer = await generateAnswerWithRAG(userText, ragResult.context, ragResult.sources, lang);
+                    return answer;
+                } else {
+                    console.log('⚠️ No relevant information found in knowledge base, using ChatGPT');
+                }
             }
             
-            const history = conversationHistory.get(sessionId);
-            history.push({ role: 'user', content: userText });
-            
-            let reply;
-            reply = await openaiService.chat(userText, history, sessionId, lang);
-            
-            history.push({ role: 'assistant', content: reply });
-            
-            // Limit history size
-            if (history.length > 20) {
-                conversationHistory.set(sessionId, history.slice(-20));
-            }
-            
-            return reply;
+            // ========== CHATGPT CHO CÂU HỎI THƯỜNG ==========
+            return await handleGeneralQuestion(userText, sessionId, lang);
             
         } catch (error) {
             console.error('Process error:', error);
