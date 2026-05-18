@@ -610,3 +610,224 @@ window.showDriveMode = showDriveMode;
 window.showTranslateMode = showTranslateMode;
 window.showCameraMode = showCameraMode;
 window.showGameMode = showGameMode;
+
+
+
+
+
+
+
+
+
+
+// ========== PWA & FULLSCREEN FEATURES ==========
+
+// Lock orientation to landscape (for game)
+async function lockOrientation() {
+    try {
+        if (screen.orientation && screen.orientation.lock) {
+            await screen.orientation.lock('landscape');
+            console.log('✅ Orientation locked to landscape');
+        }
+    } catch(e) {
+        console.log('Orientation lock not supported:', e);
+    }
+}
+
+// Request fullscreen
+async function requestFullscreen() {
+    try {
+        const elem = document.documentElement;
+        if (elem.requestFullscreen) {
+            await elem.requestFullscreen();
+        } else if (elem.webkitRequestFullscreen) {
+            await elem.webkitRequestFullscreen();
+        } else if (elem.msRequestFullscreen) {
+            await elem.msRequestFullscreen();
+        }
+        console.log('✅ Fullscreen mode activated');
+    } catch(e) {
+        console.log('Fullscreen request failed:', e);
+    }
+}
+
+// Exit fullscreen
+async function exitFullscreen() {
+    try {
+        if (document.exitFullscreen) {
+            await document.exitFullscreen();
+        } else if (document.webkitExitFullscreen) {
+            await document.webkitExitFullscreen();
+        }
+        console.log('✅ Exited fullscreen');
+    } catch(e) {}
+}
+
+// Check if fullscreen is supported
+function isFullscreenSupported() {
+    return !!(document.documentElement.requestFullscreen || 
+              document.documentElement.webkitRequestFullscreen);
+}
+
+// Toggle fullscreen
+function toggleFullscreen() {
+    if (document.fullscreenElement || document.webkitFullscreenElement) {
+        exitFullscreen();
+    } else {
+        requestFullscreen();
+    }
+}
+
+// Hide address bar on mobile
+function hideAddressBar() {
+    window.scrollTo(0, 1);
+    setTimeout(() => window.scrollTo(0, 1), 100);
+}
+
+// Register Service Worker for PWA
+async function registerServiceWorker() {
+    if ('serviceWorker' in navigator) {
+        try {
+            const registration = await navigator.serviceWorker.register('/service-worker.js');
+            console.log('✅ Service Worker registered:', registration.scope);
+            
+            // Check for updates
+            registration.onupdatefound = () => {
+                const installingWorker = registration.installing;
+                installingWorker.onstatechange = () => {
+                    if (installingWorker.state === 'installed') {
+                        if (navigator.serviceWorker.controller) {
+                            console.log('🔄 New version available, reload to update');
+                            // Show update notification
+                            showUpdateNotification();
+                        } else {
+                            console.log('✅ App ready for offline use');
+                        }
+                    }
+                };
+            };
+        } catch(e) {
+            console.log('Service Worker registration failed:', e);
+        }
+    }
+}
+
+// Show update notification
+function showUpdateNotification() {
+    const notification = document.createElement('div');
+    notification.style.cssText = `
+        position: fixed;
+        bottom: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: #00d4ff;
+        color: #000;
+        padding: 12px 24px;
+        border-radius: 40px;
+        font-family: 'Orbitron', monospace;
+        z-index: 10000;
+        cursor: pointer;
+        box-shadow: 0 0 20px rgba(0,212,255,0.5);
+    `;
+    notification.innerHTML = '🔄 Cập nhật mới có sẵn! Nhấn để tải lại';
+    notification.onclick = () => window.location.reload();
+    document.body.appendChild(notification);
+    setTimeout(() => notification.remove(), 10000);
+}
+
+// Create splash screen
+function showSplashScreen() {
+    // Check if splash already shown
+    if (sessionStorage.getItem('splashShown')) return;
+    
+    const splash = document.createElement('div');
+    splash.id = 'splash';
+    splash.innerHTML = `
+        <div class="splash-logo">🐹</div>
+        <div class="splash-text">CHIRI AI</div>
+        <div style="margin-top: 20px; font-size: 12px; opacity: 0.6;">CHẠM ĐỂ BẮT ĐẦU</div>
+    `;
+    document.body.appendChild(splash);
+    
+    // Remove splash on click or after timeout
+    const removeSplash = () => {
+        splash.style.opacity = '0';
+        setTimeout(() => splash.remove(), 500);
+        sessionStorage.setItem('splashShown', 'true');
+    };
+    
+    splash.onclick = async () => {
+        removeSplash();
+        // Request fullscreen on first user interaction
+        if (isFullscreenSupported() && !document.fullscreenElement) {
+            await requestFullscreen();
+        }
+        await lockOrientation();
+    };
+    
+    // Auto remove after 3 seconds
+    setTimeout(removeSplash, 3000);
+}
+
+// Initialize PWA features
+async function initPWA() {
+    console.log('📱 Initializing PWA features...');
+    
+    // Register service worker
+    await registerServiceWorker();
+    
+    // Lock orientation (best effort)
+    await lockOrientation();
+    
+    // Hide address bar on mobile
+    hideAddressBar();
+    window.addEventListener('resize', hideAddressBar);
+    window.addEventListener('orientationchange', hideAddressBar);
+    
+    // Show splash screen on first visit
+    showSplashScreen();
+    
+    // Add fullscreen toggle button (optional)
+    addFullscreenButton();
+}
+
+// Add floating fullscreen button
+function addFullscreenButton() {
+    const btn = document.createElement('div');
+    btn.className = 'fullscreen-btn';
+    btn.innerHTML = '⛶';
+    btn.onclick = (e) => {
+        e.stopPropagation();
+        toggleFullscreen();
+    };
+    document.body.appendChild(btn);
+}
+
+// Listen for fullscreen change events
+document.addEventListener('fullscreenchange', () => {
+    const isFullscreen = !!(document.fullscreenElement || document.webkitFullscreenElement);
+    console.log(`Fullscreen mode: ${isFullscreen ? 'ON' : 'OFF'}`);
+    
+    // Update button icon
+    const btn = document.querySelector('.fullscreen-btn');
+    if (btn) btn.innerHTML = isFullscreen ? '✕' : '⛶';
+});
+
+// Listen for visibility change (for PWA)
+document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') {
+        console.log('App became visible');
+        hideAddressBar();
+    }
+});
+
+// Initialize PWA when DOM is ready
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initPWA);
+} else {
+    initPWA();
+}
+
+
+
+
