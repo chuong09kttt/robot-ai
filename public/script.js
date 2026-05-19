@@ -97,9 +97,18 @@ async function login() {
         const data = await response.json();
         
         if (data.success) {
-            currentUser = { username: data.username, name: data.name };
+             currentUser = { username: data.username, name: data.name };
+    
+            // CHUYỂN MÀN HÌNH
             document.getElementById('loginScreen').style.display = 'none';
-            document.getElementById('modeScreen').style.display = 'block';
+            const modeScreenElem = document.getElementById('modeScreen');
+            if (modeScreenElem) {
+                modeScreenElem.style.display = 'block';
+                console.log('✅ Switched to mode screen');
+            }
+
+            
+            
             document.getElementById('userNameDisplay').innerHTML = `👤 ${data.name}`;
             
             // Initialize features
