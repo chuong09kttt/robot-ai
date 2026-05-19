@@ -2,16 +2,16 @@
 const express = require('express');
 const router = express.Router();
 const ragService = require('../services/rag');
-const { requireApiAuth } = require('../middleware/auth');
+const { requireAuth } = require('../middleware/auth');  // ← SỬA
 
-// Get knowledge stats
+// Get knowledge stats (public, no auth needed)
 router.get('/stats', (req, res) => {
     const stats = ragService.getStats();
     res.json(stats);
 });
 
 // Upload PDF
-router.post('/upload-pdf', requireApiAuth, async (req, res) => {
+router.post('/upload-pdf', requireAuth, async (req, res) => {  // ← SỬA
     const { fileContent, fileName } = req.body;
     
     if (!fileContent) {
@@ -23,7 +23,7 @@ router.post('/upload-pdf', requireApiAuth, async (req, res) => {
 });
 
 // Add website
-router.post('/add-website', requireApiAuth, async (req, res) => {
+router.post('/add-website', requireAuth, async (req, res) => {  // ← SỬA
     const { url } = req.body;
     
     if (!url) {
@@ -35,7 +35,7 @@ router.post('/add-website', requireApiAuth, async (req, res) => {
 });
 
 // Add Google Drive file
-router.post('/add-drive', requireApiAuth, async (req, res) => {
+router.post('/add-drive', requireAuth, async (req, res) => {  // ← SỬA
     const { fileId } = req.body;
     
     if (!fileId) {
@@ -47,13 +47,13 @@ router.post('/add-drive', requireApiAuth, async (req, res) => {
 });
 
 // Clear knowledge base
-router.post('/clear', requireApiAuth, (req, res) => {
+router.post('/clear', requireAuth, (req, res) => {  // ← SỬA
     ragService.clearKnowledge();
     res.json({ success: true, message: 'Đã xóa toàn bộ dữ liệu đã học!' });
 });
 
 // Search knowledge
-router.post('/search', requireApiAuth, async (req, res) => {
+router.post('/search', requireAuth, async (req, res) => {  // ← SỬA
     const { query } = req.body;
     
     if (!query) {
