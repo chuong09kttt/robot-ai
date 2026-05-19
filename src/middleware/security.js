@@ -23,6 +23,7 @@ function sessionFingerprint(req, res, next) {
         if (!req.session.fingerprint) {
             req.session.fingerprint = fingerprint;
         } else if (req.session.fingerprint !== fingerprint) {
+            // Session hijacking detected
             req.session.destroy();
             return res.status(401).json({ error: 'Session hijacking detected' });
         }
@@ -50,28 +51,30 @@ const loginLimiter = rateLimit({
     skipSuccessfulRequests: true
 });
 
-// Helmet security headers (CÓ THỂ COMMENT ĐỂ TEST)
+// Helmet security headers - ĐÃ TẮT CSP ĐỂ CHO PHÉP F12
 const securityHeaders = helmet({
-    contentSecurityPolicy: false,  // TẮT CSP để cho phép F12
-    hsts: false,
-    frameguard: false,
-    noSniff: true,
-    xssFilter: true
+    contentSecurityPolicy: false,  // TẮT CSP - cho phép F12 và devtools
+    hsts: false,                   // TẮT HSTS để dễ debug
+    frameguard: false,             // TẮT frameguard
+    noSniff: true,                 // GIỮ lại
+    xssFilter: true                // GIỮ lại
 });
 
-// Anti-tampering middleware - TẠM THỜI TẮT HOÀN TOÀN
+// Anti-tampering middleware - ĐÃ SỬA ĐỂ KHÔNG CHẶN REQUEST
 function antiTampering(req, res, next) {
-    // TẠM THỜI TẮT KIỂM TRA NÀY
-    // Chỉ log chứ không chặn
+    // Chỉ log cảnh báo, KHÔNG chặn request
     const suspiciousHeaders = ['x-forwarded-for', 'x-originating-ip', 'x-remote-ip'];
     for (const header of suspiciousHeaders) {
         if (req.headers[header]) {
-            console.log(`⚠️ Header detected (ignored): ${header}=${req.headers[header]}`);
-            // KHÔNG block nữa
+            console.log(`⚠️ Suspicious header detected (ignored): ${header}=${req.headers[header]}`);
+            // KHÔNG block - vẫn cho phép request đi tiếp
         }
     }
-    next();  // Luôn cho phép đi tiếp
+    next();  // Luôn cho phép tiếp tục
 }
+
+// Export watermark middleware
+const watermarkCheck = checkWatermark;
 
 module.exports = {
     sessionFingerprint,
@@ -80,5 +83,5 @@ module.exports = {
     securityHeaders,
     antiTampering,
     generateFingerprint,
-    watermarkCheck: checkWatermark
+    watermarkCheck
 };
