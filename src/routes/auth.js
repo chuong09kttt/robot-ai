@@ -1,3 +1,6 @@
+
+
+
 // ========== SECURE AUTH ROUTES ==========
 const express = require('express');
 const router = express.Router();
@@ -7,6 +10,11 @@ const crypto = require('crypto');
 
 // Login with rate limiting
 router.post('/login', loginLimiter, async (req, res) => {
+
+    console.log('📥 Received login request');
+    console.log('Body:', req.body);
+    console.log('Headers:', req.headers);
+    
     const { username, password } = req.body;
     
     console.log(`🔐 Login attempt: ${username}`);
