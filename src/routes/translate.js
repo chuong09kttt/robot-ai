@@ -2,10 +2,10 @@
 const express = require('express');
 const router = express.Router();
 const translationService = require('../services/translation');
-const { requireApiAuth } = require('../middleware/auth');
+const { requireAuth } = require('../middleware/auth');  // ← SỬA TÊN
 
 // Translate text
-router.post('/', requireApiAuth, async (req, res) => {
+router.post('/', requireAuth, async (req, res) => {    // ← SỬA TÊN
     const { text, source, target } = req.body;
     
     if (!text) {
