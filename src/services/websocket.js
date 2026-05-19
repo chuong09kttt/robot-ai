@@ -263,6 +263,9 @@ function setupWebSocket(server) {
     wss.on('connection', (ws, req) => {
         const clientId = Date.now() + '-' + Math.random().toString(36).substr(2, 6);
         console.log(`🔌 Client connected: ${clientId}`);
+            // THÊM DÒNG NÀY - lưu client vào wsClients
+        wsClients.set(clientId, ws);
+
         
         const isESP32 = req.headers['user-agent']?.includes('ESP32') || false;
         if (isESP32) {
@@ -334,6 +337,7 @@ function setupWebSocket(server) {
             console.log(`🔌 Client disconnected: ${clientId}`);
             clearInterval(pingInterval);
             esp32Clients.delete(clientId);
+            wsClients.delete(clientId);  // ← THÊM DÒNG NÀY
             gamePlayers.delete(clientId);
             setTimeout(() => {
                 conversationHistory.delete(clientId);
@@ -359,4 +363,4 @@ function setupWebSocket(server) {
     return wss;
 }
 
-module.exports = { setupWebSocket, processUserMessage, clearHistory, getHistory, gamePlayers };
+module.exports = { setupWebSocket, processUserMessage, clearHistory, getHistory, gamePlayers,wsClients,esp32Clients };
