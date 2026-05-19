@@ -2,11 +2,11 @@
 const express = require('express');
 const router = express.Router();
 const openaiService = require('../services/openai');
-const { requireApiAuth } = require('../middleware/auth');
+const { requireAuth } = require('../middleware/auth');  // ← SỬA
 const { detectLanguage } = require('../utils/helpers');
 
 // Send message
-router.post('/message', requireApiAuth, async (req, res) => {
+router.post('/message', requireAuth, async (req, res) => {  // ← SỬA
     const { message, history } = req.body;
     const username = req.session.user.username;
     
@@ -21,14 +21,14 @@ router.post('/message', requireApiAuth, async (req, res) => {
 });
 
 // Clear conversation history
-router.post('/clear', requireApiAuth, (req, res) => {
+router.post('/clear', requireAuth, (req, res) => {  // ← SỬA
     const username = req.session.user.username;
     openaiService.clearHistory(username);
     res.json({ success: true });
 });
 
 // Get conversation history
-router.get('/history', requireApiAuth, (req, res) => {
+router.get('/history', requireAuth, (req, res) => {  // ← SỬA
     const username = req.session.user.username;
     const history = openaiService.getHistory(username);
     res.json({ history });
