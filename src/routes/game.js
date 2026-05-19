@@ -1,13 +1,13 @@
 // ========== GAME MULTIPLAYER ROUTES ==========
 const express = require('express');
 const router = express.Router();
-const { requireApiAuth } = require('../middleware/auth');
+const { requireAuth } = require('../middleware/auth');  // ← SỬA
 
 // Game sessions
 const gameSessions = new Map();
 
 // Initialize game session
-router.post('/init', requireApiAuth, (req, res) => {
+router.post('/init', requireAuth, (req, res) => {  // ← SỬA
     const { mode } = req.body;
     const username = req.session.user.username;
     const sessionId = `${username}_game`;
@@ -25,7 +25,7 @@ router.post('/init', requireApiAuth, (req, res) => {
 });
 
 // Update game state
-router.post('/update', requireApiAuth, (req, res) => {
+router.post('/update', requireAuth, (req, res) => {  // ← SỬA
     const { steering, speed, shooting } = req.body;
     const username = req.session.user.username;
     const sessionId = `${username}_game`;
@@ -51,7 +51,7 @@ router.post('/update', requireApiAuth, (req, res) => {
 });
 
 // Add score
-router.post('/score', requireApiAuth, (req, res) => {
+router.post('/score', requireAuth, (req, res) => {  // ← SỬA
     const { points } = req.body;
     const username = req.session.user.username;
     const sessionId = `${username}_game`;
@@ -66,7 +66,7 @@ router.post('/score', requireApiAuth, (req, res) => {
 });
 
 // Reduce life
-router.post('/hit', requireApiAuth, (req, res) => {
+router.post('/hit', requireAuth, (req, res) => {  // ← SỬA
     const username = req.session.user.username;
     const sessionId = `${username}_game`;
     
@@ -80,7 +80,7 @@ router.post('/hit', requireApiAuth, (req, res) => {
 });
 
 // Get game state
-router.get('/state', requireApiAuth, (req, res) => {
+router.get('/state', requireAuth, (req, res) => {  // ← SỬA
     const username = req.session.user.username;
     const sessionId = `${username}_game`;
     
