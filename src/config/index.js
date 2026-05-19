@@ -26,8 +26,18 @@ module.exports = {
     },
 
     // Users (tạm thời, nên chuyển sang database)
+    // Users configuration
     USERS: {
-        admin: { name: 'Administrator', password: 'admin123' },
-        ch: { name: 'ch', password: '123' }
+        admin: { 
+            name: 'Administrator', 
+            password: 'admin123' 
+        },
+        ch: { 
+            name: 'ch', 
+            password: '123' 
+        }
     }
+
+
+    
 };
