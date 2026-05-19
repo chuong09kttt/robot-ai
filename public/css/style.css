@@ -1198,3 +1198,18 @@ body {
     background: var(--primary);
     border-radius: 3px;
 }
+/* Ẩn các gợi ý autofill của trình duyệt */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+input:-webkit-autofill:active {
+    -webkit-box-shadow: 0 0 0 30px #0a0a2a inset !important;
+    -webkit-text-fill-color: #00d4ff !important;
+}
+
+/* Ẩn popup gợi ý mật khẩu */
+::-webkit-credentials-auto-fill-button {
+    display: none !important;
+    visibility: hidden;
+    pointer-events: none;
+}
