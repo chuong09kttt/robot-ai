@@ -990,3 +990,13 @@ if ('serviceWorker' in navigator) {
             .catch(err => console.log('Service Worker error:', err));
     });
 }
+// Đảm bảo login button hoạt động
+document.addEventListener('DOMContentLoaded', function() {
+    const loginBtn = document.getElementById('loginBtn');
+    if (loginBtn) {
+        loginBtn.onclick = login;
+        console.log('✅ Login button assigned');
+    } else {
+        console.error('❌ Login button not found!');
+    }
+});
