@@ -2,13 +2,14 @@
 const express = require('express');
 const router = express.Router();
 const { loginLimiter } = require('../middleware/security');
-const { verifyPassword } = require('../middleware/auth');
 const config = require('../config');
 const crypto = require('crypto');
 
 // Login with rate limiting
 router.post('/login', loginLimiter, async (req, res) => {
     const { username, password } = req.body;
+    
+    console.log(`🔐 Login attempt: ${username}`);
     
     // Input validation
     if (!username || !password) {
@@ -18,11 +19,15 @@ router.post('/login', loginLimiter, async (req, res) => {
         });
     }
     
-    // Check user exists (simplified - in production use database)
-    const user = config.USERS[username];
+    // Check user exists in config
+    const user = config.USERS?.[username];
     
-    // For demo, using plain text (in production use bcrypt)
-    if (user && password === (username === 'admin' ? 'admin123' : '123')) {
+    // Log để debug
+    console.log(`User found: ${!!user}`);
+    console.log(`Password match: ${user && user.password === password}`);
+    
+    // Xác thực mật khẩu từ config
+    if (user && user.password === password) {
         // Generate secure session ID
         req.session.user = { 
             username, 
@@ -31,10 +36,18 @@ router.post('/login', loginLimiter, async (req, res) => {
             sessionId: crypto.randomBytes(32).toString('hex')
         };
         
-        req.session.save();
-        
-        console.log(`✅ User logged in: ${username}`);
-        res.json({ success: true, name: user.name, username });
+        req.session.save((err) => {
+            if (err) {
+                console.error('Session save error:', err);
+                return res.status(500).json({ 
+                    success: false, 
+                    message: 'Lỗi server, vui lòng thử lại!' 
+                });
+            }
+            
+            console.log(`✅ User logged in: ${username}`);
+            res.json({ success: true, name: user.name, username });
+        });
     } else {
         console.log(`❌ Login failed: ${username}`);
         
