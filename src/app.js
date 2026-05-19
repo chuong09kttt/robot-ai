@@ -27,6 +27,15 @@ const secureGameRoutes = require('./routes/secure-game');
 const app = express();
 const server = http.createServer(app);
 
+
+
+// Sau khi setupWebSocket(server)
+const { esp32Clients, wsClients } = require('./socket'); // export thêm wsClients
+
+// Gán vào app để các route có thể dùng
+app.set('wsClients', wsClients);
+
+
 // ========== SECURITY MIDDLEWARE ==========
 app.use(securityHeaders);
 app.use(antiTampering);
