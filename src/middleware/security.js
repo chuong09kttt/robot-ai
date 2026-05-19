@@ -3,6 +3,7 @@ const helmet = require('helmet');
 const crypto = require('crypto');
 const config = require('../config');
 const { checkWatermark } = require('../utils/watermark');
+
 // Generate request fingerprint
 function generateFingerprint(req) {
     const userAgent = req.headers['user-agent'] || '';
@@ -22,7 +23,6 @@ function sessionFingerprint(req, res, next) {
         if (!req.session.fingerprint) {
             req.session.fingerprint = fingerprint;
         } else if (req.session.fingerprint !== fingerprint) {
-            // Session hijacking detected
             req.session.destroy();
             return res.status(401).json({ error: 'Session hijacking detected' });
         }
@@ -33,8 +33,8 @@ function sessionFingerprint(req, res, next) {
 // Rate limiting by IP
 const rateLimit = require('express-rate-limit');
 const apiLimiter = rateLimit({
-    windowMs: config.RATE_LIMIT.windowMs,
-    max: config.RATE_LIMIT.max,
+    windowMs: config.RATE_LIMIT?.windowMs || 15 * 60 * 1000,
+    max: config.RATE_LIMIT?.max || 100,
     message: { error: 'Too many requests, please try again later.' },
     keyGenerator: (req) => {
         return req.ip || req.connection.remoteAddress;
@@ -50,32 +50,27 @@ const loginLimiter = rateLimit({
     skipSuccessfulRequests: true
 });
 
-// Helmet security headers
+// Helmet security headers (CÓ THỂ COMMENT ĐỂ TEST)
 const securityHeaders = helmet({
-    contentSecurityPolicy: {
-        directives: config.CSP
-    },
-    hsts: {
-        maxAge: 31536000,
-        includeSubDomains: true,
-        preload: true
-    },
-    frameguard: { action: 'deny' },
+    contentSecurityPolicy: false,  // TẮT CSP để cho phép F12
+    hsts: false,
+    frameguard: false,
     noSniff: true,
     xssFilter: true
 });
 
-// Anti-tampering middleware
+// Anti-tampering middleware - TẠM THỜI TẮT HOÀN TOÀN
 function antiTampering(req, res, next) {
-    // Check for suspicious headers
+    // TẠM THỜI TẮT KIỂM TRA NÀY
+    // Chỉ log chứ không chặn
     const suspiciousHeaders = ['x-forwarded-for', 'x-originating-ip', 'x-remote-ip'];
     for (const header of suspiciousHeaders) {
         if (req.headers[header]) {
-            console.warn(`Suspicious header detected: ${header}`);
-            return res.status(400).json({ error: 'Bad request' });
+            console.log(`⚠️ Header detected (ignored): ${header}=${req.headers[header]}`);
+            // KHÔNG block nữa
         }
     }
-    next();
+    next();  // Luôn cho phép đi tiếp
 }
 
 module.exports = {
@@ -84,16 +79,6 @@ module.exports = {
     loginLimiter,
     securityHeaders,
     antiTampering,
-    generateFingerprint
-};
-
-// Export thêm watermark middleware
-module.exports = {
-    sessionFingerprint,
-    apiLimiter,
-    loginLimiter,
-    securityHeaders,
-    antiTampering,
     generateFingerprint,
-    watermarkCheck: checkWatermark  // Thêm middleware watermark
+    watermarkCheck: checkWatermark
 };
