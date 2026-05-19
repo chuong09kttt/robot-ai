@@ -28,6 +28,6 @@ module.exports = {
     // Users (tạm thời, nên chuyển sang database)
     USERS: {
         admin: { name: 'Administrator', password: 'admin123' },
-        ch: { name: 'Chiri User', password: '123' }
+        ch: { name: 'ch', password: '123' }
     }
 };
