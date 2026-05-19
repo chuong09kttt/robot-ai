@@ -48,14 +48,14 @@ app.use(express.urlencoded({ extended: true }));
 app.use(session({
     secret: config.SESSION_SECRET || 'fallback-secret-key-change-in-production',
     resave: false,
-    saveUninitialized: true,  // Đổi thành true để test
+    saveUninitialized: true,  // ← ĐỔI thành true
     cookie: {
-        secure: false,  // TẮT secure vì Railway dùng HTTP
+        secure: false,         // ← ĐỔI thành false (vì Railway dùng HTTP)
         httpOnly: true,
-        sameSite: 'lax',  // Đổi từ 'strict' thành 'lax'
+        sameSite: 'lax',       // ← ĐỔI từ 'strict' thành 'lax'
         maxAge: config.SESSION_MAX_AGE || 86400000
     },
-    name: 'chiri-session'  // Bỏ __Secure- prefix
+    name: 'chiri-session'      // ← BỎ __Secure- prefix
 }));
 
 // Custom security middleware (TẠM THỜI COMMENT)
