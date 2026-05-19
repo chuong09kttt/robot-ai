@@ -1000,3 +1000,11 @@ document.addEventListener('DOMContentLoaded', function() {
         console.error('❌ Login button not found!');
     }
 });
+
+
+// Force show mode screen after login
+window.forceShowModeScreen = function() {
+    document.getElementById('loginScreen').style.display = 'none';
+    document.getElementById('modeScreen').style.display = 'block';
+    console.log('✅ Mode screen forced');
+};
