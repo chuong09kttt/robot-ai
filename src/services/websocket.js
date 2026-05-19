@@ -19,6 +19,9 @@ const gamePlayers = new Map();
 const conversationHistory = new Map();
 const processingQueue = new Map();
 
+// Tạo Map để lưu tất cả WebSocket clients (bao gồm cả browser và ESP32)
+const wsClients = new Map();  // ← THÊM DÒNG NÀY
+const esp32Clients = new Map(); // ← có thể đã có
 // ========== TỪ KHÓA NỘI BỘ (cần tra RAG) ==========
 // Những từ khóa này sẽ ưu tiên tìm trong knowledge base
 const INTERNAL_KEYWORDS = [
