@@ -2,7 +2,7 @@
 // Đây là file chính điều khiển toàn bộ giao diện và tính năng
 
 
-
+/*
 // ========== ANTI-DEVTOOLS ==========
 (function() {
     // Chặn F12, Ctrl+Shift+I, Ctrl+U
@@ -44,7 +44,7 @@
         console.warn = function() {};
     }
 })();
-
+*/
 
 
 
