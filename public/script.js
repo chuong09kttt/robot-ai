@@ -1017,3 +1017,36 @@ window.forceShowModeScreen = function() {
     document.getElementById('modeScreen').style.display = 'block';
     console.log('✅ Mode screen forced');
 };
+
+
+
+
+
+
+// ========== FIX AUTO SWITCH ==========
+document.addEventListener('DOMContentLoaded', function() {
+    const originalFetch = window.fetch;
+    window.fetch = function(...args) {
+        if (args[0] && args[0].includes('/api/auth/login')) {
+            return originalFetch(...args).then(response => {
+                response.clone().json().then(data => {
+                    if (data.success) {
+                        setTimeout(() => {
+                            const loginScr = document.getElementById('loginScreen');
+                            const modeScr = document.getElementById('modeScreen');
+                            if (loginScr && modeScr) {
+                                loginScr.style.display = 'none';
+                                modeScr.style.display = 'block';
+                                console.log('✅ Auto-switched to mode screen via fetch interceptor');
+                            }
+                        }, 100);
+                    }
+                }).catch(() => {});
+                return response;
+            });
+        }
+        return originalFetch(...args);
+    };
+    console.log('✅ Fetch interceptor installed');
+});
+
