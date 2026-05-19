@@ -12,7 +12,7 @@ const {
     watermarkCheck
 } = require('./middleware/security');
 const { cleanupSession } = require('./middleware/auth');
-const { setupWebSocket } = require('./socket');
+const { setupWebSocket, wsClients, esp32Clients } = require('./socket'); // CHỈ REQUIRE 1 LẦN
 
 // Routes
 const authRoutes = require('./routes/auth');
@@ -26,15 +26,6 @@ const secureGameRoutes = require('./routes/secure-game');
 
 const app = express();
 const server = http.createServer(app);
-
-
-
-// Sau khi setupWebSocket(server)
-const { esp32Clients, wsClients } = require('./socket'); // export thêm wsClients
-
-// Gán vào app để các route có thể dùng
-app.set('wsClients', wsClients);
-
 
 // ========== SECURITY MIDDLEWARE ==========
 app.use(securityHeaders);
@@ -92,16 +83,17 @@ app.get('/health', (req, res) => {
     });
 });
 
-// Simple root endpoint for Railway healthcheck
+// Simple endpoint for Railway healthcheck
 app.get('/ping', (req, res) => {
     res.status(200).send('pong');
 });
 
 // ========== WEBSOCKET ==========
-const { setupWebSocket, wsClients } = require('./socket');
 setupWebSocket(server);
+
 // Gán wsClients vào app để các route có thể dùng
 app.set('wsClients', wsClients);
+
 // ========== ERROR HANDLING ==========
 // 404 handler
 app.use((req, res) => {
