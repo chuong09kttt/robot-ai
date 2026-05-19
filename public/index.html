@@ -375,7 +375,37 @@
         <!-- Cuối file body, thay thế các script bằng: -->
     
     <!-- Main UI script (non-module) -->
-    <script src="/script.js?v=3"></script>
+<script src="/script.js?v=5"></script>
+<script>
+    // Đảm bảo chuyển màn hình ngay khi login thành công
+    (function() {
+        const originalFetch = window.fetch;
+        window.fetch = function(url, options) {
+            if (typeof url === 'string' && url.includes('/api/auth/login')) {
+                return originalFetch(url, options).then(response => {
+                    response.clone().json().then(data => {
+                        if (data.success) {
+                            setTimeout(() => {
+                                const loginScreen = document.getElementById('loginScreen');
+                                const modeScreen = document.getElementById('modeScreen');
+                                if (loginScreen && modeScreen) {
+                                    loginScreen.style.display = 'none';
+                                    modeScreen.style.display = 'block';
+                                    console.log('✅ Auto-switched!');
+                                }
+                            }, 50);
+                        }
+                    }).catch(() => {});
+                    return response;
+                });
+            }
+            return originalFetch(url, options);
+        };
+        console.log('✅ Force fetch interceptor installed from HTML');
+    })();
+</script>
+
+
     
     <!-- Game modules (module) -->
     <script type="module" src="/js/main.js"></script>
