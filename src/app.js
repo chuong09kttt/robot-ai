@@ -98,8 +98,10 @@ app.get('/ping', (req, res) => {
 });
 
 // ========== WEBSOCKET ==========
+const { setupWebSocket, wsClients } = require('./socket');
 setupWebSocket(server);
-
+// Gán wsClients vào app để các route có thể dùng
+app.set('wsClients', wsClients);
 // ========== ERROR HANDLING ==========
 // 404 handler
 app.use((req, res) => {
