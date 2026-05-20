@@ -260,6 +260,35 @@ function escapeHtml(text) {
 }
 
 // ========== GIỌNG NÓI TỰ NHIÊN NHƯ NGƯỜI THẬT ==========
+
+// ========== VOICE MAPPING THEO NGÔN NGỮ (CHUẨN THƯƠNG MẠI) ==========
+// Map ngôn ngữ -> giọng nói ưu tiên
+const VOICE_PREFERENCE = {
+    vi: {
+        name: 'Vietnamese Female',
+        preferred: ['Google Tiếng Việt', 'Google Vietnamese', 'Microsoft HoaiMy', 'Microsoft Nam'],
+        lang: 'vi-VN',
+        rate: 0.95,
+        pitch: 1.05
+    },
+    en: {
+        name: 'UK English Female',
+        preferred: ['Google UK English Female', 'Google UK English', 'Microsoft Libby', 'Samantha'],
+        lang: 'en-GB',
+        rate: 0.9,
+        pitch: 1.0
+    }
+};
+
+// Phát hiện ngôn ngữ của text
+function detectTextLanguage(text) {
+    if (!text) return 'vi';
+    const vietnameseChars = /[àáảãạâầấẩẫậêềếểễệôồốổỗộơờớởỡợưừứửữựđ]/i;
+    if (vietnameseChars.test(text)) return 'vi';
+    return 'en';
+}
+
+// Hàm speak nâng cấp (tự chọn giọng theo ngôn ngữ)
 async function speak(text) {
     if (!text || isTranslatorMode) return;
     
@@ -272,7 +301,15 @@ async function speak(text) {
     setExpression('talking');
     
     try {
+        // Phát hiện ngôn ngữ của text
+        const textLang = detectTextLanguage(text);
+        const voiceConfig = VOICE_PREFERENCE[textLang];
+        
         const utterance = new SpeechSynthesisUtterance(text);
+        utterance.lang = voiceConfig.lang;
+        utterance.rate = voiceConfig.rate;
+        utterance.pitch = voiceConfig.pitch;
+        utterance.volume = 1;
         
         // Lấy danh sách giọng nói
         let voices = window.speechSynthesis.getVoices();
@@ -285,42 +322,23 @@ async function speak(text) {
             });
         }
         
-        // Chọn giọng nói tự nhiên nhất
-        const preferredVoices = [
-            'Google Tiếng Việt',
-            'Google Vietnamese',
-            'Microsoft HoaiMy',
-            'Microsoft Nam',
-            'Google UK English Female',
-            'Google US English',
-            'Samantha'
-        ];
-        
+        // Chọn giọng nói theo ưu tiên
         let selectedVoice = null;
-        for (const preferred of preferredVoices) {
+        for (const preferred of voiceConfig.preferred) {
             selectedVoice = voices.find(v => v.name.includes(preferred));
             if (selectedVoice) break;
         }
         
         if (!selectedVoice) {
-            selectedVoice = voices.find(v => v.lang === 'vi-VN') ||
-                           voices.find(v => v.lang === 'en-US') ||
-                           voices[0];
+            selectedVoice = voices.find(v => v.lang === voiceConfig.lang) || voices[0];
         }
         
         if (selectedVoice) {
             utterance.voice = selectedVoice;
-            console.log(`🎤 Using voice: ${selectedVoice.name}`);
+            console.log(`🎤 Using voice: ${selectedVoice.name} (${textLang.toUpperCase()})`);
         }
         
-        // Phát hiện ngôn ngữ
-        const isVietnamese = /[àáảãạâầấẩẫậêềếểễệôồốổỗộơờớởỡợưừứửữựđ]/i.test(text);
-        utterance.lang = isVietnamese ? 'vi-VN' : 'en-US';
-        utterance.rate = 0.95;
-        utterance.pitch = 1.05;
-        utterance.volume = 1;
-        
-        utterance.onstart = () => console.log('🗣️ Speaking...');
+        utterance.onstart = () => console.log(`🗣️ Speaking (${textLang.toUpperCase()})...`);
         utterance.onend = () => {
             isSpeaking = false;
             stopMouthAnimation();
@@ -340,7 +358,6 @@ async function speak(text) {
         stopMouthAnimation();
     }
 }
-
 
 
 function wakeUp() {
