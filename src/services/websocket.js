@@ -96,7 +96,11 @@ async function handleGeneralQuestion(userText, sessionId, lang) {
     history.push({ role: 'user', content: userText });
     const shortHistory = history.slice(-6);
     console.log('🧠 History:', shortHistory);
+    // Gọi chat với language detection tự động
     let reply = await openaiService.chat(userText, shortHistory, sessionId, lang);
+    // Thêm log để debug
+    console.log(`🤖 AI Response (${lang}): ${reply?.slice(0, 100)}`);
+    
     if (!reply || reply.includes('having a problem') || reply.includes('gặp vấn đề')) {
         reply = getSimpleReply(userText, lang);
     }
@@ -104,6 +108,19 @@ async function handleGeneralQuestion(userText, sessionId, lang) {
     if (history.length > 20) conversationHistory.set(sessionId, history.slice(-20));
     return reply;
 }
+
+
+// ========== PHÁT HIỆN NGÔN NGỮ THỐNG NHẤT ==========
+function detectLanguageUnified(text) {
+    if (!text) return 'vi';
+    const viChars = /[àáảãạăâêôơưđ]/i;
+    if (viChars.test(text)) return 'vi';
+    const englishWords = /\b(what|where|when|why|how|hello|hi|thanks|please|current|date|time|yes|no|ok|good|bad|love|hate|like|dislike|help|support)\b/ix;
+    if (englishWords.test(text)) return 'en';
+    return 'vi';
+}
+
+
 
 // ========== GỬI THÔNG BÁO GIỌNG NÓI ==========
 function sendVoiceAlertToAll(text, lang = 'vi') {
