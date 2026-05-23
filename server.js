@@ -18,7 +18,7 @@ process.on('unhandledRejection', (reason, promise) => {
 console.log('🚀 CHIRI AI - Starting server...');
 console.log(`📦 Node version: ${process.version}`);
 console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
-console.log(`🔌 PORT: ${process.env.PORT || '3000 (default)'}`);
+console.log(`🔌 PORT: ${process.env.PORT || '8880 (default)'}`);
 
 startServer()
     .then(() => {
