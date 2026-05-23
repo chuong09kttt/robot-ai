@@ -28,7 +28,7 @@ function checkHatAndGlasses(landmarks) {
     }
     
     // Lấy các điểm mốc quan trọng trên khuôn mặt
-    // MediaFace có 468 điểm landmarks, chỉ số tham khảo:
+    // MediaPipe có 468 điểm landmarks, chỉ số tham khảo:
     const leftEye = landmarks[33];      // Mắt trái
     const rightEye = landmarks[263];    // Mắt phải
     const forehead = landmarks[10];     // Điểm giữa trán
@@ -227,6 +227,24 @@ router.get('/stats', requireAuth, (req, res) => {
         totalUsers: Object.keys(db).length,
         userFacesCount: userFaces.length,
         userFaces: userFaces.map(f => ({ name: f.name, registeredAt: f.registeredAt }))
+    });
+});
+
+// ========== THÊM MỚI: Endpoint cho frontend gọi /api/face-database ==========
+// Endpoint này trả về danh sách khuôn mặt đã đăng ký của user hiện tại
+router.get('/database', requireAuth, (req, res) => {
+    const username = req.session.user.username;
+    const db = faceEngine.readFaceDatabase();
+    const userFaces = db[username] || [];
+    
+    res.json({
+        success: true,
+        faces: userFaces.map(f => ({ 
+            name: f.name, 
+            registeredAt: f.registeredAt,
+            hasDescriptor: !!f.descriptor
+        })),
+        total: userFaces.length
     });
 });
 
