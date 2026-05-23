@@ -602,7 +602,7 @@ function onFaceMeshResults(results) {
 // ========== FACE DATABASE ==========
 async function loadFaceDatabase() {
     try {
-        const res = await fetch('/api/face-database');
+        const res = await fetch('/api/face/database');
         const data = await res.json();
         console.log('Face database:', data);
     } catch(e) {}
