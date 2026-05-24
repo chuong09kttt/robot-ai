@@ -20,6 +20,10 @@ const funAI = require('../ai/entertainment_layer');
 const AutonomousLoop = require('../enterprise/autonomous_loop');
 const company = require('../enterprise/company_simulator');
 
+const hrSystem = require('../ai/hr_orchestrator');
+
+
+
 
 const loop = new AutonomousLoop(wss);
 loop.start();
@@ -371,6 +375,16 @@ function setupWebSocket(server) {
                     }));
                 }
 
+//////AUTONOMOUS HR DECISION API
+                if (data.type === "hr_autonomous_evaluation") {
+                
+                    const result = await hrSystem.evaluateCandidate(data.candidate);
+                
+                    ws.send(JSON.stringify({
+                        type: "hr_autonomous_result",
+                        data: result
+                    }));
+                }
 
                 
 
