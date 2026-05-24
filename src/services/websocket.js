@@ -8,6 +8,16 @@ const { evaluateSensors } = require('../ai/agent');
 const { getVisionData } = require('./services/visionClient');
 const { evaluate } = require('./ai/autonomous');
 
+
+const { EnvironmentDetector } = require('../../context/environment_detector');
+const { AdaptiveBehavior } = require('../../behavior/adaptive_behavior');
+
+const envDetector = new EnvironmentDetector();
+const adaptive = new AdaptiveBehavior();
+
+
+
+
 const { RealTimeVision } = require('../../vision/realtime_detector');
 const { HazardEngine } = require('../../safety/hazard_engine');
 const { SemanticWorldModel } = require('../../world_model/semantic_model');
@@ -409,6 +419,45 @@ function setupWebSocket(server) {
                         world
                     }));
                 }
+
+                if (data.type === "chat" || data.type === "voice") {
+
+                    const vision = perception?.analyze?.(null) || {};
+                
+                    // 1. detect environment
+                    const context = envDetector.classify(
+                        data.text,
+                        vision
+                    );
+                
+                    // 2. get behavior mode
+                    const mode = adaptive.get_mode(context.environment);
+                
+                    // 3. AI prompt dynamic
+                    const prompt = `
+                You are a robot assistant.
+                
+                Current environment: ${context.environment}
+                Confidence: ${context.confidence}
+                
+                Behavior mode: ${mode.behavior}
+                Tone: ${mode.tone}
+                
+                User: ${data.text}
+                
+                Respond appropriately for this environment.
+                `;
+                
+                    const reply = await openaiService.chat(prompt);
+                
+                    ws.send(JSON.stringify({
+                        type: "adaptive_ai",
+                        environment: context,
+                        mode,
+                        reply
+                    }));
+                }
+
                 
                 if (data.type === "chat" || data.type === "voice") {
                 
