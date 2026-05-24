@@ -9,6 +9,21 @@ const { getVisionData } = require('./services/visionClient');
 const { evaluate } = require('./ai/autonomous');
 
 
+
+const { Perception } = require('../../vision/perception');
+const { SLAMBridge } = require('../../localization/slam_bridge');
+const { NavClient } = require('../../navigation/nav_client');
+const { CognitiveBrain } = require('../../cognition/cognitive_brain');
+
+const perception = new Perception();
+const slam = new SLAMBridge();
+const nav = new NavClient();
+const brain = new CognitiveBrain();
+
+
+
+
+
 const { EnvironmentDetector } = require('../../context/environment_detector');
 const { AdaptiveBehavior } = require('../../behavior/adaptive_behavior');
 
@@ -330,6 +345,49 @@ function setupWebSocket(server) {
                 const data = JSON.parse(message);
 
 
+
+
+                 // 1. camera frame
+                if (data.type === "camera_frame") {
+            
+                    const vision = perception.analyze(data.frame);
+                    const pose = slam.get_pose();
+            
+                    ws.send(JSON.stringify({
+                        type: "environment",
+                        vision,
+                        pose
+                    }));
+                }
+            
+                // 2. chat / voice
+                if (data.type === "chat" || data.type === "voice") {
+            
+                    const vision = perception.analyze(null);
+                    const pose = slam.get_pose();
+            
+                    const decision = brain.decide(
+                        data.text,
+                        vision,
+                        pose
+                    );
+            
+                    if (decision.action === "go_to") {
+                        nav.go_to(decision.target);
+                    }
+            
+                    if (decision.action === "follow_user") {
+                        nav.go_to("user_tracking_mode");
+                    }
+            
+                    ws.send(JSON.stringify({
+                        type: "ai_response",
+                        text: `OK, executing: ${decision.action}`,
+                        decision
+                    }));
+            
+            
+                    
                 if (data.type === "add_employee") {
                     company.addEmployee(data.employee);
                 }
