@@ -32,6 +32,14 @@ const conversationHistory = new Map();
 const processingQueue = new Map();
 const wsClients = new Map();
 
+
+const visionAI = new RealTimeVision();
+const safetyAI = new HazardEngine();
+const worldAI = new SemanticWorldModel();
+const memoryAI = new ContinualMemory();
+const agentAI = new CognitiveAgent();
+
+
 // ===================== INTERNAL KNOWLEDGE =====================
 const INTERNAL_KEYWORDS = [
     'vinfast',
@@ -387,6 +395,76 @@ setInterval(() => {
 
 }, 500);
 
+
+
+/////////////////////////////////////////////////CAMERA + VISION FLOW
+if (data.type === "camera_frame") {
+
+    const vision = visionAI.analyze(data.frame);
+
+    const hazard = safetyAI.evaluate(vision);
+
+    const world = worldAI.classify_environment(vision, "");
+
+    memoryAI.learn({
+        type: "vision_update",
+        data: vision
+    });
+
+    ws.send(JSON.stringify({
+        type: "world_state",
+        vision,
+        hazard,
+        world
+    }));
+}
+
+if (data.type === "chat" || data.type === "voice") {
+
+    const vision = visionAI.analyze(null);
+    const hazard = safetyAI.evaluate(vision);
+    const world = worldAI.classify_environment(vision, data.text);
+
+    const decision = agentAI.decide(
+        vision,
+        world,
+        hazard,
+        data.text
+    );
+
+    memoryAI.learn({
+        type: decision.mode,
+        text: data.text
+    });
+
+    let response = "";
+
+    if (decision.mode === "emergency") {
+        response = "⚠️ Danger detected! Alerting safety system.";
+    }
+
+    if (decision.mode === "safety_inspector") {
+        response = "Monitoring factory safety conditions.";
+    }
+
+    if (decision.mode === "manager_assistant") {
+        response = "I will help organize your tasks.";
+    }
+
+    if (decision.mode === "service_robot") {
+        response = "I will guide you.";
+    }
+
+    ws.send(JSON.stringify({
+        type: "cognitive_ai",
+        decision,
+        response
+    }));
+}
+
+
+
+////////////////////////////////////////////////////////////////
 
 // ===================== EXPORT =====================
 module.exports = {
