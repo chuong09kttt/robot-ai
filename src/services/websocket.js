@@ -369,6 +369,18 @@ function setupWebSocket(server) {
     return wss;
 }
 
+setInterval(() => {
+    const vision = getVisionData();
+
+    evaluate(
+        vision,
+        sendToESP32,
+        (msg) => broadcast(msg)
+    );
+
+}, 500);
+
+
 // ===================== EXPORT =====================
 module.exports = {
     setupWebSocket,
