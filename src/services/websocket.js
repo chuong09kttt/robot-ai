@@ -8,6 +8,13 @@ const { evaluateSensors } = require('../ai/agent');
 const { getVisionData } = require('./services/visionClient');
 const { evaluate } = require('./ai/autonomous');
 
+const { RealTimeVision } = require('../../vision/realtime_detector');
+const { HazardEngine } = require('../../safety/hazard_engine');
+const { SemanticWorldModel } = require('../../world_model/semantic_model');
+const { ContinualMemory } = require('../../memory/continual_memory');
+const { CognitiveAgent } = require('../../agent/cognitive_agent');
+
+
 const {
     detectLanguage,
     parseDriveCommand,
