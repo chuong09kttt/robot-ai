@@ -1,36 +1,21 @@
-function detectEnvironment() {
+function detect() {
     const railway = !!process.env.RAILWAY_ENVIRONMENT;
+    const pm2 = !!process.env.PM2_HOME;
+    const ssh = !!process.env.SSH_CONNECTION;
+    const ubuntu = process.env.HOME?.includes('/home');
 
-    const isSSH = !!process.env.SSH_CONNECTION;
-    const isPM2 = !!process.env.PM2_HOME;
-    const isUbuntu = process.env.HOME && process.env.HOME.includes('/home');
-
-    const vps = isSSH || isPM2 || isUbuntu;
-
-    if (railway) {
-        return {
-            name: 'railway',
-            isRailway: true,
-            isVPS: false,
-            isLocal: false
-        };
-    }
-
-    if (vps) {
-        return {
-            name: 'vps',
-            isRailway: false,
-            isVPS: true,
-            isLocal: false
-        };
-    }
-
-    return {
-        name: 'local',
-        isRailway: false,
-        isVPS: false,
-        isLocal: true
-    };
+    if (railway) return 'railway';
+    if (pm2 || ssh || ubuntu) return 'vps';
+    return 'local';
 }
 
-module.exports = detectEnvironment();
+const ENV_NAME = detect();
+
+const ENV = {
+    name: ENV_NAME,
+    isRailway: ENV_NAME === 'railway',
+    isVPS: ENV_NAME === 'vps',
+    isLocal: ENV_NAME === 'local'
+};
+
+module.exports = ENV;
