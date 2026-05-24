@@ -5,6 +5,8 @@ const translationService = require('./translation');
 const ragService = require('./rag');
 const { sendToESP32, esp32Clients } = require('../routes/drive');
 const { evaluateSensors } = require('../ai/agent');
+const { getVisionData } = require('./services/visionClient');
+const { evaluate } = require('./ai/autonomous');
 
 const {
     detectLanguage,
