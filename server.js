@@ -1,6 +1,3 @@
-// ========== CHIRI AI - SECURE ENTRY POINT ==========
-// No need dotenv - Railway injects env vars directly to process.env
-// require('dotenv').config(); // REMOVED for Railway compatibility
 require('dotenv').config(); // oracle
 const { startServer } = require('./src/app');
 
