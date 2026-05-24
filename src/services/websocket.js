@@ -21,6 +21,8 @@ const AutonomousLoop = require('../enterprise/autonomous_loop');
 const company = require('../enterprise/company_simulator');
 
 
+const loop = new AutonomousLoop(wss);
+loop.start();
 
 const {
     detectLanguage,
@@ -312,6 +314,15 @@ function setupWebSocket(server) {
 
             try {
                 const data = JSON.parse(message);
+
+
+                if (data.type === "add_employee") {
+                    company.addEmployee(data.employee);
+                }
+                
+                if (data.type === "add_project") {
+                    company.addProject(data.project);
+                }
 
                 // ================= CHAT =================
                 if (data.type === "telemetry") {
