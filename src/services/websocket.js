@@ -273,6 +273,13 @@ function setupWebSocket(server) {
                 const data = JSON.parse(message);
 
                 // ================= CHAT =================
+                if (data.type === "telemetry") {
+                    evaluateSensors(
+                        data.payload,
+                        sendToESP32,
+                        (msg) => ws.send(JSON.stringify(msg))
+                    );
+                }
                 if (data.type === 'voice' || data.type === 'chat') {
 
                     const reply = await processUserMessage(
