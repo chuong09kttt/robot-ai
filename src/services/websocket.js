@@ -14,6 +14,10 @@ const { SemanticWorldModel } = require('../../world_model/semantic_model');
 const { ContinualMemory } = require('../../memory/continual_memory');
 const { CognitiveAgent } = require('../../agent/cognitive_agent');
 
+const hrAI = require('../ai/hr_llm_layer');
+const funAI = require('../ai/entertainment_layer');
+
+
 
 const {
     detectLanguage,
@@ -273,6 +277,23 @@ Answer:
     });
 }
 
+
+
+function detectMode(text) {
+
+    const t = text.toLowerCase();
+
+    if (t.includes("tuyển dụng") || t.includes("phỏng vấn"))
+        return "hr";
+
+    if (t.includes("tử vi") || t.includes("xem bói") || t.includes("nhân tướng"))
+        return "fun";
+
+    return "general";
+}
+
+
+
 // ===================== WEBSOCKET SERVER =====================
 function setupWebSocket(server) {
 
@@ -336,6 +357,167 @@ function setupWebSocket(server) {
                     }));
                 }
 
+
+                
+
+/////////////////////////////////////////////////CAMERA + VISION FLOW
+                if (data.type === "camera_frame") {
+                
+                    const vision = visionAI.analyze(data.frame);
+                
+                    const hazard = safetyAI.evaluate(vision);
+                
+                    const world = worldAI.classify_environment(vision, "");
+                
+                    memoryAI.learn({
+                        type: "vision_update",
+                        data: vision
+                    });
+                
+                    ws.send(JSON.stringify({
+                        type: "world_state",
+                        vision,
+                        hazard,
+                        world
+                    }));
+                }
+                
+                if (data.type === "chat" || data.type === "voice") {
+                
+                    const vision = visionAI.analyze(null);
+                    const hazard = safetyAI.evaluate(vision);
+                    const world = worldAI.classify_environment(vision, data.text);
+                
+                    const decision = agentAI.decide(
+                        vision,
+                        world,
+                        hazard,
+                        data.text
+                    );
+                
+                    memoryAI.learn({
+                        type: decision.mode,
+                        text: data.text
+                    });
+                
+                    let response = "";
+                
+                    if (decision.mode === "emergency") {
+                        response = "⚠️ Danger detected! Alerting safety system.";
+                    }
+                
+                    if (decision.mode === "safety_inspector") {
+                        response = "Monitoring factory safety conditions.";
+                    }
+                
+                    if (decision.mode === "manager_assistant") {
+                        response = "I will help organize your tasks.";
+                    }
+                
+                    if (decision.mode === "service_robot") {
+                        response = "I will guide you.";
+                    }
+                
+                    ws.send(JSON.stringify({
+                        type: "cognitive_ai",
+                        decision,
+                        response
+                    }));
+                }
+                
+                if (data.type === "hr_interview_questions") {
+                
+                    const result = await hrAI.generateInterviewQuestions(
+                        data.role,
+                        data.level
+                    );
+                
+                    ws.send(JSON.stringify({
+                        type: "hr_questions",
+                        data: result
+                    }));
+                }
+                
+                
+                
+                if (data.type === "hr_evaluate_candidate") {
+                
+                    const result = await hrAI.evaluateCandidate(
+                        data.candidate,
+                        data.answers
+                    );
+                
+                    ws.send(JSON.stringify({
+                        type: "hr_evaluation",
+                        data: result
+                    }));
+                }
+                
+                if (data.type === "project_progress") {
+                
+                    const result = await hrAI.trackProjectProgress(
+                        data.project
+                    );
+                
+                    ws.send(JSON.stringify({
+                        type: "project_analysis",
+                        data: result
+                    }));
+                }
+                
+                
+                if (data.type === "hr_hiring_decision") {
+                
+                    const result = await hrAI.hiringDecision(
+                        data.team,
+                        data.candidates
+                    );
+                
+                    ws.send(JSON.stringify({
+                        type: "hiring_decision",
+                        data: result
+                    }));
+                }
+                
+                
+                if (data.type === "fortune_telling") {
+                
+                    const result = await funAI.fortuneTelling(data.text);
+                
+                    ws.send(JSON.stringify({
+                        type: "fortune",
+                        data: result
+                    }));
+                }
+                
+                if (data.type === "face_reading") {
+                
+                    const result = await funAI.faceReadingDescription(data.face);
+                
+                    ws.send(JSON.stringify({
+                        type: "face_reading_result",
+                        data: result
+                    }));
+                }
+                
+                if (data.type === "numerology") {
+                
+                    const result = await funAI.numerology(
+                        data.name,
+                        data.birthdate
+                    );
+                
+                    ws.send(JSON.stringify({
+                        type: "numerology_result",
+                        data: result
+                    }));
+                }
+                
+                
+                
+                
+                
+                                
                 // ================= GAME =================
                 if (data.type === 'game_move') {
 
@@ -394,73 +576,6 @@ setInterval(() => {
     );
 
 }, 500);
-
-
-
-/////////////////////////////////////////////////CAMERA + VISION FLOW
-if (data.type === "camera_frame") {
-
-    const vision = visionAI.analyze(data.frame);
-
-    const hazard = safetyAI.evaluate(vision);
-
-    const world = worldAI.classify_environment(vision, "");
-
-    memoryAI.learn({
-        type: "vision_update",
-        data: vision
-    });
-
-    ws.send(JSON.stringify({
-        type: "world_state",
-        vision,
-        hazard,
-        world
-    }));
-}
-
-if (data.type === "chat" || data.type === "voice") {
-
-    const vision = visionAI.analyze(null);
-    const hazard = safetyAI.evaluate(vision);
-    const world = worldAI.classify_environment(vision, data.text);
-
-    const decision = agentAI.decide(
-        vision,
-        world,
-        hazard,
-        data.text
-    );
-
-    memoryAI.learn({
-        type: decision.mode,
-        text: data.text
-    });
-
-    let response = "";
-
-    if (decision.mode === "emergency") {
-        response = "⚠️ Danger detected! Alerting safety system.";
-    }
-
-    if (decision.mode === "safety_inspector") {
-        response = "Monitoring factory safety conditions.";
-    }
-
-    if (decision.mode === "manager_assistant") {
-        response = "I will help organize your tasks.";
-    }
-
-    if (decision.mode === "service_robot") {
-        response = "I will guide you.";
-    }
-
-    ws.send(JSON.stringify({
-        type: "cognitive_ai",
-        decision,
-        response
-    }));
-}
 
 
 
