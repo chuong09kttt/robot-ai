@@ -1,37 +1,35 @@
-// ========== CHIRI AI - SECURE ENTRY POINT ==========
-
-// Load environment ONLY for Local / VPS (PM2, Ubuntu, Oracle)
+const config = require('./src/config');
 const ENV = require('./src/config/env');
-
-if (ENV.isLocal || ENV.isVPS) {
-    require('dotenv').config();
-}
-
-// Core app
 const { startServer } = require('./src/app');
 
-// ========== ERROR HANDLING ==========
+// ========== SAFETY ==========
 process.on('uncaughtException', (err) => {
     console.error('❌ Uncaught Exception:', err);
 });
 
-process.on('unhandledRejection', (reason) => {
-    console.error('❌ Unhandled Rejection:', reason);
+process.on('unhandledRejection', (err) => {
+    console.error('❌ Unhandled Rejection:', err);
 });
 
-// ========== STARTUP LOGS ==========
-console.log('🚀 CHIRI AI - Starting server...');
-console.log(`🌍 Environment: ${ENV.name}`);
-console.log(`📦 Node version: ${process.version}`);
-console.log(`🏠 Platform: ${process.platform}`);
-console.log(`🔑 OpenAI Key: ${process.env.OPENAI_API_KEY ? 'OK' : 'MISSING'}`);
+// ========== LOG START ==========
+console.log('=================================');
+console.log('🚀 CHIRI AI STARTING...');
+console.log('🌍 ENV:', ENV.name);
+console.log('⚙️ PORT:', config.port);
+console.log('🔑 OPENAI:', config.openaiKey ? 'OK' : 'MISSING');
+console.log('=================================');
 
-// ========== START SERVER ==========
-startServer()
+// ========== HEALTH CHECK ==========
+setInterval(() => {
+    console.log(`💓 HEALTH OK - ${new Date().toISOString()}`);
+}, 60000);
+
+// ========== START ==========
+startServer(config.port)
     .then(() => {
-        console.log('✅ Server started successfully');
+        console.log('✅ SERVER RUNNING');
     })
     .catch((err) => {
-        console.error('❌ Failed to start server:', err);
+        console.error('❌ START FAILED:', err);
         process.exit(1);
     });
