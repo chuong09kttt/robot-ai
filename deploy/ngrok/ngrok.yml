@@ -1,0 +1,22 @@
+version: "2"
+authtoken: YOUR_NGROK_AUTH_TOKEN
+
+tunnels:
+  robot-api:
+    proto: http
+    addr: 3000
+    bind_tls: true
+    inspect: false
+    schemes:
+      - https
+    host_header: "localhost:3000"
+    
+  robot-websocket:
+    proto: tcp
+    addr: 3001
+    remote_addr: 0.tcp.ngrok.io:12345
+    
+  robot-video:
+    proto: http
+    addr: 8080
+    auth: "admin:${NGROK_PASSWORD}"  # Bảo vệ stream video
