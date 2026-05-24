@@ -1,29 +1,28 @@
-// ========== WEBSOCKET SERVICE ==========
+// ========== WEBSOCKET SERVICE (PRO AI + IOT UPGRADE) ==========
 const WebSocket = require('ws');
 const openaiService = require('./openai');
 const translationService = require('./translation');
 const ragService = require('./rag');
 const { sendToESP32, esp32Clients } = require('../routes/drive');
-const { 
-    detectLanguage, 
-    parseDriveCommand, 
-    parseCountdownCommand, 
-    getCurrentTime, 
+
+const {
+    detectLanguage,
+    parseDriveCommand,
+    parseCountdownCommand,
+    getCurrentTime,
     getCurrentDate,
     getSimpleReply
 } = require('../utils/helpers');
+
 const { DRIVE_REPLIES } = require('../utils/constants');
 
-// Game players storage
+// ===================== STATE =====================
 const gamePlayers = new Map();
 const conversationHistory = new Map();
 const processingQueue = new Map();
-
-// Tạo Map để lưu tất cả WebSocket clients (bao gồm cả browser và ESP32)
 const wsClients = new Map();
-// KHÔNG khai báo esp32Clients ở đây vì đã import từ drive.js
 
-// ========== TỪ KHÓA NỘI BỘ (cần tra RAG) ==========
+// ===================== INTERNAL KNOWLEDGE =====================
 const INTERNAL_KEYWORDS = [
     'vinfast',
     'vard',
@@ -35,288 +34,335 @@ const INTERNAL_KEYWORDS = [
     'vũng tàu'
 ];
 
-// ========== LANGUAGE DETECTION ==========
-function detectLanguageImproved(text) {
-    if (!text) return 'vi';
-    const viChars = /[àáảãạăâêôơưđ]/i;
-    if (viChars.test(text)) return 'vi';
-    const englishWords = /\b(what|where|when|why|how|hello|hi|thanks|please|current|date|time)\b/ix;
-    if (englishWords.test(text)) return 'en';
-    return 'vi';
-}
-
-// ========== KIỂM TRA CÓ CẦN TRA RAG KHÔNG ==========
-function shouldUseRAG(query) {
-    const lower = query.toLowerCase();
-    for (const keyword of INTERNAL_KEYWORDS) {
-        if (lower.includes(keyword)) return true;
-    }
-    if (lower.includes('theo tài liệu') || lower.includes('trong file') || 
-        lower.includes('tài liệu nói') || lower.includes('theo văn bản')) return true;
-    return false;
-}
-
-// ========== TÌM KIẾM TRONG KNOWLEDGE BASE ==========
-async function searchKnowledgeBase(query, lang) {
-    try {
-        console.log('🔍 Searching in knowledge base...');
-        const searchResults = ragService.search(query);
-        if (searchResults && searchResults.length > 0) {
-            console.log(`📖 Found ${searchResults.length} relevant results`);
-            const contexts = searchResults.map(r => r.content).slice(0, 2);
-            let context = contexts.join('\n\n---\n\n');
-            context = context.slice(0, 1500);
-            return { found: true, context, sources: searchResults.map(r => r.source) };
-        }
-        return { found: false, context: null, sources: [] };
-    } catch (error) {
-        console.error('RAG search error:', error);
-        return { found: false, context: null, sources: [] };
-    }
-}
-
-// ========== TẠO CÂU TRẢ LỜI TỪ RAG + CHATGPT ==========
-async function generateAnswerWithRAG(userText, context, sources, lang) {
-    const contextPrompt = lang === 'en' 
-        ? `Based on the following reference information, please answer the user's question accurately and concisely.\n\nReference information:\n${context}\n\nUser question: ${userText}\n\nAnswer:`
-        : `Dựa trên thông tin tham khảo sau đây, hãy trả lời câu hỏi của người dùng một cách chính xác và ngắn gọn.\n\nThông tin tham khảo:\n${context}\n\nCâu hỏi: ${userText}\n\nTrả lời:`;
-    try {
-        const reply = await openaiService.chat(contextPrompt, [], `rag_${Date.now()}`, lang);
-        const sourceText = sources.length > 0 ? `\n\n📌 *Nguồn: ${sources.slice(0, 2).join(', ')}*` : '';
-        return reply + sourceText;
-    } catch (error) {
-        return `📖 **Thông tin tham khảo:**\n\n${context.slice(0, 800)}${context.length > 800 ? '...' : ''}\n\n📌 *Nguồn: ${sources.join(', ')}*`;
-    }
-}
-
-// ========== XỬ LÝ CÂU HỎI THƯỜNG (CHATGPT) ==========
-async function handleGeneralQuestion(userText, sessionId, lang) {
-    if (!conversationHistory.has(sessionId)) conversationHistory.set(sessionId, []);
-    const history = conversationHistory.get(sessionId);
-    history.push({ role: 'user', content: userText });
-    const shortHistory = history.slice(-6);
-    console.log('🧠 History:', shortHistory);
-    // Gọi chat với language detection tự động
-    let reply = await openaiService.chat(userText, shortHistory, sessionId, lang);
-    // Thêm log để debug
-    console.log(`🤖 AI Response (${lang}): ${reply?.slice(0, 100)}`);
-    
-    if (!reply || reply.includes('having a problem') || reply.includes('gặp vấn đề')) {
-        reply = getSimpleReply(userText, lang);
-    }
-    history.push({ role: 'assistant', content: reply });
-    if (history.length > 20) conversationHistory.set(sessionId, history.slice(-20));
-    return reply;
-}
-
-
-// ========== PHÁT HIỆN NGÔN NGỮ THỐNG NHẤT ==========
+// ===================== LANGUAGE =====================
 function detectLanguageUnified(text) {
     if (!text) return 'vi';
     const viChars = /[àáảãạăâêôơưđ]/i;
     if (viChars.test(text)) return 'vi';
-    const englishWords = /\b(what|where|when|why|how|hello|hi|thanks|please|current|date|time|yes|no|ok|good|bad|love|hate|like|dislike|help|support)\b/ix;
-    if (englishWords.test(text)) return 'en';
+
+    const enWords = /\b(what|where|when|why|how|hello|hi|thanks|please|time|date|today|now|help)\b/ix;
+    if (enWords.test(text)) return 'en';
+
     return 'vi';
 }
 
+// ===================== RAG CHECK =====================
+function shouldUseRAG(query) {
+    const lower = query.toLowerCase();
 
-
-// ========== GỬI THÔNG BÁO GIỌNG NÓI ==========
-function sendVoiceAlertToAll(text, lang = 'vi') {
-    const message = JSON.stringify({ type: 'voice_alert', text, lang });
-    for (const [id, client] of wsClients) {
-        if (client.readyState === WebSocket.OPEN) client.send(message);
-    }
-    console.log(`🔊 Voice alert to all: "${text}"`);
+    return INTERNAL_KEYWORDS.some(k => lower.includes(k)) ||
+        lower.includes('tài liệu') ||
+        lower.includes('theo file') ||
+        lower.includes('theo văn bản');
 }
 
-function sendVoiceAlertToClient(clientId, text, lang = 'vi') {
-    const client = wsClients.get(clientId);
-    if (client && client.readyState === WebSocket.OPEN) {
-        client.send(JSON.stringify({ type: 'voice_alert', text, lang }));
-        console.log(`🔊 Voice alert to ${clientId}: "${text}"`);
+// ===================== RAG SEARCH =====================
+async function searchKnowledgeBase(query, lang) {
+    try {
+        const results = ragService.search(query);
+
+        if (results?.length > 0) {
+            const context = results.slice(0, 2).map(r => r.content).join('\n---\n').slice(0, 1500);
+
+            return {
+                found: true,
+                context,
+                sources: results.map(r => r.source)
+            };
+        }
+
+        return { found: false };
+    } catch (err) {
+        return { found: false };
     }
 }
 
-// ========== PROCESS USER MESSAGE (CHÍNH) ==========
+// ===================== AI BRAIN (NEW CORE) =====================
+async function aiBrain(userText, lang) {
+    const prompt = `
+You are CHIRI AI - a smart assistant with 3 abilities:
+
+1. CHAT MODE (normal conversation)
+2. ENGLISH TEACHER MODE (correct grammar, explain)
+3. IOT CONTROL MODE (generate ESP32 commands)
+
+RULES:
+- If user asks to control device → return JSON command
+- If user chat → normal response
+- If English wrong → correct it
+- ALWAYS RETURN JSON ONLY
+
+FORMAT:
+{
+  "mode": "chat | english | iot",
+  "message": "",
+  "commands": [
+    {
+      "device": "fan_1",
+      "action": "on/off/set",
+      "value": 0
+    }
+  ]
+}
+
+USER: ${userText}
+`;
+
+    const res = await openaiService.chat(prompt, [], 'brain');
+
+    try {
+        return JSON.parse(res);
+    } catch (e) {
+        return {
+            mode: "chat",
+            message: res,
+            commands: []
+        };
+    }
+}
+
+// ===================== GENERAL CHAT =====================
+async function handleGeneralQuestion(userText, sessionId, lang) {
+    if (!conversationHistory.has(sessionId)) {
+        conversationHistory.set(sessionId, []);
+    }
+
+    const history = conversationHistory.get(sessionId);
+    history.push({ role: 'user', content: userText });
+
+    const reply = await openaiService.chat(userText, history.slice(-6), sessionId, lang);
+
+    history.push({ role: 'assistant', content: reply });
+
+    if (history.length > 20) {
+        conversationHistory.set(sessionId, history.slice(-20));
+    }
+
+    return reply;
+}
+
+// ===================== MAIN PROCESS =====================
 async function processUserMessage(userText, driveMode, sessionId, ws) {
-    if (!processingQueue.has(sessionId)) processingQueue.set(sessionId, Promise.resolve());
+
+    if (!processingQueue.has(sessionId)) {
+        processingQueue.set(sessionId, Promise.resolve());
+    }
+
     const queue = processingQueue.get(sessionId);
-    return await queue.then(async () => {
+
+    return queue.then(async () => {
+
         try {
-            console.log(`🔍 Process: "${userText}" | driveMode: ${driveMode}`);
-            const lang = detectLanguageImproved(userText);
-            console.log(`🌐 Detected language: ${lang === 'en' ? 'ENGLISH' : 'VIETNAMESE'}`);
+            const lang = detectLanguageUnified(userText);
             const lower = userText.toLowerCase();
-            
-            console.log({ question: userText, lang, driveMode, useRAG: shouldUseRAG(userText) });
-            
-            if (lower.includes('bật phiên dịch') || lower.includes('bật dịch')) {
-                return "🌐 Đã bật chế độ phiên dịch real-time! Vui lòng chọn ngôn ngữ trên màn hình.";
+
+            // ================= SYSTEM COMMANDS =================
+            if (lower.includes('bật dịch')) {
+                return "🌐 Translation ON";
             }
-            if (lower.includes('tắt phiên dịch') || lower.includes('tắt dịch')) {
-                return "🌐 Đã tắt chế độ phiên dịch real-time.";
+
+            if (lower.includes('tắt dịch')) {
+                return "🌐 Translation OFF";
             }
-            
+
+            // ================= DRIVE MODE =================
             if (driveMode === true) {
-                const command = parseDriveCommand(userText);
-                if (command) {
-                    sendToESP32(command, 0);
-                    return DRIVE_REPLIES[command];
+                const cmd = parseDriveCommand(userText);
+
+                if (cmd) {
+                    sendToESP32(cmd, 0);
+                    return DRIVE_REPLIES[cmd];
                 }
-                return lang === 'en' 
-                    ? '🚫 Please say: FORWARD, BACK, LEFT, RIGHT, or STOP'
-                    : '🚫 Vui lòng nói: TIẾN, LÙI, TRÁI, PHẢI, hoặc DỪNG';
-            }
-            
-            const countdown = parseCountdownCommand(userText);
-            if (countdown.isCountdown) {
-                if (ws && ws.readyState === WebSocket.OPEN) {
-                    ws.send(JSON.stringify({ type: 'countdown', seconds: countdown.seconds }));
-                }
+
                 return lang === 'en'
-                    ? `⏰ Countdown started for ${countdown.seconds} seconds!`
-                    : `⏰ Đã bắt đầu đếm ngược ${countdown.seconds} giây!`;
+                    ? 'Use: FORWARD / BACK / LEFT / RIGHT / STOP'
+                    : 'Dùng: TIẾN / LÙI / TRÁI / PHẢI / DỪNG';
             }
-            
-            if (lower.includes('mấy giờ') || lower.includes('current time') || lower.includes('time now')) {
+
+            // ================= COUNTDOWN =================
+            const countdown = parseCountdownCommand(userText);
+
+            if (countdown.isCountdown && ws) {
+                ws.send(JSON.stringify({
+                    type: 'countdown',
+                    seconds: countdown.seconds
+                }));
+
+                return lang === 'en'
+                    ? `Countdown ${countdown.seconds}s started`
+                    : `Đếm ngược ${countdown.seconds}s`;
+            }
+
+            // ================= TIME =================
+            if (lower.includes('mấy giờ') || lower.includes('time')) {
                 return getCurrentTime(lang);
             }
-            if (lower.includes('hôm nay') || lower.includes('today') || lower.includes('what date')) {
+
+            // ================= DATE =================
+            if (lower.includes('hôm nay') || lower.includes('date')) {
                 return getCurrentDate(lang);
             }
-            
+
+            // ================= RAG =================
             if (shouldUseRAG(userText)) {
-                console.log('📚 This question may need internal knowledge, searching RAG...');
-                const ragResult = await searchKnowledgeBase(userText, lang);
-                if (ragResult.found) {
-                    console.log('✅ Found relevant information in knowledge base');
-                    const answer = await generateAnswerWithRAG(userText, ragResult.context, ragResult.sources, lang);
+
+                const rag = await searchKnowledgeBase(userText, lang);
+
+                if (rag.found) {
+                    const prompt = `
+Based on context:
+${rag.context}
+
+Question: ${userText}
+Answer:
+`;
+
+                    const answer = await openaiService.chat(prompt, [], sessionId);
+
                     return answer;
-                } else {
-                    console.log('⚠️ No relevant information found in knowledge base, using ChatGPT');
                 }
             }
-            
+
+            // ================= AI BRAIN (NEW PRO FEATURE) =================
+            const ai = await aiBrain(userText, lang);
+
+            // ===== CHAT MODE =====
+            if (ai.mode === 'chat' || ai.mode === 'english') {
+                return ai.message;
+            }
+
+            // ===== IOT MODE (AUTO CONTROL) =====
+            if (ai.mode === 'iot' && ai.commands?.length) {
+
+                for (const cmd of ai.commands) {
+                    sendToESP32(cmd.device, cmd);
+                }
+
+                return `🤖 Executed ${ai.commands.length} device commands`;
+            }
+
+            // fallback
             return await handleGeneralQuestion(userText, sessionId, lang);
-        } catch (error) {
-            console.error('Process error:', error);
-            const lang = detectLanguageImproved(userText);
-            return lang === 'en'
-                ? 'Sorry, I encountered an error. Please try again! 😊'
-                : 'Xin lỗi, Chiri gặp chút vấn đề. Vui lòng thử lại nhé! 😊';
+
+        } catch (err) {
+            console.error(err);
+
+            return '❌ AI error, please try again';
         }
+
     }).finally(() => {
         processingQueue.set(sessionId, Promise.resolve());
     });
 }
 
-function clearHistory(sessionId) { conversationHistory.delete(sessionId); }
-function getHistory(sessionId) { return conversationHistory.get(sessionId) || []; }
-
-// Setup WebSocket server
+// ===================== WEBSOCKET SERVER =====================
 function setupWebSocket(server) {
+
     const wss = new WebSocket.Server({ server });
-    
+
     wss.on('connection', (ws, req) => {
+
         const clientId = Date.now() + '-' + Math.random().toString(36).substr(2, 6);
-        console.log(`🔌 Client connected: ${clientId}`);
+
         wsClients.set(clientId, ws);
-        
-        const isESP32 = req.headers['user-agent']?.includes('ESP32') || false;
-        if (isESP32) {
-            esp32Clients.set(clientId, ws);
-            console.log(`📱 ESP32 device connected: ${clientId}`);
-        }
-        
-        const pingInterval = setInterval(() => {
-            if (ws.readyState === WebSocket.OPEN) ws.ping();
-        }, 30000);
-        
+
         ws.on('message', async (message) => {
+
             try {
                 const data = JSON.parse(message);
-                
-                if (data.type === 'voice') {
-                    const reply = await processUserMessage(data.text, data.driveMode === true, clientId, ws);
-                    if (ws.readyState === WebSocket.OPEN) {
-                        ws.send(JSON.stringify({ type: 'ai', text: reply }));
-                    }
+
+                // ================= CHAT =================
+                if (data.type === 'voice' || data.type === 'chat') {
+
+                    const reply = await processUserMessage(
+                        data.text,
+                        data.driveMode === true,
+                        clientId,
+                        ws
+                    );
+
+                    ws.send(JSON.stringify({
+                        type: 'ai',
+                        text: reply
+                    }));
                 }
-                
+
+                // ================= DRIVE =================
                 if (data.type === 'drive_command') {
                     sendToESP32(data.command, data.duration || 0);
-                    if (ws.readyState === WebSocket.OPEN) {
-                        ws.send(JSON.stringify({ type: 'drive_response', command: data.command }));
-                    }
+
+                    ws.send(JSON.stringify({
+                        type: 'drive_response',
+                        command: data.command
+                    }));
                 }
-                
+
+                // ================= TRANSLATE =================
                 if (data.type === 'translate') {
-                    const translated = await translationService.translateText(data.text, data.source, data.target);
-                    if (ws.readyState === WebSocket.OPEN) {
-                        ws.send(JSON.stringify({ type: 'translation', translated }));
-                    }
+                    const translated = await translationService.translateText(
+                        data.text,
+                        data.source,
+                        data.target
+                    );
+
+                    ws.send(JSON.stringify({
+                        type: 'translation',
+                        translated
+                    }));
                 }
-                
+
+                // ================= GAME =================
                 if (data.type === 'game_move') {
-                    gamePlayers.set(clientId, { x: data.x, z: data.z, rotation: data.rotation, lastUpdate: Date.now() });
-                    const playersList = {};
-                    for (const [id, player] of gamePlayers) {
-                        if (Date.now() - player.lastUpdate < 5000) {
-                            playersList[id] = { x: player.x, z: player.z, rotation: player.rotation };
+
+                    gamePlayers.set(clientId, {
+                        x: data.x,
+                        z: data.z,
+                        rotation: data.rotation,
+                        lastUpdate: Date.now()
+                    });
+
+                    const players = {};
+
+                    for (const [id, p] of gamePlayers) {
+                        if (Date.now() - p.lastUpdate < 5000) {
+                            players[id] = p;
                         }
                     }
-                    for (const client of wss.clients) {
-                        if (client.readyState === WebSocket.OPEN) {
-                            client.send(JSON.stringify({ type: 'game_players', players: playersList }));
+
+                    wss.clients.forEach(c => {
+                        if (c.readyState === WebSocket.OPEN) {
+                            c.send(JSON.stringify({
+                                type: 'game_players',
+                                players
+                            }));
                         }
-                    }
+                    });
                 }
-                
-                if (data.type === 'ping') {
-                    ws.send(JSON.stringify({ type: 'pong', time: Date.now() }));
-                }
-            } catch(e) {
-                console.error('WebSocket error:', e.message);
+
+            } catch (err) {
+                console.error('WS error:', err);
             }
         });
-        
+
         ws.on('close', () => {
-            console.log(`🔌 Client disconnected: ${clientId}`);
-            clearInterval(pingInterval);
-            esp32Clients.delete(clientId);
             wsClients.delete(clientId);
             gamePlayers.delete(clientId);
-            setTimeout(() => {
-                conversationHistory.delete(clientId);
-                processingQueue.delete(clientId);
-            }, 300000);
         });
-        
-        if (ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify({ type: 'system', message: 'Connected to CHIRI AI server', clientId }));
-        }
+
+        ws.send(JSON.stringify({
+            type: 'system',
+            message: 'CHIRI AI PRO CONNECTED',
+            clientId
+        }));
     });
-    
-    setInterval(() => {
-        const now = Date.now();
-        for (const [id, player] of gamePlayers) {
-            if (now - player.lastUpdate > 10000) gamePlayers.delete(id);
-        }
-    }, 5000);
-    
+
     return wss;
 }
 
-module.exports = { 
-    setupWebSocket, 
-    processUserMessage, 
-    clearHistory, 
-    getHistory, 
-    gamePlayers,
+// ===================== EXPORT =====================
+module.exports = {
+    setupWebSocket,
+    processUserMessage,
     wsClients,
-    esp32Clients,
-    sendVoiceAlertToAll,
-    sendVoiceAlertToClient
+    gamePlayers
 };
