@@ -1,0 +1,21 @@
+FROM node:18-alpine
+
+# Install Oracle Cloud CLI
+RUN apk add --no-cache python3 py3-pip && \
+    pip3 install oci-cli
+
+WORKDIR /app
+
+# Copy backend code
+COPY backend/package*.json ./
+RUN npm ci --only=production
+
+COPY backend/ ./
+
+# Copy Oracle startup script
+COPY deploy/oracle/oracle-start.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/oracle-start.sh
+
+EXPOSE 3000
+
+CMD ["/usr/local/bin/oracle-start.sh"]
