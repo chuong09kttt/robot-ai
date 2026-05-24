@@ -10,6 +10,17 @@ const { evaluate } = require('./ai/autonomous');
 
 
 
+const { FaceRecognition } = require('../../vision/face_recognition');
+const { HotelMapManager } = require('../../hotel/map_manager');
+const { MultiFloorNavigator } = require('../../navigation/multi_floor_nav');
+const { HotelTaskEngine } = require('../../hotel/task_engine');
+const faceAI = new FaceRecognition();
+const map = new HotelMapManager();
+const nav = new MultiFloorNavigator();
+const taskEngine = new HotelTaskEngine();
+
+
+
 const { Perception } = require('../../vision/perception');
 const { SLAMBridge } = require('../../localization/slam_bridge');
 const { NavClient } = require('../../navigation/nav_client');
@@ -352,8 +363,14 @@ function setupWebSocket(server) {
             
                     const vision = perception.analyze(data.frame);
                     const pose = slam.get_pose();
-            
+                    const face = faceAI.identify(data.frame);
+
+
+
+                    
                     ws.send(JSON.stringify({
+                        type: "vision",
+                        face,
                         type: "environment",
                         vision,
                         pose
@@ -370,8 +387,46 @@ function setupWebSocket(server) {
                         data.text,
                         vision,
                         pose
+
+                    const face = faceAI.identify(null);
+
+                    const task = taskEngine.decide_task(
+                        data.text,
+                        face
+
+        
                     );
-            
+
+                    let response = "How can I assist you?";
+
+                    if (task.action === "escort") {
+                
+                        const route = map.get_route("current", task.target);
+                
+                        nav.go_to(task.target);
+                
+                        response = `I will escort you to ${task.target}`;
+                    }
+                
+                    if (task.action === "guide_reception") {
+                
+                        nav.go_to("reception");
+                
+                        response = "Please follow me to reception.";
+                    }
+                
+                    if (task.action === "delivery_service") {
+                
+                        nav.go_to("delivery_point");
+                
+                        response = "Delivery service activated.";
+                    }
+                
+                
+                
+                                    
+
+                    
                     if (decision.action === "go_to") {
                         nav.go_to(decision.target);
                     }
@@ -379,8 +434,16 @@ function setupWebSocket(server) {
                     if (decision.action === "follow_user") {
                         nav.go_to("user_tracking_mode");
                     }
-            
+
+
+                    
                     ws.send(JSON.stringify({
+
+                        type: "hotel_ai",
+                        text: response,
+                        task,
+
+            
                         type: "ai_response",
                         text: `OK, executing: ${decision.action}`,
                         decision
