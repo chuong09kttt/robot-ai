@@ -155,13 +155,29 @@ async function startServer() {
     });
 }
 
-// Graceful shutdown
-process.on('SIGTERM', () => {
-    console.log('🛑 SIGTERM received, closing server...');
+// ========== GRACEFUL SHUTDOWN ==========
+function gracefulShutdown(signal) {
+    console.log(`🛑 ${signal} received, shutting down gracefully...`);
+
     server.close(() => {
-        console.log('✅ Server closed');
+        console.log('✅ HTTP server closed');
+
+        // nếu bạn có websocket cleanup thì thêm ở đây
+        // wsClients.forEach(...)
+
         process.exit(0);
     });
-});
+
+    // force exit nếu treo
+    setTimeout(() => {
+        console.log('⚠️ Force shutdown after timeout');
+        process.exit(1);
+    }, 10000);
+}
+
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+
+
 
 module.exports = { startServer };
