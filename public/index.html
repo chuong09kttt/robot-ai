@@ -113,6 +113,14 @@
                     <div class="mode-desc">Ocean Rush - Bắn tàu</div>
                     <div class="mode-badge">BODY TRACKING</div>
                 </div>
+                <div class="mode-card" data-mode="enterprise">
+                    <div class="mode-icon">🏢</div>
+                    <div class="mode-name">ENTERPRISE AI</div>
+                    <div class="mode-desc">AI doanh nghiệp tự vận hành</div>
+                    <div class="mode-badge">BETA PRO</div>
+                </div>
+                    
+                    
             </div>
             
             <div class="mode-footer">
@@ -356,6 +364,57 @@
         </div>
     </div>
 
+
+<!-- ENTERPRISE PANEL -->
+<div id="enterprisePanel" class="mode-panel" style="display:none;">
+    <div class="panel-header">
+        <button class="back-btn" data-back="mode">⌂ HOME</button>
+        <div class="panel-title">🏢 AI ENTERPRISE SYSTEM</div>
+        <div class="panel-status">LIVE</div>
+    </div>
+
+    <div class="grid" style="
+        display:grid;
+        grid-template-columns: repeat(2,1fr);
+        gap:10px;
+        padding:10px;
+    ">
+
+        <div class="card">
+            <h3>💰 Finance</h3>
+            <pre id="financeBox">...</pre>
+        </div>
+
+        <div class="card">
+            <h3>👥 Employees</h3>
+            <pre id="employeeBox">...</pre>
+        </div>
+
+        <div class="card">
+            <h3>📊 Projects</h3>
+            <pre id="projectBox">...</pre>
+        </div>
+
+        <div class="card">
+            <h3>🧠 Decision AI</h3>
+            <pre id="decisionBox">...</pre>
+        </div>
+
+        <div class="card" style="grid-column: span 2;">
+            <h3>⚠️ Risk Monitor</h3>
+            <pre id="riskBox">...</pre>
+        </div>
+
+    </div>
+
+    <div style="padding:10px;">
+        <button onclick="forceDecision()">🧠 Force AI Decision</button>
+        <button onclick="addMockData()">➕ Add Test Data</button>
+    </div>
+</div>
+
+        
+        
 
 
         <!-- Thêm vào index.html để hiển thị QR code cho mobile -->
