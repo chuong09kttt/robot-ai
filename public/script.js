@@ -1067,3 +1067,63 @@ document.addEventListener('DOMContentLoaded', function() {
     console.log('✅ Fetch interceptor installed');
 });
 
+// ===== ENTERPRISE MODE =====
+const enterprisePanel = document.getElementById("enterprisePanel");
+
+// open mode
+document.querySelectorAll(".mode-card").forEach(card => {
+    card.addEventListener("click", () => {
+        const mode = card.dataset.mode;
+
+        if (mode === "enterprise") {
+            showEnterprise();
+        }
+    });
+});
+
+function showEnterprise() {
+    document.getElementById("modeScreen").style.display = "none";
+    enterprisePanel.style.display = "block";
+}
+
+// WebSocket extend
+ws.addEventListener("message", (msg) => {
+    const data = JSON.parse(msg.data);
+
+    if (data.type === "enterprise_update") {
+        document.getElementById("financeBox").innerText =
+            JSON.stringify(data.state.finance, null, 2);
+
+        document.getElementById("employeeBox").innerText =
+            JSON.stringify(data.state.employees, null, 2);
+
+        document.getElementById("projectBox").innerText =
+            JSON.stringify(data.state.projects, null, 2);
+
+        document.getElementById("decisionBox").innerText =
+            JSON.stringify(data.state.decision, null, 2);
+
+        document.getElementById("riskBox").innerText =
+            JSON.stringify(data.state.risk, null, 2);
+    }
+});
+
+// back button support
+document.querySelectorAll('[data-back="mode"]').forEach(btn => {
+    btn.addEventListener("click", () => {
+        enterprisePanel.style.display = "none";
+        document.getElementById("modeScreen").style.display = "block";
+    });
+});
+
+// test functions
+function forceDecision() {
+    ws.send(JSON.stringify({ type: "force_decision" }));
+}
+
+function addMockData() {
+    ws.send(JSON.stringify({
+        type: "add_employee",
+        employee: { name: "AI Worker", role: "engineer" }
+    }));
+}
