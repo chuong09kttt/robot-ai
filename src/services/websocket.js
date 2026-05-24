@@ -17,6 +17,9 @@ const { CognitiveAgent } = require('../../agent/cognitive_agent');
 const hrAI = require('../ai/hr_llm_layer');
 const funAI = require('../ai/entertainment_layer');
 
+const AutonomousLoop = require('../enterprise/autonomous_loop');
+const company = require('../enterprise/company_simulator');
+
 
 
 const {
