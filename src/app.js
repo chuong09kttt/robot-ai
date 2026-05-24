@@ -162,18 +162,31 @@ function gracefulShutdown(signal) {
     server.close(() => {
         console.log('✅ HTTP server closed');
 
-        // nếu bạn có websocket cleanup thì thêm ở đây
-        // wsClients.forEach(...)
+        // ========== CLEANUP WEBSOCKET ==========
+        try {
+            if (wsClients) {
+                wsClients.clear();
+                console.log('🧹 wsClients cleared');
+            }
+
+            if (esp32Clients) {
+                esp32Clients.clear();
+                console.log('🧹 esp32Clients cleared');
+            }
+        } catch (err) {
+            console.error('⚠️ Cleanup error:', err);
+        }
 
         process.exit(0);
     });
 
-    // force exit nếu treo
+    // Force shutdown nếu treo
     setTimeout(() => {
-        console.log('⚠️ Force shutdown after timeout');
+        console.log('⚠️ Force shutdown timeout reached');
         process.exit(1);
     }, 10000);
 }
+
 
 process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 process.on('SIGINT', () => gracefulShutdown('SIGINT'));
